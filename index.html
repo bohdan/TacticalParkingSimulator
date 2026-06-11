@@ -33,7 +33,7 @@
     </div>
     <div class="sliderRow">
       <span class="icon rev">R</span>
-      <input id="dist" type="range" min="-12" max="12" step="0.1" value="0">
+      <input id="dist" type="range" min="-25" max="25" step="0.1" value="0">
       <span class="icon fwd">D</span>
       <span id="distVal" class="val">&mdash;</span>
     </div>
@@ -74,7 +74,7 @@
     <div style="text-align:center;font-size:20px;font-weight:800;margin-bottom:12px;">How to Play</div>
     <div class="help-body">
       <b>Goal</b> — Park the car inside the green zone.<br><br>
-      <b>Plan moves</b> — Set a steering angle and distance with the sliders (or drag on the canvas), then tap <i>Add move</i>. Moves are queued up as a plan.<br><br>
+      <b>Plan moves</b> — Drag on the canvas and the ghost car follows your finger along a drivable arc, or use the sliders for fine control. Tap <i>Add move</i> to queue it up.<br><br>
       <b>Run</b> — Animates your full plan. The last pending move is auto-committed when you hit Run.<br><br>
       <b>Edit past moves</b> — Tap a numbered badge on the canvas to load that move back into the sliders. <i>Update #N</i> saves the change; <i>Cancel</i> discards it.<br><br>
       <b>&#9733; Stars</b><br>
@@ -83,7 +83,7 @@
       &nbsp;&#9733;&#9734;&#9734; — Parked, but can do better<br><br>
       <b>Precise mode</b> — Stars based on fewest moves (or shortest distance for Dead End).<br><br>
       <b>Quick mode</b> — Stars based on estimated time: car accelerates/brakes at 2 m/s&sup2; up to 3 m/s top speed, steering 60&deg;/s, +1.5s per direction reversal. Short moves are penalised heavily because you can&rsquo;t build up speed.<br><br>
-      <b>&#128161; Solution</b> — Loads the verified optimal move sequence. Use it as a hint or to see what perfect looks like.
+      <b>&#128161; Solution</b> — Loads the verified optimal move sequence. Using it disables leaderboard submission for the level until you press <i>Reset</i>.
     </div>
     <div style="text-align:center;margin-top:16px;">
       <button id="helpClose" style="height:44px;padding:0 24px;border-radius:12px;border:1px solid #313a4b;background:#1d4f6b;border-color:#2d7396;color:#e7ecf3;font-size:14px;font-weight:600;">Got it</button>

@@ -7,7 +7,7 @@
 const CAR = { len: 4.4, wid: 1.8, wb: 2.7, rOver: 0.85, maxSteer: 35 };
 CAR.fOver = CAR.len - CAR.wb - CAR.rOver;
 
-const MAX_MOVE_DIST = 12;    // m, per planned move
+const MAX_MOVE_DIST = 25;    // m, per planned move
 const SAMPLE_STEP = 0.06;    // m, collision sampling along path
 
 const rad = d => d * Math.PI / 180;
@@ -188,7 +188,7 @@ const LEVELS = [
     cars: [
       { cx: 4.8,  cy: 9.4, h: 0 },
       { cx: 15.7, cy: 9.4, h: 0 },
-      { cx: 9.5,  cy: 2.4, h: Math.PI },
+      { cx: 9.5,  cy: 2.55, h: Math.PI },
       { cx: 21.0, cy: 9.4, h: 0 },
     ],
     starThresh: [3, 5], starThreshQuick: [17, 26],
@@ -225,23 +225,22 @@ const LEVELS = [
   },
 
   {
-    name: 'Two-Stage Approach', mode: 'moves', w: 28, h: 13,
+    name: 'Far Slot', mode: 'moves', w: 28, h: 13,
     start: { x: 2.6, y: 7.0, h: 0 },
-    goal: { cx: 16.5, cy: 9.4, w: 5.5, h: 2.2, heads: [0], tol: 12 },
+    goal: { cx: 14.6, cy: 9.4, w: 5.5, h: 2.2, heads: [0], tol: 12 },
     walls: [
       { x: 0, y: 10.5, w: 28, h: 2.5, kind: 'curb' },
       { x: 0, y: 0,    w: 28, h: 1.6, kind: 'curb' },
     ],
     cars: [
-      { cx: 11.5, cy: 9.5, h: 0 },
+      { cx:  9.6, cy: 9.5, h: 0 },
       { cx: 21.0, cy: 9.5, h: 0 },
-      { cx: 16.5, cy: 2.55, h: Math.PI },
+      { cx: 14.6, cy: 2.55, h: Math.PI },
     ],
-    starThresh: [4, 6], starThreshQuick: [22, 33],
-    hint: 'The gap is too far for one straight move — split your approach.',
+    starThresh: [3, 5], starThreshQuick: [19, 30],
+    hint: 'A long approach — judge the distance, then reverse in.',
     solution: [
-      { steer: 0,   dist: 12 },
-      { steer: 0,   dist: 6.5 },
+      { steer: 0,   dist: 16.05 },
       { steer: 35,  dist: -3 },
       { steer: -35, dist: -3 },
     ],
@@ -264,41 +263,42 @@ const LEVELS = [
 
   {
     name: 'Narrow Dead End', mode: 'dist', w: 22, h: 12,
-    start: { x: 3.2, y: 6.5, h: 0 },
-    goal: { cx: 4.6, cy: 6.5, w: 8, h: 5.6, heads: [180], tol: 12 },
+    start: { x: 3.2, y: 6.0, h: 0 },
+    goal: { cx: 4.6, cy: 6.0, w: 8, h: 5.8, heads: [180], tol: 12 },
     walls: [
-      { x: 0, y: 0,    w: 22, h: 3.7 },
-      { x: 0, y: 8.6,  w: 22, h: 3.4 },
+      { x: 0, y: 0,    w: 22, h: 3.1 },
+      { x: 0, y: 8.9,  w: 22, h: 3.1 },
       { x: 18.4, y: 0, w: 3.6, h: 12 },
     ],
     cars: [],
-    starThresh: [19, 27], starThreshQuick: [30, 45],
-    hint: 'Same dead end — the corridor is 1.2 m narrower.',
+    starThresh: [16, 22], starThreshQuick: [42, 64],
+    hint: 'A 5.8 m corridor — the simple U-turn no longer fits.',
     solution: [
-      { steer:  12, dist:  3   },
-      { steer: -35, dist:  3   },
-      { steer:  35, dist: -3   },
-      { steer: -35, dist:  1.5 },
-      { steer:   0, dist: -1.5 },
-      { steer: -35, dist:  5   },
+      { steer: -20, dist:  2   },
+      { steer:  35, dist:  3   },
+      { steer: -35, dist: -2.5 },
+      { steer:  35, dist:  1   },
+      { steer: -35, dist: -1   },
+      { steer:  35, dist:  1   },
+      { steer: -35, dist: -1   },
+      { steer:  35, dist:  3   },
     ],
   },
 
   {
-    name: 'Two-Stage Bay', mode: 'moves', w: 28, h: 13,
+    name: 'Cross-Lot Bay', mode: 'moves', w: 28, h: 13,
     start: { x: 26.0, y: 8.6, h: Math.PI },
-    goal: { cx: 9.85, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
+    goal: { cx: 9.4, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
     walls: [],
     cars: [
       ...([2.4, 4.7, 7.0, 11.8, 14.1, 16.4].map(cx => ({ cx, cy: 2.85, h: Math.PI / 2 }))),
-      { cx: 22.0, cy: 9.5, h: 0 },
-      { cx: 24.5, cy: 9.5, h: 0 },
+      { cx: 20.0, cy: 11.6, h: 0 },
+      { cx: 24.5, cy: 11.6, h: 0 },
     ],
-    starThresh: [4, 6], starThreshQuick: [24, 36],
-    hint: 'The bay is far — you need two straight moves just to reach it.',
+    starThresh: [3, 5], starThreshQuick: [22, 34],
+    hint: 'Cross the whole lot, then back into the empty bay.',
     solution: [
-      { steer:  0,  dist: 12   },
-      { steer:  0,  dist:  7.6 },
+      { steer:  0,  dist: 20.1 },
       { steer: 35,  dist: -6.3 },
       { steer:  0,  dist: -2.9 },
     ],
@@ -309,21 +309,20 @@ const LEVELS = [
   {
     name: 'Long Way Round', mode: 'moves', w: 30, h: 13,
     start: { x: 25.4, y: 7.0, h: Math.PI },
-    goal: { cx: 13.5, cy: 9.4, w: 5.5, h: 2.2, heads: [180], tol: 10 },
+    goal: { cx: 13.45, cy: 9.4, w: 4.8, h: 2.2, heads: [180], tol: 10 },
     walls: [
       { x: 0, y: 10.5, w: 30, h: 2.5, kind: 'curb' },
       { x: 0, y: 0,    w: 30, h: 1.6, kind: 'curb' },
     ],
     cars: [
-      { cx: 10.0, cy: 9.5, h: 0 },
-      { cx: 19.0, cy: 9.5, h: 0 },
-      { cx: 13.5, cy: 2.55, h: 0 },
+      { cx:  7.0, cy: 9.5, h: 0 },
+      { cx: 18.2, cy: 9.5, h: 0 },
+      { cx: 13.45, cy: 2.55, h: 0 },
     ],
-    starThresh: [4, 6], starThreshQuick: [21, 32],
-    hint: 'Far approach from the right, park facing left — two forward moves needed.',
+    starThresh: [3, 5], starThreshQuick: [19, 30],
+    hint: 'The goal zone is barely longer than the car — nail the approach.',
     solution: [
-      { steer:   0, dist: 12 },
-      { steer:   0, dist:  4 },
+      { steer:   0, dist: 16 },
       { steer: -35, dist: -3 },
       { steer:  35, dist: -3 },
     ],
@@ -332,19 +331,18 @@ const LEVELS = [
   {
     name: 'Marathon Bay', mode: 'moves', w: 36, h: 13,
     start: { x: 34.0, y: 8.6, h: Math.PI },
-    goal: { cx: 10.25, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
+    goal: { cx: 9.4, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
     walls: [],
     cars: [
       ...([2.4, 4.7, 7.0, 11.8, 14.1, 16.4].map(cx => ({ cx, cy: 2.85, h: Math.PI / 2 }))),
-      { cx: 28.0, cy: 9.5, h: 0 },
-      { cx: 31.0, cy: 9.5, h: 0 },
+      { cx: 24.0, cy: 11.6, h: 0 },
+      { cx: 29.0, cy: 11.6, h: 0 },
     ],
-    starThresh: [5, 7], starThreshQuick: [31, 46],
-    hint: 'Three straight moves just to reach the bay, then the real work begins.',
+    starThresh: [4, 6], starThreshQuick: [27, 42],
+    hint: 'Too far even for one full-length move — then thread the bay.',
     solution: [
-      { steer:  0,  dist: 12   },
-      { steer:  0,  dist: 12   },
-      { steer:  0,  dist:  3.5 },
+      { steer:  0,  dist: 24   },
+      { steer:  0,  dist:  4.1 },
       { steer: 35,  dist: -6.3 },
       { steer:  0,  dist: -2.9 },
     ],
@@ -352,68 +350,80 @@ const LEVELS = [
 
   {
     name: 'Tight Corner', mode: 'dist', w: 22, h: 11,
-    start: { x: 3.2, y: 6.1, h: 0 },
-    goal: { cx: 4.6, cy: 6.1, w: 8, h: 5.0, heads: [180], tol: 12 },
+    start: { x: 3.2, y: 5.5, h: 0 },
+    goal: { cx: 4.6, cy: 5.5, w: 8, h: 5.6, heads: [180], tol: 12 },
     walls: [
-      { x: 0, y: 0,    w: 22, h: 3.6 },
-      { x: 0, y: 7.8,  w: 22, h: 3.2 },
+      { x: 0, y: 0,    w: 22, h: 2.7 },
+      { x: 0, y: 8.3,  w: 22, h: 2.7 },
       { x: 18.4, y: 0, w: 3.6, h: 11 },
     ],
     cars: [],
-    starThresh: [19, 27], starThreshQuick: [30, 45],
-    hint: '5.2 m to turn around — tighter than Narrow Dead End.',
+    starThresh: [17, 23], starThreshQuick: [54, 84],
+    hint: '5.6 m to turn around — shuffle, inch by inch.',
     solution: [
-      { steer:  12, dist:  3   },
-      { steer: -35, dist:  3   },
-      { steer:  35, dist: -3   },
-      { steer: -35, dist:  1.5 },
-      { steer:   0, dist: -1.5 },
-      { steer: -35, dist:  5   },
+      { steer: -20, dist:  2   },
+      { steer:  35, dist:  3   },
+      { steer: -35, dist: -2   },
+      { steer:  35, dist:  0.5 },
+      { steer: -35, dist: -1   },
+      { steer:  20, dist:  1   },
+      { steer: -20, dist: -1   },
+      { steer:  35, dist:  1   },
+      { steer: -35, dist: -0.5 },
+      { steer:  35, dist:  3   },
+      { steer: -35, dist: -0.5 },
     ],
   },
 
   {
     name: 'Distant Return', mode: 'moves', w: 30, h: 13,
     start: { x: 5.4, y: 7.0, h: 0 },
-    goal: { cx: 17.3, cy: 9.4, w: 5.5, h: 2.2, heads: [0], tol: 10 },
+    goal: { cx: 17.35, cy: 9.4, w: 5.0, h: 2.2, heads: [0], tol: 10 },
     walls: [
       { x: 0, y: 10.5, w: 30, h: 2.5, kind: 'curb' },
       { x: 0, y: 0,    w: 30, h: 1.6, kind: 'curb' },
     ],
     cars: [
-      { cx: 12.0, cy: 9.5, h: 0 },
-      { cx: 22.5, cy: 9.5, h: 0 },
-      { cx: 17.0, cy: 2.55, h: Math.PI },
+      { cx: 12.6,  cy: 9.5, h: 0 },
+      { cx: 23.75, cy: 9.5, h: 0 },
+      { cx: 17.35, cy: 2.55, h: Math.PI },
     ],
-    starThresh: [4, 6], starThreshQuick: [21, 32],
-    hint: 'Drive almost the full length of the lot before the slot opens up.',
+    starThresh: [3, 5], starThreshQuick: [19, 30],
+    hint: 'Drive the length of the lot — the goal is barely wider than the car.',
     solution: [
-      { steer:  0,  dist: 12 },
-      { steer:  0,  dist:  4 },
+      { steer:  0,  dist: 16 },
       { steer: 35,  dist: -3 },
       { steer: -35, dist: -3 },
     ],
   },
 
   {
-    name: 'The Gauntlet', mode: 'dist', w: 22, h: 10,
-    start: { x: 3.2, y: 5.4, h: 0 },
-    goal: { cx: 4.0, cy: 5.0, w: 7.0, h: 4.5, heads: [180], tol: 12 },
+    name: 'The Gauntlet', mode: 'dist', w: 22, h: 11,
+    start: { x: 3.2, y: 5.5, h: 0 },
+    goal: { cx: 4.6, cy: 5.5, w: 8, h: 5.4, heads: [180], tol: 12 },
     walls: [
-      { x: 0, y: 0,    w: 22, h: 3.2 },
-      { x: 0, y: 7.6,  w: 22, h: 2.4 },
-      { x: 18.4, y: 0, w: 3.6, h: 10 },
+      { x: 0, y: 0,    w: 22, h: 2.8 },
+      { x: 0, y: 8.2,  w: 22, h: 2.8 },
+      { x: 18.4, y: 0, w: 3.6, h: 11 },
     ],
     cars: [],
-    starThresh: [19, 27], starThreshQuick: [30, 45],
-    hint: 'Only 4.4 m to manoeuvre — absolute precision required.',
+    starThresh: [17, 23], starThreshQuick: [63, 97],
+    hint: 'Only 5.4 m of corridor — a true shuffle marathon.',
     solution: [
-      { steer:  12, dist:  3   },
-      { steer: -35, dist:  3   },
+      { steer: -20, dist:  1   },
+      { steer:   0, dist:  3   },
       { steer:  35, dist: -3   },
+      { steer:  35, dist: -0.5 },
+      { steer: -35, dist:  0.5 },
+      { steer:  35, dist: -0.5 },
+      { steer: -35, dist:  0.5 },
+      { steer:  35, dist: -0.5 },
+      { steer: -35, dist:  0.5 },
+      { steer:  35, dist: -0.5 },
+      { steer: -35, dist:  0.5 },
+      { steer:  35, dist: -0.5 },
       { steer: -35, dist:  1.5 },
-      { steer:   0, dist: -1.5 },
-      { steer: -35, dist:  5   },
+      { steer:  35, dist: -2   },
     ],
   },
 ];
@@ -505,6 +515,7 @@ let editIdx = null;    // index of the move being tweaked (null = composing next
 
 let anim = null;       // {samples, cum, total, t0, speed}
 let pendingLb = null;  // {levelIdx, stars, st} — awaiting leaderboard submit
+let solutionUsed = false; // viewing the solution locks leaderboard until Reset
 let scoringMode = 'precise'; // 'precise' | 'quick'
 let view = { scale: 1, ox: 0, oy: 0 };
 
@@ -976,8 +987,8 @@ function finishRun() {
         ? `3★ ≤ ${level.starThresh[0]} m`
         : `3★ ≤ ${level.starThresh[0]} moves`);
     $('ovNext').style.display = levelIdx < LEVELS.length - 1 ? '' : 'none';
-    pendingLb = { levelIdx, stars, st: { ...st } };
-    $('ovSubmitRow').style.display = lbEnabled() ? '' : 'none';
+    pendingLb = solutionUsed ? null : { levelIdx, stars, st: { ...st } };
+    $('ovSubmitRow').style.display = (lbEnabled() && !solutionUsed) ? '' : 'none';
     $('ovSubmit').disabled = false;
     $('ovSubmit').textContent = '⭹ Submit to leaderboard';
     $('overlay').classList.remove('hidden');
@@ -995,6 +1006,7 @@ function setLevel(i) {
   moves = [];
   anim = null;
   editIdx = null;
+  solutionUsed = false;
   setEdit(0, 0);
   recomputePlan();
 }
@@ -1053,6 +1065,7 @@ $('resetBtn').addEventListener('click', () => {
   if (anim) return;
   editIdx = null;
   moves = [];
+  solutionUsed = false;
   setEdit(0, 0);
   recomputePlan();
 });
@@ -1109,6 +1122,7 @@ $('ovImprove').addEventListener('click', () => $('overlay').classList.add('hidde
 $('ovRetry').addEventListener('click', () => {
   $('overlay').classList.add('hidden');
   moves = [];
+  solutionUsed = false;
   setEdit(0, 0);
   recomputePlan();
 });
@@ -1207,10 +1221,11 @@ function showSolution() {
   if (!level.solution) { toast('No solution on record for this level'); return; }
   if (anim) return;
   editIdx = null;
+  solutionUsed = true;
   moves = level.solution.map(m => ({ steer: rad(m.steer), dist: m.dist }));
   setEdit(0, 0);
   recomputePlan();
-  toast('Optimal solution loaded — hit Run to see it');
+  toast('Solution loaded — leaderboard disabled until Reset');
 }
 
 function toggleMode() {
@@ -1218,22 +1233,47 @@ function toggleMode() {
   updateHUD();
 }
 
-// Drag directly on the canvas: vertical = distance, horizontal = steering.
+// Drag directly on the canvas: the ghost car chases the pointer. The arc
+// from the current move's start pose through the pointer's world position
+// determines both steering angle and signed distance, so dragging feels
+// like placing the car where you want it to go.
 // A tap (minimal movement) on a move badge selects it for tweaking.
+function pointerToWorld(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left - view.ox) / view.scale,
+           y: (e.clientY - r.top - view.oy) / view.scale };
+}
+
+// Given a target point in world space, find the constant-steer arc from the
+// edit start pose whose rear axle passes through it: a circle tangent to the
+// pose heading. Returns {steer (deg), dist (m, signed)}.
+function arcToPoint(pose, wp) {
+  const dx = wp.x - pose.x, dy = wp.y - pose.y;
+  const c = Math.cos(pose.h), s = Math.sin(pose.h);
+  const lx = dx * c + dy * s;    // forward component
+  const ly = -dx * s + dy * c;   // lateral component (steer>0 side)
+  if (Math.abs(ly) < 0.05) return { steer: 0, dist: lx };
+  const R = (lx * lx + ly * ly) / (2 * ly);
+  const th = Math.atan2(lx / R, (R - ly) / R);
+  return { steer: deg(Math.atan(CAR.wb / R)), dist: R * th };
+}
+
 let drag = null;
 cv.addEventListener('pointerdown', e => {
   if (anim) return;
   cv.setPointerCapture(e.pointerId);
-  drag = { x: e.clientX, y: e.clientY, steer: editSteer, dist: editDist, moved: false };
+  drag = { x: e.clientX, y: e.clientY, moved: false };
 });
 cv.addEventListener('pointermove', e => {
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.abs(dx) > 5 || Math.abs(dy) > 5) drag.moved = true;
   if (!drag.moved) return;
-  const steer = drag.steer + dx / (cv.clientWidth * 0.45) * CAR.maxSteer * 2;
-  const dist = drag.dist - dy / view.scale * 1.25;
-  setEdit(steer, dist);
+  const startPose = editIdx !== null
+    ? (editIdx === 0 ? level.start : planSims[editIdx - 1].end)
+    : planEnd();
+  const a = arcToPoint(startPose, pointerToWorld(e));
+  setEdit(a.steer, a.dist);
 });
 cv.addEventListener('pointerup', e => {
   if (drag && !drag.moved) {
