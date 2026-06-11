@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#171a21">
+<title>Park Planner</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <button id="prevLv" class="nav">&#8249;</button>
+    <div id="lvInfo">
+      <div id="lvName">Level</div>
+      <div id="objective" class="sub"></div>
+    </div>
+    <button id="nextLv" class="nav">&#8250;</button>
+  </header>
+
+  <div id="stats"></div>
+
+  <div id="cvWrap"><canvas id="cv"></canvas></div>
+
+  <div id="panel">
+    <div class="sliderRow">
+      <span class="icon">&#8634;</span>
+      <input id="steer" type="range" min="-35" max="35" step="1" value="0">
+      <span class="icon">&#8635;</span>
+      <span id="steerVal" class="val">0&deg;</span>
+    </div>
+    <div class="sliderRow">
+      <span class="icon rev">R</span>
+      <input id="dist" type="range" min="-12" max="12" step="0.1" value="0">
+      <span class="icon fwd">D</span>
+      <span id="distVal" class="val">&mdash;</span>
+    </div>
+    <div id="btns">
+      <button id="undoBtn">&#8630; Undo</button>
+      <button id="resetBtn">&#10005; Reset</button>
+      <button id="addBtn" class="primary">&#65291; Add move</button>
+      <button id="goBtn" class="go">&#9654; Run</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay" class="hidden">
+  <div class="card">
+    <div id="ovTitle">Parked!</div>
+    <div id="ovStars"></div>
+    <div id="ovStats"></div>
+    <div id="ovTip" class="sub"></div>
+    <div class="row">
+      <button id="ovImprove">Improve</button>
+      <button id="ovRetry">Retry</button>
+      <button id="ovNext" class="primary">Next &#8250;</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+
+<script src="game.js"></script>
+</body>
+</html>
