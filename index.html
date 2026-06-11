@@ -16,6 +16,7 @@
       <div id="objective" class="sub"></div>
     </div>
     <button id="nextLv" class="nav">&#8250;</button>
+    <button id="lbBtn" class="nav" style="font-size:16px;">&#127942;</button>
     <button id="helpBtn" class="nav" style="font-size:18px;font-weight:700;">?</button>
   </header>
 
@@ -62,6 +63,9 @@
       <button id="ovRetry">Retry</button>
       <button id="ovNext" class="primary">Next &#8250;</button>
     </div>
+    <div class="row" id="ovSubmitRow" style="margin-top:8px;display:none;">
+      <button id="ovSubmit" class="lb">&#8679; Submit to leaderboard</button>
+    </div>
   </div>
 </div>
 
@@ -83,6 +87,28 @@
     </div>
     <div style="text-align:center;margin-top:16px;">
       <button id="helpClose" style="height:44px;padding:0 24px;border-radius:12px;border:1px solid #313a4b;background:#1d4f6b;border-color:#2d7396;color:#e7ecf3;font-size:14px;font-weight:600;">Got it</button>
+    </div>
+  </div>
+</div>
+
+<div id="nameOverlay" class="hidden">
+  <div class="card">
+    <div style="font-size:18px;font-weight:700;margin-bottom:12px;">Choose your display name</div>
+    <input id="nameInput" type="text" maxlength="20" placeholder="Your name" class="name-input"
+      autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <div class="row" style="margin-top:12px;">
+      <button id="nameCancel">Cancel</button>
+      <button id="nameOk" class="primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="lbOverlay" class="hidden">
+  <div class="card" style="max-height:80vh;overflow-y:auto;">
+    <div id="lbTitle" style="text-align:center;font-size:17px;font-weight:700;margin-bottom:12px;"></div>
+    <table id="lbTable" class="lb-table"></table>
+    <div style="text-align:center;margin-top:14px;">
+      <button id="lbClose" style="height:44px;padding:0 24px;border-radius:12px;border:1px solid #313a4b;background:#222837;color:#e7ecf3;font-size:14px;font-weight:600;">Close</button>
     </div>
   </div>
 </div>

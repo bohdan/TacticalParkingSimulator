@@ -227,6 +227,23 @@ function inGoal(pose, goal) {
     v => v.x >= x0 && v.x <= x1 && v.y >= y0 && v.y <= y1);
 }
 
+// ── Leaderboard (Supabase) ─────────────────────────────────────────────────
+// 1. Go to https://supabase.com and sign in with GitHub (no new account needed)
+// 2. Create a project, open the SQL editor, and run:
+//      create table leaderboard (
+//        id bigserial primary key, player text not null,
+//        level int not null, level_name text not null,
+//        stars int not null, moves int, dist real, time_s real,
+//        mode text not null, submitted_at timestamptz default now()
+//      );
+//      alter table leaderboard enable row level security;
+//      create policy "public read"   on leaderboard for select using (true);
+//      create policy "public insert" on leaderboard for insert
+//        with check (char_length(player) between 1 and 20);
+// 3. Fill in Project Settings → API → Project URL and anon/public key below.
+const LB_URL = ''; // e.g. 'https://xxxxxxxxxxxx.supabase.co'
+const LB_KEY = ''; // anon / public key
+
 const V_MAX = 3.0;         // m/s top speed
 const ACCEL = 2.0;         // m/s² acceleration / braking
 const STEER_RATE_DS = 60;  // degrees per second
@@ -270,6 +287,7 @@ let editSimOpp = null; // preview for the opposite direction (same |dist|, oppos
 let editIdx = null;    // index of the move being tweaked (null = composing next move)
 
 let anim = null;       // {samples, cum, total, t0, speed}
+let pendingLb = null;  // {levelIdx, stars, st} — awaiting leaderboard submit
 let scoringMode = 'precise'; // 'precise' | 'quick'
 let view = { scale: 1, ox: 0, oy: 0 };
 
@@ -741,6 +759,10 @@ function finishRun() {
         ? `3★ ≤ ${level.starThresh[0]} m`
         : `3★ ≤ ${level.starThresh[0]} moves`);
     $('ovNext').style.display = levelIdx < LEVELS.length - 1 ? '' : 'none';
+    pendingLb = { levelIdx, stars, st: { ...st } };
+    $('ovSubmitRow').style.display = lbEnabled() ? '' : 'none';
+    $('ovSubmit').disabled = false;
+    $('ovSubmit').textContent = '⭹ Submit to leaderboard';
     $('overlay').classList.remove('hidden');
   } else {
     toast('Not parked yet — keep planning');
@@ -838,6 +860,34 @@ $('modeBtn').addEventListener('click', toggleMode);
 $('helpBtn').addEventListener('click', () => $('helpOverlay').classList.remove('hidden'));
 $('helpClose').addEventListener('click', () => $('helpOverlay').classList.add('hidden'));
 
+$('lbBtn').addEventListener('click', () => {
+  if (lbEnabled()) openLeaderboard(levelIdx);
+  else toast('Leaderboard not configured — see LB_URL / LB_KEY in game.js');
+});
+$('lbClose').addEventListener('click', () => $('lbOverlay').classList.add('hidden'));
+
+$('ovSubmit').addEventListener('click', async () => {
+  if (!pendingLb) return;
+  const player = localStorage.getItem('parking.player');
+  if (!player) {
+    $('nameInput').value = '';
+    $('nameOverlay').classList.remove('hidden');
+    setTimeout(() => $('nameInput').focus(), 50);
+    return;
+  }
+  await doLbSubmit(player);
+});
+
+$('nameCancel').addEventListener('click', () => $('nameOverlay').classList.add('hidden'));
+$('nameOk').addEventListener('click', async () => {
+  const name = $('nameInput').value.trim().slice(0, 20);
+  if (!name) return;
+  localStorage.setItem('parking.player', name);
+  $('nameOverlay').classList.add('hidden');
+  if (pendingLb) await doLbSubmit(name);
+});
+$('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('nameOk').click(); });
+
 $('ovImprove').addEventListener('click', () => $('overlay').classList.add('hidden'));
 $('ovRetry').addEventListener('click', () => {
   $('overlay').classList.add('hidden');
@@ -856,6 +906,84 @@ function selectMove(i) {
   editIdx = i;
   const m = moves[i];
   setEdit(deg(m.steer), m.dist);
+}
+
+// ── Leaderboard functions ────────────────────────────────────────────────────
+const lbEnabled = () => !!(LB_URL && LB_KEY);
+
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function lbPost(levelIdx, player, stars, st) {
+  const r = await fetch(`${LB_URL}/rest/v1/leaderboard`, {
+    method: 'POST',
+    headers: {
+      apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}`,
+      'Content-Type': 'application/json', Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({
+      player, level: levelIdx, level_name: level.name,
+      stars, moves: st.moves,
+      dist: +st.dist.toFixed(2), time_s: +st.time.toFixed(1),
+      mode: scoringMode,
+    }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+}
+
+async function lbGet(levelIdx) {
+  const col = scoringMode === 'quick' ? 'time_s' : 'moves';
+  const p = new URLSearchParams({
+    select: 'player,stars,moves,dist,time_s',
+    level: `eq.${levelIdx}`, mode: `eq.${scoringMode}`,
+    order: `stars.desc,${col}.asc`, limit: '50',
+  });
+  const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
+    headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function openLeaderboard(idx) {
+  $('lbTitle').textContent = `${LEVELS[idx].name} · ${scoringMode === 'quick' ? '⏱ Quick' : '★ Precise'}`;
+  $('lbTable').innerHTML = '<tr><td colspan="4" class="lb-empty">Loading…</td></tr>';
+  $('lbOverlay').classList.remove('hidden');
+  try {
+    const rows = await lbGet(idx);
+    // keep only each player's first (best) entry since rows are sorted optimally
+    const seen = new Set();
+    const top = rows.filter(r => { if (seen.has(r.player)) return false; seen.add(r.player); return true; }).slice(0, 10);
+    if (!top.length) {
+      $('lbTable').innerHTML = '<tr><td colspan="4" class="lb-empty">No entries yet — be first!</td></tr>';
+      return;
+    }
+    $('lbTable').innerHTML = top.map((r, i) => {
+      const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
+      const metric = scoringMode === 'quick' ? `${r.time_s.toFixed(1)}s` : `${r.moves}mv`;
+      const stars = '★'.repeat(r.stars) + `<span class="lb-dim">★</span>`.repeat(3 - r.stars);
+      return `<tr class="${cls}"><td class="lb-rank">${i + 1}</td><td class="lb-name">${escHtml(r.player)}</td><td class="lb-stars">${stars}</td><td class="lb-metric">${metric}</td></tr>`;
+    }).join('');
+  } catch (e) {
+    $('lbTable').innerHTML = `<tr><td colspan="4" class="lb-empty" style="color:#ff7070">Error: ${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function doLbSubmit(player) {
+  const { levelIdx: li, stars, st } = pendingLb;
+  $('ovSubmit').disabled = true;
+  $('ovSubmit').textContent = '⏳ Submitting…';
+  try {
+    await lbPost(li, player, stars, st);
+    pendingLb = null;
+    $('overlay').classList.add('hidden');
+    await openLeaderboard(li);
+  } catch (e) {
+    toast(`Submit failed: ${e.message}`);
+    $('ovSubmit').disabled = false;
+    $('ovSubmit').textContent = '⭹ Submit to leaderboard';
+  }
 }
 
 function showSolution() {

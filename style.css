@@ -210,6 +210,67 @@ button:active:not(:disabled) { filter: brightness(1.25); }
 
 .help-body { font-size: 13px; color: #c8d2e2; line-height: 1.7; }
 
+/* ── Leaderboard & name prompt ─────────────────────────────────────────── */
+#nameOverlay, #lbOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 12, 16, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+#nameOverlay.hidden, #lbOverlay.hidden { display: none; }
+#nameOverlay .card, #lbOverlay .card {
+  background: #1f2530;
+  border: 1px solid #364052;
+  border-radius: 18px;
+  padding: 22px 24px;
+  width: min(86vw, 360px);
+  text-align: center;
+}
+#nameOverlay .row button, #nameOverlay .card button {
+  flex: 1;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid #313a4b;
+  background: #222837;
+  color: #e7ecf3;
+  font-size: 14px;
+  font-weight: 600;
+}
+#nameOverlay .row button.primary { background: #1d4f6b; border-color: #2d7396; }
+
+.name-input {
+  width: 100%;
+  background: #2a3140;
+  border: 1px solid #3c4760;
+  border-radius: 10px;
+  color: #e7ecf3;
+  font-size: 16px;
+  padding: 10px 12px;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.name-input:focus { border-color: #4fc3f7; }
+
+.lb-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.lb-table tr + tr { border-top: 1px solid #23293a; }
+.lb-table td { padding: 7px 4px; }
+.lb-rank { width: 24px; color: #93a0b4; text-align: right; padding-right: 8px; }
+.lb-name { text-align: left; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-stars { width: 52px; font-size: 11px; color: #ffd45e; }
+.lb-dim { color: #444c5c; }
+.lb-metric { width: 48px; text-align: right; font-variant-numeric: tabular-nums; color: #93a0b4; }
+.lb-empty { text-align: center; color: #93a0b4; padding: 16px 0; }
+.lb-gold td { background: rgba(255, 212, 94, 0.06); }
+.lb-silver td { background: rgba(180, 195, 220, 0.04); }
+.lb-bronze td { background: rgba(200, 140, 60, 0.05); }
+
+#overlay .row button.lb { background: #152a1c; border-color: #2a5035; color: #5dde8e; }
+
 #helpOverlay {
   position: fixed;
   inset: 0;
