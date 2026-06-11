@@ -210,6 +210,7 @@ let planSims = [];     // cached simulateMove result per move
 let editSteer = 0;     // degrees, from slider
 let editDist = 0;      // meters, signed
 let editSim = null;
+let editSimOpp = null; // preview for the opposite direction (same |dist|, opposite sign)
 let editIdx = null;    // index of the move being tweaked (null = composing next move)
 
 let anim = null;       // {samples, cum, total, t0, speed}
@@ -235,9 +236,12 @@ function recomputeEdit() {
   const startPose = editIdx !== null
     ? (editIdx === 0 ? level.start : planSims[editIdx - 1].end)
     : planEnd();
-  editSim = Math.abs(editDist) > 0.01
-    ? simulateMove(startPose, rad(editSteer), editDist, level.obstacles)
-    : null;
+  if (Math.abs(editDist) > 0.01) {
+    editSim    = simulateMove(startPose, rad(editSteer),  editDist, level.obstacles);
+    editSimOpp = simulateMove(startPose, rad(editSteer), -editDist, level.obstacles);
+  } else {
+    editSim = editSimOpp = null;
+  }
   $('addBtn').disabled = !editSim || !!editSim.hit || !!anim;
   $('addBtn').textContent = editIdx !== null ? `Update #${editIdx + 1}` : 'Add move';
 }
@@ -543,7 +547,20 @@ function draw(now) {
     ctx.restore();
   }
 
-  // live edit preview
+  // opposite-direction ghost (same |dist|, opposite sign) — shown dim so the
+  // player can see both options at once without it competing with the active arc
+  if (editSimOpp) {
+    const oppFwd = editDist < 0; // opposite of current direction
+    ctx.save();
+    ctx.globalAlpha = 0.32;
+    drawPath(editSimOpp.pts,
+             oppFwd ? 'rgba(69,196,255,0.9)' : 'rgba(255,159,67,0.9)', !oppFwd);
+    drawGhost(editSimOpp.end,
+              oppFwd ? 'rgba(69,196,255,0.9)' : 'rgba(255,159,67,0.9)', rad(editSteer));
+    ctx.restore();
+  }
+
+  // live edit preview (active direction)
   let hitInfo = null;
   if (editSim) {
     const bad = !!editSim.hit;
