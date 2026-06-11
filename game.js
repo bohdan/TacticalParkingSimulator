@@ -7,7 +7,6 @@
 const CAR = { len: 4.4, wid: 1.8, wb: 2.7, rOver: 0.85, maxSteer: 35 };
 CAR.fOver = CAR.len - CAR.wb - CAR.rOver;
 
-const MAX_MOVE_DIST = 25;    // m, per planned move
 const SAMPLE_STEP = 0.06;    // m, collision sampling along path
 
 const rad = d => d * Math.PI / 180;
@@ -338,11 +337,10 @@ const LEVELS = [
       { cx: 24.0, cy: 11.6, h: 0 },
       { cx: 29.0, cy: 11.6, h: 0 },
     ],
-    starThresh: [4, 6], starThreshQuick: [27, 42],
-    hint: 'Too far even for one full-length move — then thread the bay.',
+    starThresh: [3, 5], starThreshQuick: [25, 39],
+    hint: 'Cross the entire 36 m lot, then thread the bay.',
     solution: [
-      { steer:  0,  dist: 24   },
-      { steer:  0,  dist:  4.1 },
+      { steer:  0,  dist: 28.1 },
       { steer: 35,  dist: -6.3 },
       { steer:  0,  dist: -2.9 },
     ],
@@ -521,6 +519,11 @@ let view = { scale: 1, ox: 0, oy: 0 };
 
 function planEnd() {
   return planSims.length ? planSims[planSims.length - 1].end : level.start;
+}
+
+// Per-move distance cap: one move can span the whole field.
+function maxMoveDist() {
+  return Math.max(level.w, level.h);
 }
 
 function recomputePlan() {
@@ -1003,6 +1006,8 @@ function setLevel(i) {
   levelIdx = (i + LEVELS.length) % LEVELS.length;
   localStorage.setItem('parking.level', String(levelIdx));
   level = buildLevel(LEVELS[levelIdx]);
+  distEl.min = -maxMoveDist();
+  distEl.max = maxMoveDist();
   moves = [];
   anim = null;
   editIdx = null;
@@ -1017,7 +1022,7 @@ const steerEl = $('steer'), distEl = $('dist');
 
 function setEdit(steerDeg, dist) {
   editSteer = clamp(Math.abs(steerDeg) <= 2 ? 0 : steerDeg, -CAR.maxSteer, CAR.maxSteer);
-  editDist = Math.abs(dist) < 0.15 ? 0 : clamp(dist, -MAX_MOVE_DIST, MAX_MOVE_DIST);
+  editDist = Math.abs(dist) < 0.15 ? 0 : clamp(dist, -maxMoveDist(), maxMoveDist());
   steerEl.value = editSteer;
   distEl.value = editDist;
   $('steerVal').textContent = editSteer === 0 ? '0°'
