@@ -388,7 +388,26 @@ function drawCarBody(pose, opts) {
   ctx.restore();
 }
 
-function drawGhost(pose, color) {
+function drawGhost(pose, color, steer = 0) {
+  ctx.save();
+  ctx.translate(pose.x, pose.y);
+  ctx.rotate(pose.h);
+  ctx.lineWidth = 0.07;
+  ctx.strokeStyle = color;
+  ctx.setLineDash([0.25, 0.18]);
+  for (const [wx, wy, a] of [
+    [0, -0.74, 0], [0, 0.74, 0],
+    [CAR.wb, -0.74, steer], [CAR.wb, 0.74, steer],
+  ]) {
+    ctx.save();
+    ctx.translate(wx, wy);
+    ctx.rotate(a);
+    ctx.strokeRect(-0.33, -0.13, 0.66, 0.26);
+    ctx.restore();
+  }
+  ctx.restore();
+  ctx.setLineDash([]);
+
   drawPoly(carPoly(pose));
   ctx.lineWidth = 0.07;
   ctx.strokeStyle = color;
@@ -502,7 +521,7 @@ function draw(now) {
   }
   for (let i = 0; i < planSims.length; i++) {
     drawGhost(planSims[i].end, i === planSims.length - 1 && !editSim
-      ? 'rgba(233,240,250,0.85)' : 'rgba(160,175,195,0.5)');
+      ? 'rgba(233,240,250,0.85)' : 'rgba(160,175,195,0.5)', moves[i].steer);
   }
 
   // live edit preview
@@ -514,7 +533,7 @@ function draw(now) {
                  : editDist >= 0 ? 'rgba(69,196,255,0.95)' : 'rgba(255,159,67,0.95)',
              editDist < 0);
     drawGhost(bad ? editSim.hit.pose : editSim.end,
-              bad ? 'rgba(255,82,82,0.95)' : 'rgba(233,240,250,0.95)');
+              bad ? 'rgba(255,82,82,0.95)' : 'rgba(233,240,250,0.95)', rad(editSteer));
     if (bad) hitInfo = editSim.hit;
   }
 
