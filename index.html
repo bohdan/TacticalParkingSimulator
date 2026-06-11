@@ -16,6 +16,7 @@
       <div id="objective" class="sub"></div>
     </div>
     <button id="nextLv" class="nav">&#8250;</button>
+    <button id="helpBtn" class="nav" style="font-size:18px;font-weight:700;">?</button>
   </header>
 
   <div id="stats"></div>
@@ -36,10 +37,16 @@
       <span id="distVal" class="val">&mdash;</span>
     </div>
     <div id="btns">
-      <button id="undoBtn">&#8630; Undo</button>
-      <button id="resetBtn">&#10005; Reset</button>
-      <button id="addBtn" class="primary">&#65291; Add move</button>
-      <button id="goBtn" class="go">&#9654; Run</button>
+      <div class="btns-row">
+        <button id="undoBtn">&#8630; Undo</button>
+        <button id="resetBtn">&#10005; Reset</button>
+        <button id="addBtn" class="primary">&#65291; Add move</button>
+        <button id="goBtn" class="go">&#9654; Run</button>
+      </div>
+      <div class="btns-row" style="margin-top:6px;">
+        <button id="solBtn">&#128161; Solution</button>
+        <button id="modeBtn" class="mode">&#9733; Precise</button>
+      </div>
     </div>
   </div>
 </div>
@@ -54,6 +61,28 @@
       <button id="ovImprove">Improve</button>
       <button id="ovRetry">Retry</button>
       <button id="ovNext" class="primary">Next &#8250;</button>
+    </div>
+  </div>
+</div>
+
+<div id="helpOverlay" class="hidden">
+  <div class="card" style="text-align:left;max-height:80vh;overflow-y:auto;">
+    <div style="text-align:center;font-size:20px;font-weight:800;margin-bottom:12px;">How to Play</div>
+    <div class="help-body">
+      <b>Goal</b> — Park the car inside the green zone.<br><br>
+      <b>Plan moves</b> — Set a steering angle and distance with the sliders (or drag on the canvas), then tap <i>Add move</i>. Moves are queued up as a plan.<br><br>
+      <b>Run</b> — Animates your full plan. The last pending move is auto-committed when you hit Run.<br><br>
+      <b>Edit past moves</b> — Tap a numbered badge on the canvas to load that move back into the sliders. <i>Update #N</i> saves the change; <i>Cancel</i> discards it.<br><br>
+      <b>&#9733; Stars</b><br>
+      &nbsp;&#9733;&#9733;&#9733; — Perfect (meets 3-star threshold)<br>
+      &nbsp;&#9733;&#9733;&#9734; — Good<br>
+      &nbsp;&#9733;&#9734;&#9734; — Parked, but can do better<br><br>
+      <b>Precise mode</b> — Stars based on fewest moves (or shortest distance for Dead End).<br><br>
+      <b>Quick mode</b> — Stars based on estimated time: driving speed 3 m/s, steering 60&deg;/s, +1.5s per direction reversal. Fewer, longer moves beat many short ones.<br><br>
+      <b>&#128161; Solution</b> — Loads the verified optimal move sequence. Use it as a hint or to see what perfect looks like.
+    </div>
+    <div style="text-align:center;margin-top:16px;">
+      <button id="helpClose" style="height:44px;padding:0 24px;border-radius:12px;border:1px solid #313a4b;background:#1d4f6b;border-color:#2d7396;color:#e7ecf3;font-size:14px;font-weight:600;">Got it</button>
     </div>
   </div>
 </div>

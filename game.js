@@ -129,6 +129,8 @@ const LEVELS = [
     cars: [],
     starThresh: [2, 4],
     hint: 'Get around the block into the green zone.',
+    solution: [{steer:22,dist:10.5},{steer:0,dist:3}],
+    starThreshQuick: [8, 13],
   },
   {
     name: 'Parallel Squeeze', mode: 'moves', w: 22, h: 13,
@@ -145,6 +147,8 @@ const LEVELS = [
     ],
     starThresh: [3, 5],
     hint: 'Reverse into the gap at the curb.',
+    solution: [{steer:0,dist:10.75},{steer:35,dist:-3},{steer:-35,dist:-3}],
+    starThreshQuick: [12, 18],
   },
   {
     name: 'Tight Bay', mode: 'moves', w: 20, h: 13,
@@ -155,6 +159,8 @@ const LEVELS = [
       cx => ({ cx, cy: 2.85, h: Math.PI / 2 })),
     starThresh: [3, 5],
     hint: 'Back into the empty bay (either direction).',
+    solution: [{steer:0,dist:10.6},{steer:35,dist:-6.3},{steer:0,dist:-2.9}],
+    starThreshQuick: [13, 20],
   },
   {
     name: 'Dead End', mode: 'dist', w: 22, h: 13,
@@ -168,6 +174,30 @@ const LEVELS = [
     cars: [],
     starThresh: [19, 27],
     hint: 'Turn around to face the way you came.',
+    solution: [{steer:12,dist:3},{steer:-35,dist:3},{steer:35,dist:-3},{steer:-35,dist:1.5},{steer:0,dist:-1.5},{steer:-35,dist:5}],
+    starThreshQuick: [20, 30],
+  },
+  {
+    name: 'Battle Park', mode: 'moves', w: 24, h: 13,
+    start: { x: 2.6, y: 7.0, h: 0 },
+    goal: { cx: 9.29, cy: 9.22, w: 5.0, h: 2.0, heads: [0], tol: 10 },
+    walls: [
+      { x: 0, y: 10.5, w: 24, h: 2.5, kind: 'curb' },
+      { x: 0, y: 0,    w: 24, h: 1.6, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 4.8,  cy: 9.4, h: 0 },
+      { cx: 15.7, cy: 9.4, h: 0 },
+      { cx: 9.5,  cy: 2.4, h: Math.PI },
+      { cx: 21.0, cy: 9.4, h: 0 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [14, 20],
+    hint: 'Barely 9 cm from Car A — pure parallel precision.',
+    solution: [
+      { steer: 0,   dist: 10.75 },
+      { steer: 35,  dist: -3 },
+      { steer: -35, dist: -3 },
+    ],
   },
 ];
 
@@ -197,6 +227,23 @@ function inGoal(pose, goal) {
     v => v.x >= x0 && v.x <= x1 && v.y >= y0 && v.y <= y1);
 }
 
+const DRIVE_SPEED = 3.0;   // m/s
+const STEER_RATE_DS = 60;  // degrees per second
+const DIR_CHANGE_T = 1.5;  // seconds per direction reversal
+
+function planTime(mvs) {
+  let t = 0, prevDeg = 0, prevSign = 0;
+  for (let i = 0; i < mvs.length; i++) {
+    const m = mvs[i];
+    const d = deg(m.steer);
+    t += Math.abs(d - prevDeg) / STEER_RATE_DS;
+    if (i > 0 && Math.sign(m.dist) !== prevSign) t += DIR_CHANGE_T;
+    t += Math.abs(m.dist) / DRIVE_SPEED;
+    prevDeg = d; prevSign = Math.sign(m.dist);
+  }
+  return t;
+}
+
 /* ===================== Game state ===================== */
 
 const $ = id => document.getElementById(id);
@@ -214,6 +261,7 @@ let editSimOpp = null; // preview for the opposite direction (same |dist|, oppos
 let editIdx = null;    // index of the move being tweaked (null = composing next move)
 
 let anim = null;       // {samples, cum, total, t0, speed}
+let scoringMode = 'precise'; // 'precise' | 'quick'
 let view = { scale: 1, ox: 0, oy: 0 };
 
 function planEnd() {
@@ -249,10 +297,14 @@ function recomputeEdit() {
 function planStats() {
   let dist = 0;
   for (const m of moves) dist += Math.abs(m.dist);
-  return { moves: moves.length, dist };
+  return { moves: moves.length, dist, time: planTime(moves) };
 }
 
 function computeStars(st) {
+  if (scoringMode === 'quick') {
+    const thresh = level.starThreshQuick || [999, 9999];
+    return st.time <= thresh[0] ? 3 : st.time <= thresh[1] ? 2 : 1;
+  }
   const v = level.mode === 'dist' ? st.dist : st.moves;
   const t = level.starThresh;
   return v <= t[0] ? 3 : v <= t[1] ? 2 : 1;
@@ -273,28 +325,34 @@ function updateHUD() {
     ' · ' + level.hint;
   const st = planStats();
   const best = loadBest();
+  const t = st.time.toFixed(1);
+  const modeLabel = scoringMode === 'quick' ? `<span class="quick-badge">⏱ QUICK</span>` : '';
   $('stats').innerHTML =
-    `Moves <b>${st.moves}</b> · ${st.dist.toFixed(1)} m` +
+    `${modeLabel}Moves <b>${st.moves}</b> · ${st.dist.toFixed(1)} m · ~${t}s` +
     (best ? ` · Best <span class="star">${starStr(best.stars)}</span> ` +
-      (level.mode === 'dist' ? `${best.dist.toFixed(1)} m` : `${best.moves} moves`) : '');
+      (scoringMode === 'quick' ? `${(best.time||0).toFixed(1)}s` :
+       level.mode === 'dist' ? `${best.dist.toFixed(1)} m` : `${best.moves} moves`) : '');
+  $('modeBtn').textContent = scoringMode === 'precise' ? '★ Precise' : '⏱ Quick';
   $('undoBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
   $('undoBtn').textContent = editIdx !== null ? 'Cancel' : 'Undo';
   $('resetBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
-  $('goBtn').disabled = moves.length === 0 || !!anim;
+  $('goBtn').disabled = (moves.length === 0 && (!editSim || !!editSim.hit)) || !!anim;
 }
 
 function loadBest() {
-  try { return JSON.parse(localStorage.getItem('parking.best.' + levelIdx)); }
+  try { return JSON.parse(localStorage.getItem(`parking.best.${scoringMode}.${levelIdx}`)); }
   catch (e) { return null; }
 }
 
 function saveBest(st, stars) {
   const prev = loadBest();
-  const metric = level.mode === 'dist' ? st.dist : st.moves;
-  const prevMetric = prev ? (level.mode === 'dist' ? prev.dist : prev.moves) : Infinity;
+  const metric = scoringMode === 'quick' ? st.time :
+    level.mode === 'dist' ? st.dist : st.moves;
+  const prevMetric = prev ? (scoringMode === 'quick' ? (prev.time||999) :
+    level.mode === 'dist' ? prev.dist : prev.moves) : Infinity;
   if (!prev || stars > prev.stars || (stars === prev.stars && metric < prevMetric)) {
-    localStorage.setItem('parking.best.' + levelIdx,
-      JSON.stringify({ moves: st.moves, dist: st.dist, stars }));
+    localStorage.setItem(`parking.best.${scoringMode}.${levelIdx}`,
+      JSON.stringify({ moves: st.moves, dist: st.dist, time: st.time, stars }));
   }
 }
 
@@ -752,12 +810,24 @@ $('resetBtn').addEventListener('click', () => {
 });
 
 $('goBtn').addEventListener('click', () => {
+  if (anim) return;
+  // Auto-commit a valid pending move so the player doesn't have to press Add first
+  if (editSim && !editSim.hit && editIdx === null) {
+    moves.push({ steer: rad(editSteer), dist: editDist });
+    editIdx = null;
+    recomputePlan();
+  }
   if (!moves.length) { toast('Add some moves first'); return; }
   startRun();
 });
 
 $('prevLv').addEventListener('click', () => setLevel(levelIdx - 1));
 $('nextLv').addEventListener('click', () => setLevel(levelIdx + 1));
+
+$('solBtn').addEventListener('click', showSolution);
+$('modeBtn').addEventListener('click', toggleMode);
+$('helpBtn').addEventListener('click', () => $('helpOverlay').classList.remove('hidden'));
+$('helpClose').addEventListener('click', () => $('helpOverlay').classList.add('hidden'));
 
 $('ovImprove').addEventListener('click', () => $('overlay').classList.add('hidden'));
 $('ovRetry').addEventListener('click', () => {
@@ -777,6 +847,21 @@ function selectMove(i) {
   editIdx = i;
   const m = moves[i];
   setEdit(deg(m.steer), m.dist);
+}
+
+function showSolution() {
+  if (!level.solution) { toast('No solution on record for this level'); return; }
+  if (anim) return;
+  editIdx = null;
+  moves = level.solution.map(m => ({ steer: rad(m.steer), dist: m.dist }));
+  setEdit(0, 0);
+  recomputePlan();
+  toast('Optimal solution loaded — hit Run to see it');
+}
+
+function toggleMode() {
+  scoringMode = scoringMode === 'precise' ? 'quick' : 'precise';
+  updateHUD();
 }
 
 // Drag directly on the canvas: vertical = distance, horizontal = steering.

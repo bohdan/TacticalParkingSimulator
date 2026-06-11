@@ -121,7 +121,8 @@ input[type="range"]::-moz-range-thumb {
 
 #btns {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 0;
   margin-top: 6px;
 }
 #btns button {
@@ -189,4 +190,40 @@ button:active:not(:disabled) { filter: brightness(1.25); }
   z-index: 20;
   max-width: 86vw;
   text-align: center;
+}
+
+.btns-row {
+  display: flex;
+  gap: 8px;
+}
+#btns button.mode { background: #2a1f3d; border-color: #5a3e8a; color: #c9b0f0; }
+
+.quick-badge {
+  display: inline-block;
+  background: #2a1f3d;
+  color: #c9b0f0;
+  border-radius: 6px;
+  padding: 0 5px;
+  font-size: 11px;
+  margin-right: 4px;
+}
+
+.help-body { font-size: 13px; color: #c8d2e2; line-height: 1.7; }
+
+#helpOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 12, 16, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+#helpOverlay.hidden { display: none; }
+#helpOverlay .card {
+  background: #1f2530;
+  border: 1px solid #364052;
+  border-radius: 18px;
+  padding: 22px 24px;
+  width: min(86vw, 360px);
 }
