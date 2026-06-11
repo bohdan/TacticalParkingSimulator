@@ -130,7 +130,7 @@ const LEVELS = [
     starThresh: [2, 4],
     hint: 'Get around the block into the green zone.',
     solution: [{steer:22,dist:10.5},{steer:0,dist:3}],
-    starThreshQuick: [8, 13],
+    starThreshQuick: [11, 16],
   },
   {
     name: 'Parallel Squeeze', mode: 'moves', w: 22, h: 13,
@@ -148,7 +148,7 @@ const LEVELS = [
     starThresh: [3, 5],
     hint: 'Reverse into the gap at the curb.',
     solution: [{steer:0,dist:10.75},{steer:35,dist:-3},{steer:-35,dist:-3}],
-    starThreshQuick: [12, 18],
+    starThreshQuick: [17, 26],
   },
   {
     name: 'Tight Bay', mode: 'moves', w: 20, h: 13,
@@ -160,7 +160,7 @@ const LEVELS = [
     starThresh: [3, 5],
     hint: 'Back into the empty bay (either direction).',
     solution: [{steer:0,dist:10.6},{steer:35,dist:-6.3},{steer:0,dist:-2.9}],
-    starThreshQuick: [13, 20],
+    starThreshQuick: [18, 27],
   },
   {
     name: 'Dead End', mode: 'dist', w: 22, h: 13,
@@ -175,7 +175,7 @@ const LEVELS = [
     starThresh: [19, 27],
     hint: 'Turn around to face the way you came.',
     solution: [{steer:12,dist:3},{steer:-35,dist:3},{steer:35,dist:-3},{steer:-35,dist:1.5},{steer:0,dist:-1.5},{steer:-35,dist:5}],
-    starThreshQuick: [20, 30],
+    starThreshQuick: [30, 45],
   },
   {
     name: 'Battle Park', mode: 'moves', w: 24, h: 13,
@@ -191,7 +191,7 @@ const LEVELS = [
       { cx: 9.5,  cy: 2.4, h: Math.PI },
       { cx: 21.0, cy: 9.4, h: 0 },
     ],
-    starThresh: [3, 5], starThreshQuick: [14, 20],
+    starThresh: [3, 5], starThreshQuick: [17, 26],
     hint: 'Barely 9 cm from Car A — pure parallel precision.',
     solution: [
       { steer: 0,   dist: 10.75 },
@@ -227,9 +227,18 @@ function inGoal(pose, goal) {
     v => v.x >= x0 && v.x <= x1 && v.y >= y0 && v.y <= y1);
 }
 
-const DRIVE_SPEED = 3.0;   // m/s
+const V_MAX = 3.0;         // m/s top speed
+const ACCEL = 2.0;         // m/s² acceleration / braking
 const STEER_RATE_DS = 60;  // degrees per second
 const DIR_CHANGE_T = 1.5;  // seconds per direction reversal
+
+// Time for one move: trapezoid profile (accel from rest → cruise → brake to rest)
+function moveTime(dist) {
+  const d = Math.abs(dist);
+  const dFull = V_MAX * V_MAX / ACCEL; // dist needed to reach V_MAX and brake
+  if (d >= dFull) return 2 * V_MAX / ACCEL + (d - dFull) / V_MAX;
+  return 2 * Math.sqrt(d / ACCEL);
+}
 
 function planTime(mvs) {
   let t = 0, prevDeg = 0, prevSign = 0;
@@ -238,7 +247,7 @@ function planTime(mvs) {
     const d = deg(m.steer);
     t += Math.abs(d - prevDeg) / STEER_RATE_DS;
     if (i > 0 && Math.sign(m.dist) !== prevSign) t += DIR_CHANGE_T;
-    t += Math.abs(m.dist) / DRIVE_SPEED;
+    t += moveTime(m.dist);
     prevDeg = d; prevSign = Math.sign(m.dist);
   }
   return t;
