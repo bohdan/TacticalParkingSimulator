@@ -210,6 +210,7 @@ let planSims = [];     // cached simulateMove result per move
 let editSteer = 0;     // degrees, from slider
 let editDist = 0;      // meters, signed
 let editSim = null;
+let editIdx = null;    // index of the move being tweaked (null = composing next move)
 
 let anim = null;       // {samples, cum, total, t0, speed}
 let view = { scale: 1, ox: 0, oy: 0 };
@@ -231,10 +232,14 @@ function recomputePlan() {
 }
 
 function recomputeEdit() {
+  const startPose = editIdx !== null
+    ? (editIdx === 0 ? level.start : planSims[editIdx - 1].end)
+    : planEnd();
   editSim = Math.abs(editDist) > 0.01
-    ? simulateMove(planEnd(), rad(editSteer), editDist, level.obstacles)
+    ? simulateMove(startPose, rad(editSteer), editDist, level.obstacles)
     : null;
   $('addBtn').disabled = !editSim || !!editSim.hit || !!anim;
+  $('addBtn').textContent = editIdx !== null ? `Update #${editIdx + 1}` : 'Add move';
 }
 
 function planStats() {
@@ -268,8 +273,9 @@ function updateHUD() {
     `Moves <b>${st.moves}</b> · ${st.dist.toFixed(1)} m` +
     (best ? ` · Best <span class="star">${starStr(best.stars)}</span> ` +
       (level.mode === 'dist' ? `${best.dist.toFixed(1)} m` : `${best.moves} moves`) : '');
-  $('undoBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01) || !!anim;
-  $('resetBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01) || !!anim;
+  $('undoBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
+  $('undoBtn').textContent = editIdx !== null ? 'Cancel' : 'Undo';
+  $('resetBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
   $('goBtn').disabled = moves.length === 0 || !!anim;
 }
 
@@ -514,14 +520,27 @@ function draw(now) {
   ctx.setLineDash([]);
 
   // committed plan: paths + ghosts
+  // When editing move editIdx: skip that move's arc (replaced by live preview),
+  // and dim any moves that come after it (their start poses will shift on commit).
   for (let i = 0; i < planSims.length; i++) {
+    if (editIdx !== null && i === editIdx) continue;
     const sim = planSims[i];
+    const dimmed = editIdx !== null && i > editIdx;
+    ctx.save();
+    if (dimmed) ctx.globalAlpha = 0.3;
     drawPath(sim.pts, moves[i].dist >= 0 ? 'rgba(69,196,255,0.85)' : 'rgba(255,159,67,0.85)',
              moves[i].dist < 0);
+    ctx.restore();
   }
   for (let i = 0; i < planSims.length; i++) {
-    drawGhost(planSims[i].end, i === planSims.length - 1 && !editSim
+    if (editIdx !== null && i === editIdx) continue;
+    const dimmed = editIdx !== null && i > editIdx;
+    const isAnchor = editIdx !== null ? i === editIdx - 1 : i === planSims.length - 1 && !editSim;
+    ctx.save();
+    if (dimmed) ctx.globalAlpha = 0.3;
+    drawGhost(planSims[i].end, isAnchor
       ? 'rgba(233,240,250,0.85)' : 'rgba(160,175,195,0.5)', moves[i].steer);
+    ctx.restore();
   }
 
   // live edit preview
@@ -578,11 +597,12 @@ function draw(now) {
     const e = planSims[i].end;
     const sp = toScreen({ x: e.x + Math.cos(e.h) * CAR.wb / 2,
                           y: e.y + Math.sin(e.h) * CAR.wb / 2 });
+    const selected = editIdx === i;
     ctx.beginPath();
     ctx.arc(sp.x, sp.y, 9, 0, 2 * Math.PI);
-    ctx.fillStyle = 'rgba(20,25,33,0.85)';
+    ctx.fillStyle = selected ? '#ffd700' : 'rgba(20,25,33,0.85)';
     ctx.fill();
-    ctx.fillStyle = '#cfd9e6';
+    ctx.fillStyle = selected ? '#1a1400' : '#cfd9e6';
     ctx.fillText(String(i + 1), sp.x, sp.y + 0.5);
   }
 
@@ -593,6 +613,7 @@ function draw(now) {
 
 function startRun() {
   if (!moves.length || anim) return;
+  editIdx = null;
   const samples = [];
   const cum = [];
   let total = 0;
@@ -650,6 +671,7 @@ function setLevel(i) {
   level = buildLevel(LEVELS[levelIdx]);
   moves = [];
   anim = null;
+  editIdx = null;
   setEdit(0, 0);
   recomputePlan();
 }
@@ -676,13 +698,25 @@ distEl.addEventListener('input', () => setEdit(editSteer, parseFloat(distEl.valu
 
 $('addBtn').addEventListener('click', () => {
   if (!editSim || editSim.hit || anim) return;
-  moves.push({ steer: rad(editSteer), dist: editDist });
-  setEdit(editSteer, 0); // keep steering, ready for the next move
-  recomputePlan();
+  if (editIdx !== null) {
+    moves[editIdx] = { steer: rad(editSteer), dist: editDist };
+    editIdx = null;
+    setEdit(editSteer, 0);
+    recomputePlan();
+  } else {
+    moves.push({ steer: rad(editSteer), dist: editDist });
+    setEdit(editSteer, 0); // keep steering, ready for the next move
+    recomputePlan();
+  }
 });
 
 $('undoBtn').addEventListener('click', () => {
   if (anim) return;
+  if (editIdx !== null) {
+    editIdx = null;
+    setEdit(0, 0);
+    return;
+  }
   if (Math.abs(editDist) >= 0.01) {
     setEdit(editSteer, 0);
   } else if (moves.length) {
@@ -694,6 +728,7 @@ $('undoBtn').addEventListener('click', () => {
 
 $('resetBtn').addEventListener('click', () => {
   if (anim) return;
+  editIdx = null;
   moves = [];
   setEdit(0, 0);
   recomputePlan();
@@ -719,23 +754,47 @@ $('ovNext').addEventListener('click', () => {
   setLevel(levelIdx + 1);
 });
 
+function selectMove(i) {
+  if (anim) return;
+  if (editIdx === i) { editIdx = null; setEdit(0, 0); return; }
+  editIdx = i;
+  const m = moves[i];
+  setEdit(deg(m.steer), m.dist);
+}
+
 // Drag directly on the canvas: vertical = distance, horizontal = steering.
+// A tap (minimal movement) on a move badge selects it for tweaking.
 let drag = null;
 cv.addEventListener('pointerdown', e => {
   if (anim) return;
   cv.setPointerCapture(e.pointerId);
-  drag = { x: e.clientX, y: e.clientY, steer: editSteer, dist: editDist };
+  drag = { x: e.clientX, y: e.clientY, steer: editSteer, dist: editDist, moved: false };
 });
 cv.addEventListener('pointermove', e => {
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (Math.abs(dx) > 5 || Math.abs(dy) > 5) drag.moved = true;
+  if (!drag.moved) return;
   const steer = drag.steer + dx / (cv.clientWidth * 0.45) * CAR.maxSteer * 2;
   const dist = drag.dist - dy / view.scale * 1.25;
   setEdit(steer, dist);
 });
-const endDrag = () => { drag = null; };
-cv.addEventListener('pointerup', endDrag);
-cv.addEventListener('pointercancel', endDrag);
+cv.addEventListener('pointerup', e => {
+  if (drag && !drag.moved) {
+    const cx = e.clientX, cy = e.clientY;
+    let hit = -1;
+    for (let i = 0; i < planSims.length; i++) {
+      const ep = planSims[i].end;
+      const sp = toScreen({ x: ep.x + Math.cos(ep.h) * CAR.wb / 2,
+                             y: ep.y + Math.sin(ep.h) * CAR.wb / 2 });
+      if (Math.hypot(cx - sp.x, cy - sp.y) < 16) { hit = i; break; }
+    }
+    if (hit >= 0) selectMove(hit);
+    else if (editIdx !== null) { editIdx = null; setEdit(0, 0); }
+  }
+  drag = null;
+});
+cv.addEventListener('pointercancel', () => { drag = null; });
 
 document.addEventListener('gesturestart', e => e.preventDefault());
 
