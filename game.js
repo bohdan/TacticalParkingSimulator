@@ -199,6 +199,223 @@ const LEVELS = [
       { steer: -35, dist: -3 },
     ],
   },
+
+  // ── MEDIUM (6–10) ────────────────────────────────────────────────────────
+
+  {
+    name: 'Parallel Return', mode: 'moves', w: 22, h: 13,
+    start: { x: 19.4, y: 7.0, h: Math.PI },
+    goal: { cx: 11.85, cy: 9.4, w: 6.4, h: 2.2, heads: [180], tol: 12 },
+    walls: [
+      { x: 0, y: 10.5, w: 22, h: 2.5, kind: 'curb' },
+      { x: 0, y: 0,    w: 22, h: 1.6, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 17.4, cy: 9.5, h: 0 },
+      { cx:  6.3, cy: 9.5, h: 0 },
+      { cx: 12.5, cy: 2.55, h: 0 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [17, 26],
+    hint: 'Same gap — but you\'re coming from the other end.',
+    solution: [
+      { steer: 0,   dist: 10.75 },
+      { steer: -35, dist: -3 },
+      { steer:  35, dist: -3 },
+    ],
+  },
+
+  {
+    name: 'Two-Stage Approach', mode: 'moves', w: 28, h: 13,
+    start: { x: 2.6, y: 7.0, h: 0 },
+    goal: { cx: 16.5, cy: 9.4, w: 5.5, h: 2.2, heads: [0], tol: 12 },
+    walls: [
+      { x: 0, y: 10.5, w: 28, h: 2.5, kind: 'curb' },
+      { x: 0, y: 0,    w: 28, h: 1.6, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 11.5, cy: 9.5, h: 0 },
+      { cx: 21.0, cy: 9.5, h: 0 },
+      { cx: 16.5, cy: 2.55, h: Math.PI },
+    ],
+    starThresh: [4, 6], starThreshQuick: [22, 33],
+    hint: 'The gap is too far for one straight move — split your approach.',
+    solution: [
+      { steer: 0,   dist: 12 },
+      { steer: 0,   dist: 6.5 },
+      { steer: 35,  dist: -3 },
+      { steer: -35, dist: -3 },
+    ],
+  },
+
+  {
+    name: 'Bay from the Right', mode: 'moves', w: 20, h: 13,
+    start: { x: 3.5, y: 8.6, h: 0 },
+    goal: { cx: 10.6, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
+    walls: [],
+    cars: [3.6, 5.9, 8.2, 13.0, 15.3, 17.6].map(cx => ({ cx, cy: 2.85, h: Math.PI / 2 })),
+    starThresh: [3, 5], starThreshQuick: [18, 27],
+    hint: 'Same bays as Tight Bay — but you\'re pointing the wrong way.',
+    solution: [
+      { steer:   0, dist:  10.6 },
+      { steer: -35, dist:  -6.3 },
+      { steer:   0, dist:  -2.9 },
+    ],
+  },
+
+  {
+    name: 'Narrow Dead End', mode: 'dist', w: 22, h: 12,
+    start: { x: 3.2, y: 6.5, h: 0 },
+    goal: { cx: 4.6, cy: 6.5, w: 8, h: 5.6, heads: [180], tol: 12 },
+    walls: [
+      { x: 0, y: 0,    w: 22, h: 3.7 },
+      { x: 0, y: 8.6,  w: 22, h: 3.4 },
+      { x: 18.4, y: 0, w: 3.6, h: 12 },
+    ],
+    cars: [],
+    starThresh: [19, 27], starThreshQuick: [30, 45],
+    hint: 'Same dead end — the corridor is 1.2 m narrower.',
+    solution: [
+      { steer:  12, dist:  3   },
+      { steer: -35, dist:  3   },
+      { steer:  35, dist: -3   },
+      { steer: -35, dist:  1.5 },
+      { steer:   0, dist: -1.5 },
+      { steer: -35, dist:  5   },
+    ],
+  },
+
+  {
+    name: 'Two-Stage Bay', mode: 'moves', w: 28, h: 13,
+    start: { x: 26.0, y: 8.6, h: Math.PI },
+    goal: { cx: 9.85, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
+    walls: [],
+    cars: [
+      ...([2.4, 4.7, 7.0, 11.8, 14.1, 16.4].map(cx => ({ cx, cy: 2.85, h: Math.PI / 2 }))),
+      { cx: 22.0, cy: 9.5, h: 0 },
+      { cx: 24.5, cy: 9.5, h: 0 },
+    ],
+    starThresh: [4, 6], starThreshQuick: [24, 36],
+    hint: 'The bay is far — you need two straight moves just to reach it.',
+    solution: [
+      { steer:  0,  dist: 12   },
+      { steer:  0,  dist:  7.6 },
+      { steer: 35,  dist: -6.3 },
+      { steer:  0,  dist: -2.9 },
+    ],
+  },
+
+  // ── HARD (11–15) ─────────────────────────────────────────────────────────
+
+  {
+    name: 'Long Way Round', mode: 'moves', w: 30, h: 13,
+    start: { x: 25.4, y: 7.0, h: Math.PI },
+    goal: { cx: 13.5, cy: 9.4, w: 5.5, h: 2.2, heads: [180], tol: 10 },
+    walls: [
+      { x: 0, y: 10.5, w: 30, h: 2.5, kind: 'curb' },
+      { x: 0, y: 0,    w: 30, h: 1.6, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 10.0, cy: 9.5, h: 0 },
+      { cx: 19.0, cy: 9.5, h: 0 },
+      { cx: 13.5, cy: 2.55, h: 0 },
+    ],
+    starThresh: [4, 6], starThreshQuick: [21, 32],
+    hint: 'Far approach from the right, park facing left — two forward moves needed.',
+    solution: [
+      { steer:   0, dist: 12 },
+      { steer:   0, dist:  4 },
+      { steer: -35, dist: -3 },
+      { steer:  35, dist: -3 },
+    ],
+  },
+
+  {
+    name: 'Marathon Bay', mode: 'moves', w: 36, h: 13,
+    start: { x: 34.0, y: 8.6, h: Math.PI },
+    goal: { cx: 10.25, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
+    walls: [],
+    cars: [
+      ...([2.4, 4.7, 7.0, 11.8, 14.1, 16.4].map(cx => ({ cx, cy: 2.85, h: Math.PI / 2 }))),
+      { cx: 28.0, cy: 9.5, h: 0 },
+      { cx: 31.0, cy: 9.5, h: 0 },
+    ],
+    starThresh: [5, 7], starThreshQuick: [31, 46],
+    hint: 'Three straight moves just to reach the bay, then the real work begins.',
+    solution: [
+      { steer:  0,  dist: 12   },
+      { steer:  0,  dist: 12   },
+      { steer:  0,  dist:  3.5 },
+      { steer: 35,  dist: -6.3 },
+      { steer:  0,  dist: -2.9 },
+    ],
+  },
+
+  {
+    name: 'Tight Corner', mode: 'dist', w: 22, h: 11,
+    start: { x: 3.2, y: 6.1, h: 0 },
+    goal: { cx: 4.6, cy: 6.1, w: 8, h: 5.0, heads: [180], tol: 12 },
+    walls: [
+      { x: 0, y: 0,    w: 22, h: 3.6 },
+      { x: 0, y: 7.8,  w: 22, h: 3.2 },
+      { x: 18.4, y: 0, w: 3.6, h: 11 },
+    ],
+    cars: [],
+    starThresh: [19, 27], starThreshQuick: [30, 45],
+    hint: '5.2 m to turn around — tighter than Narrow Dead End.',
+    solution: [
+      { steer:  12, dist:  3   },
+      { steer: -35, dist:  3   },
+      { steer:  35, dist: -3   },
+      { steer: -35, dist:  1.5 },
+      { steer:   0, dist: -1.5 },
+      { steer: -35, dist:  5   },
+    ],
+  },
+
+  {
+    name: 'Distant Return', mode: 'moves', w: 30, h: 13,
+    start: { x: 5.4, y: 7.0, h: 0 },
+    goal: { cx: 17.3, cy: 9.4, w: 5.5, h: 2.2, heads: [0], tol: 10 },
+    walls: [
+      { x: 0, y: 10.5, w: 30, h: 2.5, kind: 'curb' },
+      { x: 0, y: 0,    w: 30, h: 1.6, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 12.0, cy: 9.5, h: 0 },
+      { cx: 22.5, cy: 9.5, h: 0 },
+      { cx: 17.0, cy: 2.55, h: Math.PI },
+    ],
+    starThresh: [4, 6], starThreshQuick: [21, 32],
+    hint: 'Drive almost the full length of the lot before the slot opens up.',
+    solution: [
+      { steer:  0,  dist: 12 },
+      { steer:  0,  dist:  4 },
+      { steer: 35,  dist: -3 },
+      { steer: -35, dist: -3 },
+    ],
+  },
+
+  {
+    name: 'The Gauntlet', mode: 'dist', w: 22, h: 10,
+    start: { x: 3.2, y: 5.4, h: 0 },
+    goal: { cx: 4.0, cy: 5.0, w: 7.0, h: 4.5, heads: [180], tol: 12 },
+    walls: [
+      { x: 0, y: 0,    w: 22, h: 3.2 },
+      { x: 0, y: 7.6,  w: 22, h: 2.4 },
+      { x: 18.4, y: 0, w: 3.6, h: 10 },
+    ],
+    cars: [],
+    starThresh: [19, 27], starThreshQuick: [30, 45],
+    hint: 'Only 4.4 m to manoeuvre — absolute precision required.',
+    solution: [
+      { steer:  12, dist:  3   },
+      { steer: -35, dist:  3   },
+      { steer:  35, dist: -3   },
+      { steer: -35, dist:  1.5 },
+      { steer:   0, dist: -1.5 },
+      { steer: -35, dist:  5   },
+    ],
+  },
 ];
 
 function buildLevel(def) {
@@ -241,8 +458,8 @@ function inGoal(pose, goal) {
 //      create policy "public insert" on leaderboard for insert
 //        with check (char_length(player) between 1 and 20);
 // 3. Fill in Project Settings → API → Project URL and anon/public key below.
-const LB_URL = ''; // e.g. 'https://xxxxxxxxxxxx.supabase.co'
-const LB_KEY = ''; // anon / public key
+const LB_URL = 'https://qvjorkpzlwvswsptkwyn.supabase.co';
+const LB_KEY = 'sb_publishable_geHaaCkSfPilYWV3fYQHQA_KZdYNrpC';
 
 const V_MAX = 3.0;         // m/s top speed
 const ACCEL = 2.0;         // m/s² acceleration / braking
