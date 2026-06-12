@@ -1390,14 +1390,15 @@ function playIntroDash() {
   const canvas = $('introCanvas');
   const c = canvas.getContext('2d');
 
-  // Full device-pixel-ratio resolution — smooth rendering, no virtual grid
+  // Full device-pixel-ratio resolution — smooth rendering, no virtual grid.
+  // Use window.innerWidth/Height (current visual viewport) and let CSS
+  // width:100%;height:100% control the display size so it adapts if the
+  // browser chrome shifts (URL bar show/hide on mobile).
   const dpr = Math.min(window.devicePixelRatio || 1, 3);
-  const W = canvas.offsetWidth  || window.innerWidth;
-  const H = canvas.offsetHeight || window.innerHeight;
+  const W = window.innerWidth;
+  const H = window.innerHeight;
   canvas.width  = Math.round(W * dpr);
   canvas.height = Math.round(H * dpr);
-  canvas.style.width  = W + 'px';
-  canvas.style.height = H + 'px';
   c.scale(dpr, dpr);
 
   const portrait = H > W * 1.1;
