@@ -1369,47 +1369,31 @@ function playIntroDash() {
 
   const canvas = $('introCanvas');
   const c = canvas.getContext('2d');
-  c.imageSmoothingEnabled = false;
 
-  // Virtual resolution: one "pixel" = PX physical pixels, matching screen aspect ratio
-  const cW = canvas.offsetWidth  || window.innerWidth;
-  const cH = canvas.offsetHeight || window.innerHeight;
-  const PX = Math.max(2, Math.round(Math.min(cW, cH) / 96));
-  const VW = Math.floor(cW / PX);
-  const VH = Math.floor(cH / PX);
-  canvas.width  = VW;  canvas.height = VH;
-  canvas.style.width  = cW + 'px';
-  canvas.style.height = cH + 'px';
+  // Full device-pixel-ratio resolution — smooth rendering, no virtual grid
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const W = canvas.offsetWidth  || window.innerWidth;
+  const H = canvas.offsetHeight || window.innerHeight;
+  canvas.width  = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  c.scale(dpr, dpr);
 
-  // Layout bands (proportional to VH)
-  const SKY_H = Math.floor(VH * 0.36);
+  const portrait = H > W * 1.1;
+
+  // Layout bands
+  const SKY_H = H * 0.37;
   const DASH_Y = SKY_H;
-  const DASH_H = Math.floor(VH * 0.46);
+  const DASH_H = H * 0.46;
 
-  // Centre CRT screen: width bounded by both orientation limits so it fits
-  const SC_W = Math.min(Math.floor(VW * 0.70), Math.floor(VH * 0.78));
-  const SC_X = Math.floor((VW - SC_W) / 2);
-  const SC_Y = DASH_Y + Math.floor(DASH_H * 0.07);
-  const SC_H = DASH_H - Math.floor(DASH_H * 0.12);
-  // Font: sized so all 9 MSG lines (lh ≈ FS×1.65) fit within SC_H
-  const FS = Math.max(3, Math.floor((SC_H - 4) / (9 * 1.65)));
+  // Centre CRT screen
+  const SC_W = portrait ? W * 0.84 : Math.min(W * 0.52, H * 0.72);
+  const SC_X = (W - SC_W) / 2;
+  const SC_Y = DASH_Y + DASH_H * 0.09;
+  const SC_H = DASH_H * 0.84;
+  const SC_R = 8;
 
-  // Side clusters (speedo + fuel) only when screen is wide enough relative to height
-  const showSide = VW > VH * 0.62;
-  const SP_CX = Math.floor(VW * 0.12);
-  const SP_CY = Math.floor(DASH_Y + DASH_H * 0.52);
-  const SP_R  = showSide ? Math.max(5, Math.min(SC_X - 3, Math.floor(DASH_H * 0.38))) : 0;
-  const RC_X  = SC_X + SC_W + 3;
-  const RC_W  = VW - RC_X - 1;
-
-  // LEDs centred in dashboard
-  const LED_Y  = DASH_Y + 2;
-  const LED_XS = [0.37, 0.41, 0.45, 0.49, 0.53].map(f => Math.floor(VW * f));
-
-  // Rearview mirror
-  const MIR_X = Math.floor(VW * 0.34), MIR_W = Math.floor(VW * 0.32);
-
-  // Message — max 14 chars per line so it fits on narrow portrait screens
   const MSG = [
     '> MSG INCOMING',
     '',
@@ -1421,184 +1405,261 @@ function playIntroDash() {
     '',
     '> MISSION: GO.',
   ];
+  // Font fits all 9 lines with top padding
+  const FS    = Math.max(11, Math.min(18, Math.floor((SC_H - 10) / (MSG.length * 1.65))));
+  const LH    = Math.ceil(FS * 1.65);
+  const SC_PAD = Math.max(8, SC_W * 0.05);
 
-  const rnd = n => { let x = Math.sin(n) * 1e4; return x - Math.floor(x); };
+  // Side clusters only in landscape
+  const showSide = !portrait;
+  const SP_R  = showSide ? Math.min((SC_X - 12) * 0.82, DASH_H * 0.38) : 0;
+  const SP_CX = SC_X / 2;
+  const SP_CY = DASH_Y + DASH_H * 0.52;
+  const RC_X  = Math.ceil(SC_X + SC_W + 8);
+  const RC_W  = W - RC_X - 8;
 
-  // Rain proportional to sky area
-  const RAIN = Array.from({ length: Math.max(8, Math.floor(VW * 0.22)) }, (_, i) => ({
-    x:   Math.floor(rnd(i * 7.3) * VW),
-    y0:  rnd(i * 3.1) * (SKY_H - 4),
-    spd: (2.5 + rnd(i * 5.7) * 4) * SKY_H / 55,
-    len: 2 + Math.floor(rnd(i * 2.2) * 3),
+  // Mirror
+  const MIR_W = W * 0.28, MIR_H = Math.max(14, SKY_H * 0.18);
+  const MIR_X = (W - MIR_W) / 2;
+
+  // LEDs top-centre of dash
+  const LED_XS = [-2,-1,0,1,2].map(i => W / 2 + i * W * 0.04);
+  const LED_Y  = DASH_Y + 8;
+  const LED_W  = Math.max(10, W * 0.024), LED_H = Math.max(5, H * 0.012);
+
+  const rnd = n => { const x = Math.sin(n) * 1e4; return x - Math.floor(x); };
+
+  // Rain
+  const RAIN = Array.from({ length: Math.floor(W * 0.16) }, (_, i) => ({
+    x: rnd(i * 7.3) * W, y0: rnd(i * 3.1) * SKY_H,
+    spd: 55 + rnd(i * 5.7) * 90, len: 7 + rnd(i * 2.2) * 10,
   }));
 
-  // Buildings as proportions [xFrac, yFrac, wFrac]
+  // Buildings with pre-generated windows
   const BLDGS = [
     [0.00,0.70,0.056],[0.04,0.53,0.038],[0.08,0.76,0.044],[0.12,0.65,0.033],
     [0.15,0.73,0.046],[0.19,0.56,0.036],[0.23,0.80,0.038],
     [0.63,0.73,0.046],[0.67,0.56,0.038],[0.71,0.74,0.046],[0.75,0.52,0.036],
     [0.79,0.70,0.053],[0.83,0.63,0.040],[0.88,0.77,0.050],[0.93,0.68,0.07],
-  ].map(([xf, yf, wf]) => [
-    Math.floor(xf * VW), Math.floor(yf * SKY_H),
-    Math.max(2, Math.floor(wf * VW)), Math.ceil((1 - yf) * SKY_H),
-  ]);
+  ].map(([xf, yf, wf]) => {
+    const bx = xf * W, by = yf * SKY_H;
+    const bw = Math.max(10, wf * W), bh = (1 - yf) * SKY_H;
+    const cols = Math.max(1, Math.round(bw / 12)), rows = Math.max(1, Math.round(bh / 10));
+    const wins = [];
+    for (let ri = 0; ri < rows; ri++)
+      for (let ci = 0; ci < cols; ci++)
+        if (rnd((bx + ci) * 11 + (by + ri) * 7) < 0.32)
+          wins.push({
+            x: bx + (ci + 0.25) * (bw / cols), y: by + (ri + 0.3) * (bh / rows),
+            w: bw / cols * 0.45, h: bh / rows * 0.5,
+            col: rnd(bx + ci * 3.1 + ri) < 0.55 ? '#ffe880' : '#8899cc',
+          });
+    return { bx, by, bw, bh, wins };
+  });
 
   let msgShown = false;
   const t0 = performance.now();
 
-  function fillCirclePx(cx, cy, r, col) {
-    c.fillStyle = col;
-    for (let dy = -r; dy <= r; dy++) {
-      const dx = Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
-      c.fillRect(cx - dx, cy + dy, dx * 2 + 1, 1);
-    }
+  function rrect(x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y); c.lineTo(x + w - r, y);
+    c.arcTo(x + w, y, x + w, y + r, r); c.lineTo(x + w, y + h - r);
+    c.arcTo(x + w, y + h, x + w - r, y + h, r); c.lineTo(x + r, y + h);
+    c.arcTo(x, y + h, x, y + h - r, r); c.lineTo(x, y + r);
+    c.arcTo(x, y, x + r, y, r); c.closePath();
   }
 
   function frame(now) {
-    const ms = now - t0;
+    const ms = now - t0, t = ms / 1000;
 
-    // Background
-    c.fillStyle = '#080b12'; c.fillRect(0, 0, VW, VH);
+    // ── Sky ───────────────────────────────────────────────────────────
+    const skyGrd = c.createLinearGradient(0, 0, 0, SKY_H);
+    skyGrd.addColorStop(0, '#05070d'); skyGrd.addColorStop(1, '#0b0f1c');
+    c.fillStyle = skyGrd; c.fillRect(0, 0, W, SKY_H);
 
-    // ── Sky ──────────────────────────────────────────────────────
-    for (const [bx, by, bw, bh] of BLDGS) {
-      c.fillStyle = '#0c0f19'; c.fillRect(bx, by, bw, bh);
-      const sw = Math.max(1, Math.floor(bw / 3)), sh = Math.max(2, Math.floor(bh / 5));
-      for (let wy = by + 1; wy < by + bh - 1; wy += sh)
-        for (let wx = bx + 1; wx < bx + bw - 1; wx += sw)
-          if (rnd(wx * 11 + wy * 7) < 0.30) {
-            c.fillStyle = rnd(wx + wy * 3) < 0.55 ? '#ffe880' : '#8899cc';
-            c.fillRect(wx, wy, Math.max(1, Math.floor(bw / 4)), Math.max(1, Math.floor(bh / 7)));
-          }
+    for (const { bx, by, bw, bh, wins } of BLDGS) {
+      c.fillStyle = '#090c18'; c.fillRect(bx, by, bw, bh);
+      for (const w of wins) {
+        c.fillStyle = w.col;
+        c.globalAlpha = 0.5 + 0.12 * Math.sin(t * 0.4 + bx);
+        c.fillRect(w.x, w.y, w.w, w.h);
+      }
+      c.globalAlpha = 1;
     }
 
     // Rearview mirror
-    const mirH = Math.max(3, Math.floor(SKY_H * 0.21));
-    c.fillStyle = '#1a1d2a'; c.fillRect(MIR_X - 1, 1, MIR_W + 2, mirH + 2);
-    c.fillStyle = '#0a0d18'; c.fillRect(MIR_X, 2, MIR_W, mirH);
-    c.fillStyle = '#0e1122';
-    c.fillRect(MIR_X + 2, 3, Math.floor(MIR_W * .18), mirH - 2);
-    c.fillRect(MIR_X + Math.floor(MIR_W * .33), 4, Math.floor(MIR_W * .14), mirH - 3);
-    c.fillRect(MIR_X + Math.floor(MIR_W * .62), 3, Math.floor(MIR_W * .18), mirH - 2);
-    c.fillStyle = '#ffe880'; c.fillRect(MIR_X + 4, 4, 1, 1);
-    c.fillStyle = '#8899cc'; c.fillRect(MIR_X + Math.floor(MIR_W * .17), 3, 1, 1);
+    if (ms > 200) {
+      c.fillStyle = '#1c2030';
+      rrect(MIR_X, 4, MIR_W, MIR_H, 4); c.fill();
+      c.fillStyle = '#0e1120';
+      rrect(MIR_X + 2, 6, MIR_W - 4, MIR_H - 4, 3); c.fill();
+      c.fillStyle = '#161924';
+      c.fillRect(MIR_X + MIR_W * 0.08, 7, MIR_W * 0.16, MIR_H - 6);
+      c.fillRect(MIR_X + MIR_W * 0.38, 7, MIR_W * 0.14, MIR_H - 6);
+      c.fillRect(MIR_X + MIR_W * 0.68, 7, MIR_W * 0.16, MIR_H - 6);
+    }
 
     // Rain
-    if (ms > 300) {
-      const t = ms / 1000;
-      c.fillStyle = 'rgba(90,130,200,.65)';
-      for (const dr of RAIN)
-        c.fillRect(dr.x, Math.floor((dr.y0 + dr.spd * t) % (SKY_H - 1)), 1, dr.len);
+    if (ms > 400) {
+      c.strokeStyle = 'rgba(100,150,220,0.45)'; c.lineWidth = 0.8;
+      for (const dr of RAIN) {
+        const y = (dr.y0 + dr.spd * t) % SKY_H;
+        c.beginPath(); c.moveTo(dr.x, y); c.lineTo(dr.x - 1, y + dr.len); c.stroke();
+      }
     }
 
-    // ── Dashboard ────────────────────────────────────────────────
-    c.fillStyle = '#141720'; c.fillRect(0, DASH_Y, VW, VH - DASH_Y);
-    c.fillStyle = '#20242e'; c.fillRect(0, DASH_Y, VW, 1);
+    // ── Dashboard ─────────────────────────────────────────────────────
+    const dashGrd = c.createLinearGradient(0, DASH_Y, 0, DASH_Y + DASH_H);
+    dashGrd.addColorStop(0, '#181c27'); dashGrd.addColorStop(1, '#0e1118');
+    c.fillStyle = dashGrd; c.fillRect(0, DASH_Y, W, H - DASH_Y);
+    c.strokeStyle = '#252c3c'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(0, DASH_Y); c.lineTo(W, DASH_Y); c.stroke();
 
     // LEDs
-    const blink = ms > 1600 && Math.floor(ms / 210) % 2 === 0;
-    const lW = Math.max(2, Math.floor(VW * .025)), lH = Math.max(2, Math.floor(VH * .014));
-    for (let i = 0; i < LED_XS.length; i++) {
-      const lx = LED_XS[i], on = i === 3 && blink;
-      c.fillStyle = '#0d1018'; c.fillRect(lx - 1, LED_Y, lW + 2, lH + 2);
-      c.fillStyle = on ? '#4eff6a' : (i === 3 ? '#1a4a28' : '#22283a');
-      c.fillRect(lx, LED_Y + 1, lW, lH);
-      if (on) { c.globalAlpha = .28; c.fillStyle = '#4eff6a'; c.fillRect(lx - 2, LED_Y - 1, lW + 4, lH + 4); c.globalAlpha = 1; }
-    }
-
-    // Speedo (landscape only)
-    if (showSide && SP_R > 0) {
-      fillCirclePx(SP_CX, SP_CY, SP_R, '#0c0f18');
-      fillCirclePx(SP_CX, SP_CY, SP_R - Math.max(1, Math.floor(SP_R * .11)), '#181c26');
-      const r1 = SP_R - Math.floor(SP_R * .20), r2 = SP_R - Math.floor(SP_R * .34);
-      for (let ti = 0; ti <= 8; ti++) {
-        const a = Math.PI * .75 + ti * (Math.PI * 1.5 / 8);
-        c.fillStyle = ti === 0 ? '#3a4560' : '#22283a';
-        for (let tr = r2; tr <= r1; tr++)
-          c.fillRect(Math.round(SP_CX + Math.cos(a) * tr), Math.round(SP_CY + Math.sin(a) * tr), 1, 1);
+    {
+      const blink = ms > 1600 && Math.floor(ms / 210) % 2 === 0;
+      for (let i = 0; i < LED_XS.length; i++) {
+        const lx = LED_XS[i] - LED_W / 2, on = i === 3 && blink;
+        c.fillStyle = '#0d1018';
+        rrect(lx - 1, LED_Y - 1, LED_W + 2, LED_H + 2, 2); c.fill();
+        c.fillStyle = on ? '#4eff6a' : (i === 3 ? '#1a4a28' : '#1a2030');
+        rrect(lx, LED_Y, LED_W, LED_H, 1); c.fill();
+        if (on) {
+          c.shadowColor = '#4eff6a'; c.shadowBlur = 10;
+          rrect(lx, LED_Y, LED_W, LED_H, 1); c.fill();
+          c.shadowBlur = 0;
+        }
       }
-      const na = Math.PI * .77;
-      c.fillStyle = '#cc3333';
-      for (let ni = 1; ni <= SP_R - Math.floor(SP_R * .22); ni++)
-        c.fillRect(Math.round(SP_CX + Math.cos(na) * ni), Math.round(SP_CY + Math.sin(na) * ni), 1, 1);
-      fillCirclePx(SP_CX, SP_CY, Math.max(1, Math.floor(SP_R * .10)), '#cc3333');
     }
 
-    // Fuel strip (landscape only, right of screen)
-    if (showSide && RC_W > 5) {
-      const rcH = Math.floor(DASH_H * .36), rcY = SC_Y;
-      c.fillStyle = '#0c0f18'; c.fillRect(RC_X, rcY, RC_W, rcH);
-      c.fillStyle = '#181c26'; c.fillRect(RC_X + 1, rcY + 1, RC_W - 2, rcH - 2);
-      const fbY = rcY + Math.floor(rcH * .48), fbH = Math.max(1, Math.floor(VH * .02));
-      c.fillStyle = '#252c3a'; c.fillRect(RC_X + 2, fbY, RC_W - 4, fbH);
-      c.fillStyle = '#c97d00'; c.fillRect(RC_X + 2, fbY, Math.max(1, Math.floor((RC_W - 4) * .14)), fbH);
-      c.fillStyle = '#3a4460'; c.font = `${FS}px monospace`; c.textAlign = 'left';
-      c.fillText('FUEL', RC_X + 2, rcY + Math.floor(rcH * .32));
+    // Speedometer (landscape only)
+    if (showSide && SP_R > 8) {
+      c.save();
+      c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 16;
+      c.fillStyle = '#0b0e18';
+      c.beginPath(); c.arc(SP_CX, SP_CY, SP_R, 0, Math.PI * 2); c.fill();
+      c.shadowBlur = 0;
+      const spGrd = c.createRadialGradient(SP_CX, SP_CY - SP_R * 0.3, 0, SP_CX, SP_CY, SP_R);
+      spGrd.addColorStop(0, '#1c2232'); spGrd.addColorStop(1, '#0c0f1c');
+      c.fillStyle = spGrd;
+      c.beginPath(); c.arc(SP_CX, SP_CY, SP_R * 0.86, 0, Math.PI * 2); c.fill();
+      for (let ti = 0; ti <= 10; ti++) {
+        const a = Math.PI * 0.75 + ti * (Math.PI * 1.5 / 10), major = ti % 2 === 0;
+        c.strokeStyle = major ? '#4a5a80' : '#28304e';
+        c.lineWidth = major ? 1.5 : 0.8;
+        const r1 = SP_R * 0.72, r2 = SP_R * (major ? 0.58 : 0.64);
+        c.beginPath();
+        c.moveTo(SP_CX + Math.cos(a) * r1, SP_CY + Math.sin(a) * r1);
+        c.lineTo(SP_CX + Math.cos(a) * r2, SP_CY + Math.sin(a) * r2);
+        c.stroke();
+      }
+      const na = Math.PI * 0.77;
+      c.shadowColor = '#cc3333'; c.shadowBlur = 6;
+      c.strokeStyle = '#dd3333'; c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(SP_CX + Math.cos(na + Math.PI) * SP_R * 0.14, SP_CY + Math.sin(na + Math.PI) * SP_R * 0.14);
+      c.lineTo(SP_CX + Math.cos(na) * SP_R * 0.66, SP_CY + Math.sin(na) * SP_R * 0.66);
+      c.stroke(); c.shadowBlur = 0;
+      c.fillStyle = '#dd3333';
+      c.beginPath(); c.arc(SP_CX, SP_CY, SP_R * 0.07, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#38486a'; c.font = `${Math.max(8, SP_R * 0.16)}px sans-serif`;
+      c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+      c.fillText('km/h', SP_CX, SP_CY + SP_R * 0.42);
+      c.restore();
     }
 
-    // ── Centre CRT screen ─────────────────────────────────────────
-    c.fillStyle = '#0a0c14'; c.fillRect(SC_X - 2, SC_Y - 2, SC_W + 4, SC_H + 4);
-    c.fillStyle = '#060810'; c.fillRect(SC_X - 1, SC_Y - 1, SC_W + 2, SC_H + 2);
+    // Fuel gauge (landscape only)
+    if (showSide && RC_W > 24) {
+      c.save();
+      const rcH = DASH_H * 0.38, rcY = SC_Y;
+      c.fillStyle = '#0c0f1c'; rrect(RC_X, rcY, RC_W, rcH, 6); c.fill();
+      c.fillStyle = '#10131e'; rrect(RC_X + 2, rcY + 2, RC_W - 4, rcH - 4, 5); c.fill();
+      c.fillStyle = '#2e3c54'; c.font = `bold ${Math.max(9, RC_W * 0.28)}px monospace`;
+      c.textAlign = 'center'; c.textBaseline = 'top';
+      c.fillText('FUEL', RC_X + RC_W / 2, rcY + 7);
+      const fbY = rcY + rcH * 0.55, fbH = Math.max(3, H * 0.013);
+      c.fillStyle = '#1c2436'; c.fillRect(RC_X + 5, fbY, RC_W - 10, fbH);
+      c.fillStyle = '#b36a00'; c.fillRect(RC_X + 5, fbY, (RC_W - 10) * 0.14, fbH);
+      c.textBaseline = 'alphabetic'; c.restore();
+    }
+
+    // ── CRT Screen ────────────────────────────────────────────────────
+    c.shadowColor = 'rgba(0,0,0,0.75)'; c.shadowBlur = 24;
+    c.fillStyle = '#0c1018'; rrect(SC_X - 5, SC_Y - 5, SC_W + 10, SC_H + 10, SC_R + 2); c.fill();
+    c.shadowBlur = 0;
+    const bezGrd = c.createLinearGradient(SC_X, SC_Y, SC_X, SC_Y + SC_H);
+    bezGrd.addColorStop(0, '#1e2430'); bezGrd.addColorStop(1, '#131620');
+    c.fillStyle = bezGrd; rrect(SC_X - 4, SC_Y - 4, SC_W + 8, SC_H + 8, SC_R + 1); c.fill();
 
     if (ms < 1400) {
-      c.fillStyle = '#010203'; c.fillRect(SC_X, SC_Y, SC_W, SC_H);
+      c.fillStyle = '#010208'; rrect(SC_X, SC_Y, SC_W, SC_H, SC_R); c.fill();
     } else if (ms < 2100) {
-      c.fillStyle = '#010203'; c.fillRect(SC_X, SC_Y, SC_W, SC_H);
-      const n = Math.floor((ms - 1400) / 700 * SC_W * SC_H * .14);
+      c.fillStyle = '#010208'; rrect(SC_X, SC_Y, SC_W, SC_H, SC_R); c.fill();
+      c.save(); rrect(SC_X, SC_Y, SC_W, SC_H, SC_R); c.clip();
+      const n = Math.floor((ms - 1400) / 700 * SC_W * SC_H * 0.05);
       for (let i = 0; i < n; i++) {
-        c.fillStyle = Math.random() > .45 ? '#36cc5a' : '#183325';
-        c.fillRect(SC_X + Math.floor(Math.random() * SC_W), SC_Y + Math.floor(Math.random() * SC_H), 1, 1);
+        c.fillStyle = Math.random() > 0.45 ? '#28b040' : '#102a18';
+        c.fillRect(SC_X + Math.random() * SC_W, SC_Y + Math.random() * SC_H, 2, 2);
       }
+      c.restore();
     } else if (ms < 2500) {
       const p = (ms - 2100) / 400;
-      c.fillStyle = `rgb(${Math.floor(p * 3)},${Math.floor(p * 22)},${Math.floor(p * 11)})`;
-      c.fillRect(SC_X, SC_Y, SC_W, SC_H);
+      c.fillStyle = `rgb(${Math.floor(p*2)},${Math.floor(p*16)},${Math.floor(p*7)})`;
+      rrect(SC_X, SC_Y, SC_W, SC_H, SC_R); c.fill();
     } else {
-      c.fillStyle = '#010a04'; c.fillRect(SC_X, SC_Y, SC_W, SC_H);
-      c.globalAlpha = .14; c.fillStyle = '#000';
-      for (let sy2 = SC_Y; sy2 < SC_Y + SC_H; sy2 += 2) c.fillRect(SC_X, sy2, SC_W, 1);
-      c.globalAlpha = 1;
-
-      c.save();
-      c.beginPath(); c.rect(SC_X, SC_Y, SC_W, SC_H); c.clip();
-      c.fillStyle = '#4eff6a';
-      c.font = `${FS}px "Courier New", monospace`; c.textAlign = 'left';
-      const lh = Math.ceil(FS * 1.6);
+      c.save(); rrect(SC_X, SC_Y, SC_W, SC_H, SC_R); c.clip();
+      const scrGrd = c.createRadialGradient(
+        SC_X + SC_W * 0.5, SC_Y + SC_H * 0.35, 0,
+        SC_X + SC_W * 0.5, SC_Y + SC_H * 0.5, SC_W * 0.7);
+      scrGrd.addColorStop(0, '#021108'); scrGrd.addColorStop(1, '#010604');
+      c.fillStyle = scrGrd; c.fillRect(SC_X, SC_Y, SC_W, SC_H);
+      // Scanlines
+      c.fillStyle = 'rgba(0,0,0,0.18)';
+      for (let sy = SC_Y; sy < SC_Y + SC_H; sy += 3) c.fillRect(SC_X, sy, SC_W, 1);
+      // Typed message
+      c.fillStyle = '#3dfa65'; c.shadowColor = '#00ee55'; c.shadowBlur = 5;
+      c.font = `${FS}px "Courier New", monospace`;
+      c.textAlign = 'left'; c.textBaseline = 'top';
       let rem = Math.floor((ms - 2500) / 1000 * 18), done = true;
       for (let li = 0; li < MSG.length; li++) {
         const line = MSG[li];
         if (rem <= 0) { done = false; break; }
         const take = Math.max(1, line.length);
         if (rem >= take) {
-          c.fillText(line, SC_X + 3, SC_Y + FS + li * lh); rem -= take;
+          c.fillText(line, SC_X + SC_PAD, SC_Y + SC_PAD + li * LH); rem -= take;
         } else {
-          c.fillText(line.slice(0, rem) + '█', SC_X + 3, SC_Y + FS + li * lh);
+          c.fillText(line.slice(0, rem) + '█', SC_X + SC_PAD, SC_Y + SC_PAD + li * LH);
           rem = 0; done = false; break;
         }
       }
-      c.restore();
+      c.shadowBlur = 0; c.restore();
       if (done && !msgShown) { msgShown = true; $('introGo').classList.remove('hidden'); }
-      c.globalAlpha = .06; c.fillStyle = '#4eff6a';
-      c.fillRect(SC_X - 4, SC_Y - 4, SC_W + 8, SC_H + 8); c.globalAlpha = 1;
+      // Green glow rim
+      c.shadowColor = 'rgba(0,200,60,0.4)'; c.shadowBlur = 20;
+      c.strokeStyle = 'rgba(0,150,50,0.15)'; c.lineWidth = 2;
+      rrect(SC_X, SC_Y, SC_W, SC_H, SC_R); c.stroke();
+      c.shadowBlur = 0;
     }
 
-    // ── Steering wheel (top arc at bottom of canvas) ──────────────
-    const wX = Math.floor(VW / 2), wY = VH + Math.floor(VH * .28);
-    const wR = Math.floor(VH * .44), hubR = Math.floor(wR * .24);
-    c.strokeStyle = '#1a1e2e'; c.lineWidth = Math.max(2, Math.floor(wR * .09));
-    c.beginPath(); c.arc(wX, wY, wR, Math.PI * 1.14, Math.PI * 1.86); c.stroke();
-    c.strokeStyle = '#22273a'; c.lineWidth = Math.max(1, Math.floor(wR * .055));
-    c.beginPath(); c.arc(wX, wY, wR, Math.PI * 1.14, Math.PI * 1.86); c.stroke();
-    c.strokeStyle = '#1a1e2e'; c.lineWidth = Math.max(1, Math.floor(wR * .04));
-    for (const a of [Math.PI * 1.22, Math.PI * 1.5, Math.PI * 1.78]) {
-      c.beginPath();
-      c.moveTo(wX + Math.cos(a) * hubR, wY + Math.sin(a) * hubR);
-      c.lineTo(wX + Math.cos(a) * (wR - Math.floor(wR * .07)), wY + Math.sin(a) * (wR - Math.floor(wR * .07)));
-      c.stroke();
+    // ── Steering wheel ────────────────────────────────────────────────
+    {
+      const wX = W / 2, wY = H + H * 0.22, wR = H * 0.44, hubR = wR * 0.13;
+      c.strokeStyle = '#1e2334'; c.lineWidth = wR * 0.09;
+      c.beginPath(); c.arc(wX, wY, wR, Math.PI * 1.12, Math.PI * 1.88); c.stroke();
+      c.strokeStyle = '#2c3348'; c.lineWidth = wR * 0.04;
+      c.beginPath(); c.arc(wX, wY, wR, Math.PI * 1.12, Math.PI * 1.88); c.stroke();
+      c.strokeStyle = '#1a1e2c'; c.lineWidth = wR * 0.034;
+      for (const a of [Math.PI * 1.22, Math.PI * 1.5, Math.PI * 1.78]) {
+        c.beginPath();
+        c.moveTo(wX + Math.cos(a) * hubR * 1.2, wY + Math.sin(a) * hubR * 1.2);
+        c.lineTo(wX + Math.cos(a) * wR * 0.91, wY + Math.sin(a) * wR * 0.91);
+        c.stroke();
+      }
+      const hGrd = c.createRadialGradient(wX - hubR * 0.3, wY - hubR * 0.3, 0, wX, wY, hubR);
+      hGrd.addColorStop(0, '#2a3244'); hGrd.addColorStop(1, '#141824');
+      c.fillStyle = hGrd;
+      c.beginPath(); c.arc(wX, wY, hubR, 0, Math.PI * 2); c.fill();
     }
-    fillCirclePx(wX, wY, hubR, '#181c2c');
-    c.fillStyle = '#242838';
-    c.fillRect(wX - Math.floor(hubR * .55), wY - Math.floor(hubR * .35), Math.floor(hubR * 1.1), Math.floor(hubR * .7));
 
     if (!$('intro').classList.contains('hidden'))
       introAnimId = requestAnimationFrame(frame);
