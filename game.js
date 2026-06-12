@@ -121,48 +121,131 @@ function obbPoly(cx, cy, w, h, ang) {
 
 const LEVELS = [
   {
-    name: 'First Steps', mode: 'moves', w: 18, h: 12,
-    start: { x: 2.5, y: 9.8, h: -Math.PI / 2 },
-    goal: { cx: 14.2, cy: 2.8, w: 5.8, h: 2.6, heads: [0], tol: 12 },
-    walls: [{ x: 7, y: 5, w: 2.6, h: 7 }],
+    name: "Lesson 1: Drive", tier: "Tutorial", mode: "moves", w: 18, h: 10,
+    start: { x: 3, y: 5, h: 0 },
+    goal: { cx: 13.5, cy: 5, w: 6.5, h: 3, heads: [0], tol: 15 },
+    walls: [],
     cars: [],
-    starThresh: [2, 4],
-    hint: 'Get around the block into the green zone.',
-    solution: [{steer:22,dist:10.5},{steer:0,dist:3}],
-    starThreshQuick: [11, 16],
+    starThresh: [1, 2], starThreshQuick: [6, 9],
+    tut: "Drag forward on the road — the ghost car follows your finger. Then press Run.",
+    hint: "Just drive into the green zone.",
+    solution: [{ steer: 0, dist: 9 }],
   },
   {
-    name: 'Parallel Squeeze', mode: 'moves', w: 22, h: 13,
-    start: { x: 2.6, y: 7.0, h: 0 },
+    name: "Lesson 2: Steer", tier: "Tutorial", mode: "moves", w: 14, h: 12,
+    start: { x: 3, y: 9, h: 0 },
+    goal: { cx: 6.9, cy: 3.8, w: 3.8, h: 5.8, heads: [-90], tol: 15 },
+    walls: [],
+    cars: [],
+    starThresh: [1, 2], starThreshQuick: [5, 8],
+    tut: "Steer with the top slider (or drag sideways) — the car drives in an arc.",
+    hint: "One smooth arc gets you in.",
+    solution: [{ steer: -35, dist: 6.06 }],
+  },
+  {
+    name: "Lesson 3: Reverse", tier: "Tutorial", mode: "moves", w: 18, h: 10,
+    start: { x: 13, y: 5, h: 0 },
+    goal: { cx: 5.5, cy: 5, w: 7, h: 3.2, heads: [0], tol: 15 },
+    walls: [],
+    cars: [],
+    starThresh: [1, 2], starThreshQuick: [5, 8],
+    tut: "Drag backwards to reverse. Fewer moves = more stars (see ? for scoring).",
+    hint: "The zone is behind you.",
+    solution: [{ steer: 0, dist: -8 }],
+  },
+  {
+    name: "First Steps", tier: "Easy", mode: "moves", w: 18, h: 12,
+    start: { x: 2.5, y: 9.8, h: -Math.PI / 2 },
+    goal: { cx: 14.2, cy: 2.8, w: 5.8, h: 2.6, heads: [0], tol: 12 },
+    walls: [
+      { x: 7, y: 5, w: 2.6, h: 7 },
+    ],
+    cars: [],
+    starThresh: [2, 4], starThreshQuick: [11, 16],
+    hint: "Get around the block into the green zone.",
+    solution: [{ steer: 22, dist: 10.5 }, { steer: 0, dist: 3 }],
+  },
+  {
+    name: "Open Bay", tier: "Easy", mode: "moves", w: 20, h: 13,
+    start: { x: 16.5, y: 8.6, h: Math.PI },
+    goal: { cx: 9.4, cy: 2.85, w: 4.5, h: 4.8, heads: [90, -90], tol: 10 },
+    walls: [],
+    cars: [
+      { cx: 2.4, cy: 2.85, h: Math.PI / 2 },
+      { cx: 4.7, cy: 2.85, h: Math.PI / 2 },
+      { cx: 14.1, cy: 2.85, h: Math.PI / 2 },
+      { cx: 16.4, cy: 2.85, h: Math.PI / 2 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [18, 27],
+    hint: "Plenty of room — back into the wide bay.",
+    solution: [{ steer: 0, dist: 10.6 }, { steer: 35, dist: -6.3 }, { steer: 0, dist: -2.9 }],
+  },
+  {
+    name: "First Parallel", tier: "Easy", mode: "moves", w: 24, h: 13,
+    start: { x: 2.6, y: 7, h: 0 },
+    goal: { cx: 10.7, cy: 9.4, w: 8, h: 2.2, heads: [0], tol: 12 },
+    walls: [
+      { x: 0, y: 10.5, w: 24, h: 2.5, kind: "curb" },
+      { x: 0, y: 0, w: 24, h: 1.6, kind: "curb" },
+    ],
+    cars: [
+      { cx: 4.6, cy: 9.5, h: 0 },
+      { cx: 18.4, cy: 9.5, h: 0 },
+      { cx: 9.5, cy: 2.55, h: Math.PI },
+    ],
+    starThresh: [3, 5], starThreshQuick: [17, 26],
+    hint: "A roomy gap at the curb — classic reverse parallel park.",
+    solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
+  },
+  {
+    name: "Parallel Squeeze", tier: "Medium", mode: "moves", w: 22, h: 13,
+    start: { x: 2.6, y: 7, h: 0 },
     goal: { cx: 10.15, cy: 9.4, w: 6.4, h: 2.2, heads: [0], tol: 12 },
     walls: [
-      { x: 0, y: 10.5, w: 22, h: 2.5, kind: 'curb' },
-      { x: 0, y: 0, w: 22, h: 1.6, kind: 'curb' },
+      { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
+      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
     ],
     cars: [
       { cx: 4.6, cy: 9.5, h: 0 },
       { cx: 15.7, cy: 9.5, h: 0 },
       { cx: 9.5, cy: 2.55, h: Math.PI },
     ],
-    starThresh: [3, 5],
-    hint: 'Reverse into the gap at the curb.',
-    solution: [{steer:0,dist:10.75},{steer:35,dist:-3},{steer:-35,dist:-3}],
-    starThreshQuick: [17, 26],
+    starThresh: [3, 5], starThreshQuick: [17, 26],
+    hint: "Reverse into the gap at the curb.",
+    solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
   },
   {
-    name: 'Tight Bay', mode: 'moves', w: 20, h: 13,
+    name: "Tight Bay", tier: "Medium", mode: "moves", w: 20, h: 13,
     start: { x: 16.5, y: 8.6, h: Math.PI },
     goal: { cx: 9.4, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
     walls: [],
-    cars: [2.4, 4.7, 7.0, 11.8, 14.1, 16.4].map(
-      cx => ({ cx, cy: 2.85, h: Math.PI / 2 })),
-    starThresh: [3, 5],
-    hint: 'Back into the empty bay (either direction).',
-    solution: [{steer:0,dist:10.6},{steer:35,dist:-6.3},{steer:0,dist:-2.9}],
-    starThreshQuick: [18, 27],
+    cars: [
+      { cx: 2.4, cy: 2.85, h: Math.PI / 2 },
+      { cx: 4.7, cy: 2.85, h: Math.PI / 2 },
+      { cx: 7, cy: 2.85, h: Math.PI / 2 },
+      { cx: 11.8, cy: 2.85, h: Math.PI / 2 },
+      { cx: 14.1, cy: 2.85, h: Math.PI / 2 },
+      { cx: 16.4, cy: 2.85, h: Math.PI / 2 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [18, 27],
+    hint: "Back into the empty bay (either direction).",
+    solution: [{ steer: 0, dist: 10.6 }, { steer: 35, dist: -6.3 }, { steer: 0, dist: -2.9 }],
   },
   {
-    name: 'Dead End', mode: 'dist', w: 22, h: 13,
+    name: "Slalom", tier: "Medium", mode: "moves", w: 28, h: 12,
+    start: { x: 2.8, y: 9.3, h: 0 },
+    goal: { cx: 23.4, cy: 7.4, w: 7, h: 4.6, heads: [0], tol: 15 },
+    walls: [
+      { x: 7.5, y: 0, w: 2.4, h: 7 },
+      { x: 16.5, y: 5.4, w: 2.4, h: 6.6 },
+    ],
+    cars: [],
+    starThresh: [4, 6], starThreshQuick: [20, 31],
+    hint: "Weave under, over, and home — all in forward gear.",
+    solution: [{ steer: 0, dist: 4 }, { steer: -25, dist: 6 }, { steer: 25, dist: 10 }, { steer: -25, dist: 3 }],
+  },
+  {
+    name: "Dead End", tier: "Medium", mode: "dist", w: 22, h: 13,
     start: { x: 3.2, y: 6.7, h: 0 },
     goal: { cx: 4.6, cy: 6.7, w: 8, h: 6.6, heads: [180], tol: 12 },
     walls: [
@@ -171,261 +254,137 @@ const LEVELS = [
       { x: 18.4, y: 0, w: 3.6, h: 13 },
     ],
     cars: [],
-    starThresh: [19, 27],
-    hint: 'Turn around to face the way you came.',
-    solution: [{steer:12,dist:3},{steer:-35,dist:3},{steer:35,dist:-3},{steer:-35,dist:1.5},{steer:0,dist:-1.5},{steer:-35,dist:5}],
-    starThreshQuick: [30, 45],
+    starThresh: [19, 27], starThreshQuick: [32, 49],
+    hint: "Turn around to face the way you came.",
+    solution: [{ steer: 12, dist: 3 }, { steer: -35, dist: 3 }, { steer: 35, dist: -3 }, { steer: -35, dist: 1.5 }, { steer: 0, dist: -1.5 }, { steer: -35, dist: 5 }],
   },
   {
-    name: 'Battle Park', mode: 'moves', w: 24, h: 13,
-    start: { x: 2.6, y: 7.0, h: 0 },
-    goal: { cx: 9.29, cy: 9.22, w: 5.0, h: 2.0, heads: [0], tol: 10 },
+    name: "Battle Park", tier: "Hard", mode: "moves", w: 24, h: 13,
+    start: { x: 2.6, y: 7, h: 0 },
+    goal: { cx: 9.29, cy: 9.22, w: 5, h: 2, heads: [0], tol: 10 },
     walls: [
-      { x: 0, y: 10.5, w: 24, h: 2.5, kind: 'curb' },
-      { x: 0, y: 0,    w: 24, h: 1.6, kind: 'curb' },
+      { x: 0, y: 10.5, w: 24, h: 2.5, kind: "curb" },
+      { x: 0, y: 0, w: 24, h: 1.6, kind: "curb" },
     ],
     cars: [
-      { cx: 4.8,  cy: 9.4, h: 0 },
+      { cx: 4.8, cy: 9.4, h: 0 },
       { cx: 15.7, cy: 9.4, h: 0 },
-      { cx: 9.5,  cy: 2.55, h: Math.PI },
-      { cx: 21.0, cy: 9.4, h: 0 },
+      { cx: 9.5, cy: 2.55, h: Math.PI },
+      { cx: 21, cy: 9.4, h: 0 },
     ],
     starThresh: [3, 5], starThreshQuick: [17, 26],
-    hint: 'Barely 9 cm from Car A — pure parallel precision.',
-    solution: [
-      { steer: 0,   dist: 10.75 },
-      { steer: 35,  dist: -3 },
-      { steer: -35, dist: -3 },
-    ],
+    hint: "Barely 9 cm from Car A — pure parallel precision.",
+    solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
   },
-
-  // ── MEDIUM (6–10) ────────────────────────────────────────────────────────
-
   {
-    name: 'Parallel Return', mode: 'moves', w: 22, h: 13,
-    start: { x: 19.4, y: 7.0, h: Math.PI },
-    goal: { cx: 11.85, cy: 9.4, w: 6.4, h: 2.2, heads: [180], tol: 12 },
+    name: "Distant Return", tier: "Hard", mode: "moves", w: 30, h: 13,
+    start: { x: 5.4, y: 7, h: 0 },
+    goal: { cx: 17.35, cy: 9.4, w: 5, h: 2.2, heads: [0], tol: 10 },
     walls: [
-      { x: 0, y: 10.5, w: 22, h: 2.5, kind: 'curb' },
-      { x: 0, y: 0,    w: 22, h: 1.6, kind: 'curb' },
+      { x: 0, y: 10.5, w: 30, h: 2.5, kind: "curb" },
+      { x: 0, y: 0, w: 30, h: 1.6, kind: "curb" },
     ],
     cars: [
-      { cx: 17.4, cy: 9.5, h: 0 },
-      { cx:  6.3, cy: 9.5, h: 0 },
-      { cx: 12.5, cy: 2.55, h: 0 },
-    ],
-    starThresh: [3, 5], starThreshQuick: [17, 26],
-    hint: 'Same gap — but you\'re coming from the other end.',
-    solution: [
-      { steer: 0,   dist: 10.75 },
-      { steer: -35, dist: -3 },
-      { steer:  35, dist: -3 },
-    ],
-  },
-
-  {
-    name: 'Far Slot', mode: 'moves', w: 28, h: 13,
-    start: { x: 2.6, y: 7.0, h: 0 },
-    goal: { cx: 14.6, cy: 9.4, w: 5.5, h: 2.2, heads: [0], tol: 12 },
-    walls: [
-      { x: 0, y: 10.5, w: 28, h: 2.5, kind: 'curb' },
-      { x: 0, y: 0,    w: 28, h: 1.6, kind: 'curb' },
-    ],
-    cars: [
-      { cx:  9.6, cy: 9.5, h: 0 },
-      { cx: 21.0, cy: 9.5, h: 0 },
-      { cx: 14.6, cy: 2.55, h: Math.PI },
-    ],
-    starThresh: [3, 5], starThreshQuick: [19, 30],
-    hint: 'A long approach — judge the distance, then reverse in.',
-    solution: [
-      { steer: 0,   dist: 16.05 },
-      { steer: 35,  dist: -3 },
-      { steer: -35, dist: -3 },
-    ],
-  },
-
-  {
-    name: 'Bay from the Right', mode: 'moves', w: 20, h: 13,
-    start: { x: 3.5, y: 8.6, h: 0 },
-    goal: { cx: 10.6, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
-    walls: [],
-    cars: [3.6, 5.9, 8.2, 13.0, 15.3, 17.6].map(cx => ({ cx, cy: 2.85, h: Math.PI / 2 })),
-    starThresh: [3, 5], starThreshQuick: [18, 27],
-    hint: 'Same bays as Tight Bay — but you\'re pointing the wrong way.',
-    solution: [
-      { steer:   0, dist:  10.6 },
-      { steer: -35, dist:  -6.3 },
-      { steer:   0, dist:  -2.9 },
-    ],
-  },
-
-  {
-    name: 'Narrow Dead End', mode: 'dist', w: 22, h: 12,
-    start: { x: 3.2, y: 6.0, h: 0 },
-    goal: { cx: 4.6, cy: 6.0, w: 8, h: 5.8, heads: [180], tol: 12 },
-    walls: [
-      { x: 0, y: 0,    w: 22, h: 3.1 },
-      { x: 0, y: 8.9,  w: 22, h: 3.1 },
-      { x: 18.4, y: 0, w: 3.6, h: 12 },
-    ],
-    cars: [],
-    starThresh: [16, 22], starThreshQuick: [42, 64],
-    hint: 'A 5.8 m corridor — the simple U-turn no longer fits.',
-    solution: [
-      { steer:   0, dist:  5   },
-      { steer: -35, dist:  1   },
-      { steer:  35, dist: -2.5 },
-      { steer: -35, dist:  0.5 },
-      { steer:  35, dist: -1   },
-      { steer: -35, dist:  1   },
-      { steer:  35, dist: -1   },
-      { steer: -35, dist:  1   },
-      { steer:  35, dist: -0.5 },
-      { steer: -35, dist:  3   },
-    ],
-  },
-
-  {
-    name: 'Cross-Lot Bay', mode: 'moves', w: 28, h: 13,
-    start: { x: 26.0, y: 8.6, h: Math.PI },
-    goal: { cx: 9.4, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
-    walls: [],
-    cars: [
-      ...([2.4, 4.7, 7.0, 11.8, 14.1, 16.4].map(cx => ({ cx, cy: 2.85, h: Math.PI / 2 }))),
-      { cx: 20.0, cy: 11.6, h: 0 },
-      { cx: 24.5, cy: 11.6, h: 0 },
-    ],
-    starThresh: [3, 5], starThreshQuick: [22, 34],
-    hint: 'Cross the whole lot, then back into the empty bay.',
-    solution: [
-      { steer:  0,  dist: 20.1 },
-      { steer: 35,  dist: -6.3 },
-      { steer:  0,  dist: -2.9 },
-    ],
-  },
-
-  // ── HARD (11–15) ─────────────────────────────────────────────────────────
-
-  {
-    name: 'Long Way Round', mode: 'moves', w: 30, h: 13,
-    start: { x: 25.4, y: 7.0, h: Math.PI },
-    goal: { cx: 13.45, cy: 9.4, w: 4.8, h: 2.2, heads: [180], tol: 10 },
-    walls: [
-      { x: 0, y: 10.5, w: 30, h: 2.5, kind: 'curb' },
-      { x: 0, y: 0,    w: 30, h: 1.6, kind: 'curb' },
-    ],
-    cars: [
-      { cx:  7.0, cy: 9.5, h: 0 },
-      { cx: 18.2, cy: 9.5, h: 0 },
-      { cx: 13.45, cy: 2.55, h: 0 },
-    ],
-    starThresh: [3, 5], starThreshQuick: [19, 30],
-    hint: 'The goal zone is barely longer than the car — nail the approach.',
-    solution: [
-      { steer:   0, dist: 16 },
-      { steer: -35, dist: -3 },
-      { steer:  35, dist: -3 },
-    ],
-  },
-
-  {
-    name: 'Marathon Bay', mode: 'moves', w: 36, h: 13,
-    start: { x: 34.0, y: 8.6, h: Math.PI },
-    goal: { cx: 9.4, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
-    walls: [],
-    cars: [
-      ...([2.4, 4.7, 7.0, 11.8, 14.1, 16.4].map(cx => ({ cx, cy: 2.85, h: Math.PI / 2 }))),
-      { cx: 24.0, cy: 11.6, h: 0 },
-      { cx: 29.0, cy: 11.6, h: 0 },
-    ],
-    starThresh: [3, 5], starThreshQuick: [25, 39],
-    hint: 'Cross the entire 36 m lot, then thread the bay.',
-    solution: [
-      { steer:  0,  dist: 28.1 },
-      { steer: 35,  dist: -6.3 },
-      { steer:  0,  dist: -2.9 },
-    ],
-  },
-
-  {
-    name: 'Tight Corner', mode: 'dist', w: 22, h: 11,
-    start: { x: 3.2, y: 5.5, h: 0 },
-    goal: { cx: 4.6, cy: 5.5, w: 8, h: 5.6, heads: [180], tol: 12 },
-    walls: [
-      { x: 0, y: 0,    w: 22, h: 2.7 },
-      { x: 0, y: 8.3,  w: 22, h: 2.7 },
-      { x: 18.4, y: 0, w: 3.6, h: 11 },
-    ],
-    cars: [],
-    starThresh: [18, 25], starThreshQuick: [54, 84],
-    hint: '5.6 m to turn around — shuffle, inch by inch.',
-    solution: [
-      { steer: -35, dist:  1   },
-      { steer:  20, dist:  5   },
-      { steer: -35, dist: -2.5 },
-      { steer:  35, dist:  0.5 },
-      { steer: -35, dist: -0.5 },
-      { steer:  35, dist:  0.5 },
-      { steer: -35, dist: -0.5 },
-      { steer:  35, dist:  0.5 },
-      { steer: -35, dist: -0.5 },
-      { steer:  35, dist:  0.5 },
-      { steer: -35, dist: -0.5 },
-      { steer:  35, dist:  4   },
-    ],
-  },
-
-  {
-    name: 'Distant Return', mode: 'moves', w: 30, h: 13,
-    start: { x: 5.4, y: 7.0, h: 0 },
-    goal: { cx: 17.35, cy: 9.4, w: 5.0, h: 2.2, heads: [0], tol: 10 },
-    walls: [
-      { x: 0, y: 10.5, w: 30, h: 2.5, kind: 'curb' },
-      { x: 0, y: 0,    w: 30, h: 1.6, kind: 'curb' },
-    ],
-    cars: [
-      { cx: 12.6,  cy: 9.5, h: 0 },
+      { cx: 12.6, cy: 9.5, h: 0 },
       { cx: 23.75, cy: 9.5, h: 0 },
       { cx: 17.35, cy: 2.55, h: Math.PI },
     ],
     starThresh: [3, 5], starThreshQuick: [19, 30],
-    hint: 'Drive the length of the lot — the goal is barely wider than the car.',
-    solution: [
-      { steer:  0,  dist: 16 },
-      { steer: 35,  dist: -3 },
-      { steer: -35, dist: -3 },
-    ],
+    hint: "Drive the length of the lot — the goal is barely wider than the car.",
+    solution: [{ steer: 0, dist: 16 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
   },
-
   {
-    name: 'The Gauntlet', mode: 'dist', w: 22, h: 11,
+    name: "Diagonal Slot", tier: "Hard", mode: "moves", w: 24, h: 12,
+    start: { x: 3, y: 9, h: 0 },
+    goal: { cx: 14, cy: 3.2, w: 5.2, h: 5.2, heads: [-45], tol: 8 },
+    walls: [
+      { x: 0, y: 0, w: 24, h: 0.5, kind: "curb" },
+    ],
+    cars: [
+      { cx: 6.5, cy: 3.2, h: -Math.PI / 4 },
+      { cx: 10.5, cy: 3.2, h: -Math.PI / 4 },
+      { cx: 17.5, cy: 3.2, h: -Math.PI / 4 },
+      { cx: 21, cy: 3.2, h: -Math.PI / 4 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [11, 18],
+    hint: "Angled bays: enter on the diagonal, dead straight.",
+    solution: [{ steer: -15, dist: 6 }, { steer: 0, dist: 4 }, { steer: -35, dist: 1 }],
+  },
+  {
+    name: "Narrow Dead End", tier: "Hard", mode: "dist", w: 22, h: 12,
+    start: { x: 3.2, y: 6, h: 0 },
+    goal: { cx: 4.6, cy: 6, w: 8, h: 5.8, heads: [180], tol: 12 },
+    walls: [
+      { x: 0, y: 0, w: 22, h: 3.1 },
+      { x: 0, y: 8.9, w: 22, h: 3.1 },
+      { x: 18.4, y: 0, w: 3.6, h: 12 },
+    ],
+    cars: [],
+    starThresh: [16, 22], starThreshQuick: [50, 78],
+    hint: "A 5.8 m corridor — the simple U-turn no longer fits.",
+    solution: [{ steer: 0, dist: 5 }, { steer: -35, dist: 1 }, { steer: 35, dist: -2.5 }, { steer: -35, dist: 0.5 }, { steer: 35, dist: -1 }, { steer: -35, dist: 1 }, { steer: 35, dist: -1 }, { steer: -35, dist: 1 }, { steer: 35, dist: -0.5 }, { steer: -35, dist: 3 }],
+  },
+  {
+    name: "Marathon Bay", tier: "Expert", mode: "moves", w: 36, h: 13,
+    start: { x: 34, y: 8.6, h: Math.PI },
+    goal: { cx: 9.4, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
+    walls: [],
+    cars: [
+      { cx: 2.4, cy: 2.85, h: Math.PI / 2 },
+      { cx: 4.7, cy: 2.85, h: Math.PI / 2 },
+      { cx: 7, cy: 2.85, h: Math.PI / 2 },
+      { cx: 11.8, cy: 2.85, h: Math.PI / 2 },
+      { cx: 14.1, cy: 2.85, h: Math.PI / 2 },
+      { cx: 16.4, cy: 2.85, h: Math.PI / 2 },
+      { cx: 24, cy: 11.6, h: 0 },
+      { cx: 29, cy: 11.6, h: 0 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [25, 39],
+    hint: "Cross the entire 36 m lot, then thread the bay.",
+    solution: [{ steer: 0, dist: 28.1 }, { steer: 35, dist: -6.3 }, { steer: 0, dist: -2.9 }],
+  },
+  {
+    name: "The Garage", tier: "Expert", mode: "moves", w: 24, h: 13,
+    start: { x: 3, y: 10.6, h: 0 },
+    goal: { cx: 21, cy: 3.6, w: 5.4, h: 6.4, heads: [-90], tol: 10 },
+    walls: [
+      { x: 13, y: 0, w: 0.6, h: 4.9 },
+      { x: 13, y: 8.1, w: 0.6, h: 4.9 },
+    ],
+    cars: [
+      { cx: 16.2, cy: 3, h: Math.PI / 2 },
+    ],
+    starThresh: [4, 6], starThreshQuick: [21, 33],
+    hint: "Thread the door, dodge the junk, face the back wall.",
+    solution: [{ steer: -35, dist: 3 }, { steer: 15, dist: 10 }, { steer: -35, dist: 6 }, { steer: 25, dist: -0.5 }],
+  },
+  {
+    name: "Tight Corner", tier: "Expert", mode: "dist", w: 22, h: 11,
+    start: { x: 3.2, y: 5.5, h: 0 },
+    goal: { cx: 4.6, cy: 5.5, w: 8, h: 5.6, heads: [180], tol: 12 },
+    walls: [
+      { x: 0, y: 0, w: 22, h: 2.7 },
+      { x: 0, y: 8.3, w: 22, h: 2.7 },
+      { x: 18.4, y: 0, w: 3.6, h: 11 },
+    ],
+    cars: [],
+    starThresh: [18, 25], starThreshQuick: [59, 91],
+    hint: "5.6 m to turn around — shuffle, inch by inch.",
+    solution: [{ steer: -35, dist: 1 }, { steer: 20, dist: 5 }, { steer: -35, dist: -2.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 4 }],
+  },
+  {
+    name: "The Gauntlet", tier: "Expert", mode: "dist", w: 22, h: 11,
     start: { x: 3.2, y: 5.5, h: 0 },
     goal: { cx: 4.6, cy: 5.5, w: 8, h: 5.5, heads: [180], tol: 12 },
     walls: [
-      { x: 0, y: 0,    w: 22, h: 2.75 },
+      { x: 0, y: 0, w: 22, h: 2.75 },
       { x: 0, y: 8.25, w: 22, h: 2.75 },
-      { x: 18.4, y: 0, w: 3.6, h: 11  },
+      { x: 18.4, y: 0, w: 3.6, h: 11 },
     ],
     cars: [],
-    starThresh: [20, 28], starThreshQuick: [63, 97],
-    hint: 'Only 5.5 m of corridor — a true shuffle marathon.',
-    solution: [
-      { steer: -35, dist:  1.5 },
-      { steer:  20, dist:  6   },
-      { steer: -35, dist: -2   },
-      { steer:  35, dist:  0.5 },
-      { steer: -35, dist: -0.5 },
-      { steer:  35, dist:  0.5 },
-      { steer: -35, dist: -0.5 },
-      { steer:  35, dist:  0.5 },
-      { steer: -35, dist: -0.5 },
-      { steer:  35, dist:  0.5 },
-      { steer: -35, dist: -0.5 },
-      { steer:  35, dist:  0.5 },
-      { steer: -35, dist: -0.5 },
-      { steer:  35, dist:  3   },
-    ],
+    starThresh: [20, 28], starThreshQuick: [69, 106],
+    hint: "Only 5.5 m of corridor — a true shuffle marathon.",
+    solution: [{ steer: -35, dist: 1.5 }, { steer: 20, dist: 6 }, { steer: -35, dist: -2 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 3 }],
   },
 ];
 
@@ -600,21 +559,24 @@ function starStr(n, total = 3) {
 
 function updateHUD() {
   $('lvName').textContent = `${levelIdx + 1}/${LEVELS.length} · ${level.name}`;
-  $('objective').textContent =
-    (level.mode === 'dist' ? 'Shortest distance wins' : 'Fewest moves wins') +
-    ' · ' + level.hint;
-  const st = planStats();
+  $('objective').textContent = `${level.tier} · ` +
+    (level.mode === 'dist' ? 'Shortest distance wins' : 'Fewest moves wins');
+  const planning = moves.length > 0 || Math.abs(editDist) > 0.01;
   const best = loadBest();
-  const t = st.time.toFixed(1);
   const modeLabel = scoringMode === 'quick' ? `<span class="quick-badge">⏱ QUICK</span>` : '';
-  $('stats').innerHTML =
-    `${modeLabel}Moves <b>${st.moves}</b> · ${st.dist.toFixed(1)} m · ~${t}s` +
-    (best ? ` · Best <span class="star">${starStr(best.stars)}</span> ` +
-      (scoringMode === 'quick' ? `${(best.time||0).toFixed(1)}s` :
-       level.mode === 'dist' ? `${best.dist.toFixed(1)} m` : `${best.moves} moves`) : '');
-  $('modeBtn').textContent = scoringMode === 'precise' ? '★ Precise' : '⏱ Quick';
+  if (planning) {
+    const st = planStats();
+    $('stats').innerHTML =
+      `${modeLabel}Moves <b>${st.moves}</b> · ${st.dist.toFixed(1)} m · ~${st.time.toFixed(1)}s` +
+      (best ? ` · Best <span class="star">${starStr(best.stars)}</span>` : '');
+  } else {
+    // idle: show guidance (tutorial step or hint) plus the saved best
+    $('stats').innerHTML = modeLabel + escHtml(level.tut || level.hint) +
+      (best ? ` · <span class="star">${starStr(best.stars)}</span>` : '');
+  }
+  $('menuMode').textContent = scoringMode === 'precise' ? '★  Scoring: Precise' : '⏱  Scoring: Quick';
   $('undoBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
-  $('undoBtn').textContent = editIdx !== null ? 'Cancel' : 'Undo';
+  $('undoBtn').textContent = editIdx !== null ? 'Cancel' : '↶ Undo';
   $('resetBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
   $('goBtn').disabled = (moves.length === 0 && (!editSim || !!editSim.hit)) || !!anim;
 }
@@ -1056,8 +1018,8 @@ function setEdit(steerDeg, dist) {
 steerEl.addEventListener('input', () => setEdit(parseFloat(steerEl.value), editDist));
 distEl.addEventListener('input', () => setEdit(editSteer, parseFloat(distEl.value)));
 
-$('addBtn').addEventListener('click', () => {
-  if (!editSim || editSim.hit || anim) return;
+function commitMove() {
+  if (!editSim || editSim.hit || anim) return false;
   if (editIdx !== null) {
     moves[editIdx] = { steer: rad(editSteer), dist: editDist };
     editIdx = null;
@@ -1068,7 +1030,10 @@ $('addBtn').addEventListener('click', () => {
     setEdit(editSteer, 0); // keep steering, ready for the next move
     recomputePlan();
   }
-});
+  return true;
+}
+
+$('addBtn').addEventListener('click', commitMove);
 
 $('undoBtn').addEventListener('click', () => {
   if (anim) return;
@@ -1110,15 +1075,30 @@ $('goBtn').addEventListener('click', () => {
 $('prevLv').addEventListener('click', () => setLevel(levelIdx - 1));
 $('nextLv').addEventListener('click', () => setLevel(levelIdx + 1));
 
-$('solBtn').addEventListener('click', showSolution);
-$('modeBtn').addEventListener('click', toggleMode);
-$('helpBtn').addEventListener('click', () => $('helpOverlay').classList.remove('hidden'));
-$('helpClose').addEventListener('click', () => $('helpOverlay').classList.add('hidden'));
-
-$('lbBtn').addEventListener('click', () => {
+$('menuBtn').addEventListener('click', () => $('menuOverlay').classList.remove('hidden'));
+$('menuClose').addEventListener('click', () => $('menuOverlay').classList.add('hidden'));
+$('menuOverlay').addEventListener('click', e => {
+  if (e.target === $('menuOverlay')) $('menuOverlay').classList.add('hidden');
+});
+$('menuHelp').addEventListener('click', () => {
+  $('menuOverlay').classList.add('hidden');
+  $('helpOverlay').classList.remove('hidden');
+});
+$('menuSol').addEventListener('click', () => {
+  $('menuOverlay').classList.add('hidden');
+  showSolution();
+});
+$('menuMode').addEventListener('click', toggleMode);
+$('menuLb').addEventListener('click', () => {
+  $('menuOverlay').classList.add('hidden');
   if (lbEnabled()) openLeaderboard(levelIdx);
   else toast('Leaderboard not configured — see LB_URL / LB_KEY in game.js');
 });
+$('menuIntro').addEventListener('click', () => {
+  $('menuOverlay').classList.add('hidden');
+  playIntro();
+});
+$('helpClose').addEventListener('click', () => $('helpOverlay').classList.add('hidden'));
 $('lbClose').addEventListener('click', () => $('lbOverlay').classList.add('hidden'));
 
 $('ovSubmit').addEventListener('click', async () => {
@@ -1190,9 +1170,10 @@ async function lbPost(levelIdx, player, stars, st) {
 
 async function lbGet(levelIdx) {
   const col = scoringMode === 'quick' ? 'time_s' : 'moves';
+  // filter by name, not index — level order can change between versions
   const p = new URLSearchParams({
     select: 'player,stars,moves,dist,time_s',
-    level: `eq.${levelIdx}`, mode: `eq.${scoringMode}`,
+    level_name: `eq.${LEVELS[levelIdx].name}`, mode: `eq.${scoringMode}`,
     order: `stars.desc,${col}.asc`, limit: '50',
   });
   const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
@@ -1283,21 +1264,29 @@ function arcToPoint(pose, wp) {
   return { steer: deg(Math.atan(CAR.wb / R)), dist: R * th };
 }
 
-let drag = null;
+function editStartPose() {
+  return editIdx !== null
+    ? (editIdx === 0 ? level.start : planSims[editIdx - 1].end)
+    : planEnd();
+}
+
+// Relative drag: the ghost is "grabbed" wherever it currently is and moves
+// 1:1 with the finger in world space — no jump on touch, and the finger
+// never has to cover the ghost. Double-tap commits the pending move.
+let drag = null, lastTap = 0;
 cv.addEventListener('pointerdown', e => {
   if (anim) return;
   cv.setPointerCapture(e.pointerId);
-  drag = { x: e.clientX, y: e.clientY, moved: false };
+  const t = (editSim && Math.abs(editDist) > 0.01) ? editSim.end : editStartPose();
+  drag = { x: e.clientX, y: e.clientY, tx: t.x, ty: t.y, moved: false };
 });
 cv.addEventListener('pointermove', e => {
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.abs(dx) > 5 || Math.abs(dy) > 5) drag.moved = true;
   if (!drag.moved) return;
-  const startPose = editIdx !== null
-    ? (editIdx === 0 ? level.start : planSims[editIdx - 1].end)
-    : planEnd();
-  const a = arcToPoint(startPose, pointerToWorld(e));
+  const a = arcToPoint(editStartPose(),
+    { x: drag.tx + dx / view.scale, y: drag.ty + dy / view.scale });
   setEdit(a.steer, a.dist);
 });
 cv.addEventListener('pointerup', e => {
@@ -1308,10 +1297,20 @@ cv.addEventListener('pointerup', e => {
       const ep = planSims[i].end;
       const sp = toScreen({ x: ep.x + Math.cos(ep.h) * CAR.wb / 2,
                              y: ep.y + Math.sin(ep.h) * CAR.wb / 2 });
-      if (Math.hypot(cx - sp.x, cy - sp.y) < 16) { hit = i; break; }
+      if (Math.hypot(cx - sp.x, cy - sp.y) < 22) { hit = i; break; }
     }
-    if (hit >= 0) selectMove(hit);
-    else if (editIdx !== null) { editIdx = null; setEdit(0, 0); }
+    if (hit >= 0) {
+      selectMove(hit);
+    } else {
+      const now = performance.now();
+      if (now - lastTap < 350 && Math.abs(editDist) > 0.01) {
+        if (commitMove()) toast('Move added');
+        lastTap = 0;
+      } else {
+        lastTap = now;
+        if (editIdx !== null) { editIdx = null; setEdit(0, 0); }
+      }
+    }
   }
   drag = null;
 });
@@ -1319,7 +1318,61 @@ cv.addEventListener('pointercancel', () => { drag = null; });
 
 document.addEventListener('gesturestart', e => e.preventDefault());
 
+/* ===================== Intro briefing ===================== */
+
+const INTRO_LINES = [
+  '> INCOMING TRANSMISSION ▒▒▒▒▒▒',
+  '> CLEARANCE LEVEL: ULTRAVIOLET — EYES ONLY',
+  '',
+  '> AGENT 7 — CODENAME "VALET".',
+  '> SITUATION CRITICAL. THE PACKAGE MUST BE',
+  '  IN POSITION BEFORE DAWN.',
+  '',
+  '> EVERY STREET IS WATCHED.',
+  '> EVERY CAMERA IS LIVE.',
+  '> YOU GET ONE ROUTE. PLAN EVERY METER.',
+  '',
+  '> NO SECOND CHANCES.',
+  '> NO SCRATCHES ON THE PAINT.',
+  '',
+  '> YOUR VEHICLE IS WAITING, AGENT.',
+];
+
+let introTimer = null;
+function playIntro() {
+  $('intro').classList.remove('hidden');
+  $('introGo').classList.add('hidden');
+  const el = $('introText');
+  let li = 0, ci = 0, out = '';
+  clearInterval(introTimer);
+  introTimer = setInterval(() => {
+    if (li >= INTRO_LINES.length) {
+      clearInterval(introTimer);
+      el.textContent = out;
+      $('introGo').classList.remove('hidden');
+      return;
+    }
+    const line = INTRO_LINES[li];
+    if (ci < line.length) {
+      out += line[ci++];
+    } else {
+      out += '\n';
+      li++; ci = 0;
+    }
+    el.textContent = out + '█';
+  }, 26);
+}
+
+function closeIntro() {
+  clearInterval(introTimer);
+  $('intro').classList.add('hidden');
+  localStorage.setItem('parking.introSeen', '1');
+}
+$('introSkip').addEventListener('click', closeIntro);
+$('introGo').addEventListener('click', closeIntro);
+
 /* ===================== Boot ===================== */
 
 setLevel(levelIdx);
 requestAnimationFrame(draw);
+if (!localStorage.getItem('parking.introSeen')) playIntro();
