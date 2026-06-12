@@ -1391,8 +1391,8 @@ function playIntroDash() {
   const SC_X = Math.floor((VW - SC_W) / 2);
   const SC_Y = DASH_Y + Math.floor(DASH_H * 0.07);
   const SC_H = DASH_H - Math.floor(DASH_H * 0.12);
-  // Font: tall enough to read, short enough to fit ~14-char lines in SC_W
-  const FS = Math.max(4, Math.min(8, Math.floor(SC_H / 10)));
+  // Font: sized so all MSG lines (lh ≈ FS×1.65) fit within SC_H
+  const FS = Math.max(3, Math.floor((SC_H - 4) / (MSG.length * 1.65)));
 
   // Side clusters (speedo + fuel) only when screen is wide enough relative to height
   const showSide = VW > VH * 0.62;
@@ -1559,6 +1559,8 @@ function playIntroDash() {
       for (let sy2 = SC_Y; sy2 < SC_Y + SC_H; sy2 += 2) c.fillRect(SC_X, sy2, SC_W, 1);
       c.globalAlpha = 1;
 
+      c.save();
+      c.beginPath(); c.rect(SC_X, SC_Y, SC_W, SC_H); c.clip();
       c.fillStyle = '#4eff6a';
       c.font = `${FS}px "Courier New", monospace`; c.textAlign = 'left';
       const lh = Math.ceil(FS * 1.6);
@@ -1574,6 +1576,7 @@ function playIntroDash() {
           rem = 0; done = false; break;
         }
       }
+      c.restore();
       if (done && !msgShown) { msgShown = true; $('introGo').classList.remove('hidden'); }
       c.globalAlpha = .06; c.fillStyle = '#4eff6a';
       c.fillRect(SC_X - 4, SC_Y - 4, SC_W + 8, SC_H + 8); c.globalAlpha = 1;
