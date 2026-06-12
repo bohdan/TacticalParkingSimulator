@@ -1066,6 +1066,7 @@ $('goBtn').addEventListener('click', () => {
   if (editSim && !editSim.hit && editIdx === null) {
     moves.push({ steer: rad(editSteer), dist: editDist });
     editIdx = null;
+    setEdit(editSteer, 0);
     recomputePlan();
   }
   if (!moves.length) { toast('Add some moves first'); return; }
