@@ -544,9 +544,9 @@ const LEVELS = [
       { x: 0, y: 20.5, w: 36, h: 0.5, kind: 'curb' },
     ],
     cars: [
-      { cx: 12, cy: 13.2, h: Math.PI / 2, type: 'bus' },
-      { cx: 8,  cy: 16,   h: 0 },
-      { cx: 20, cy: 16,   h: 0 },
+      { cx: 12, cy: 6, h: Math.PI / 2, type: 'bus' },
+      { cx: 8,  cy: 19, h: 0 },
+      { cx: 18, cy: 19, h: 0 },
     ],
     traffic: [
       { x: -6, y: 15, h: 0,       speed: 4, loop: 46, offset: 0  },
@@ -571,8 +571,8 @@ const LEVELS = [
       { x: 25, y: 0,    w: 0.8, h: 6.5 },
     ],
     cars: [
-      { cx: 10, cy: 13.2, h: Math.PI / 2, type: 'bus' },
-      { cx: 30, cy: 16,   h: 0 },
+      { cx: 10, cy: 6, h: Math.PI / 2, type: 'bus' },
+      { cx: 30, cy: 19, h: 0 },
     ],
     traffic: [
       { x: -6, y: 14.5, h: 0,       speed: 3.5, loop: 46, offset: 0  },
