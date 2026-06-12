@@ -734,9 +734,9 @@ function drawPath(pts, color, dashed, lw = 0.09) {
   ctx.setLineDash([]);
 }
 
-// Arc guides: shown when dist=0 but wheels are turned.
-// Two solid curves = outer / inner edges of the car's swept path.
-// Two dashed curves = front-left and front-right wheel tracks.
+// Arc guides: always shown when wheels are turned and no animation running.
+// Four solid curves = all 4 bounding-box corners swept path.
+// Four dashed curves = all 4 wheel tracks (front-left, front-right, rear-left, rear-right).
 function drawArcGuides(pose, steerRad) {
   if (Math.abs(steerRad) < rad(1.5)) return;
   const N = 60;
@@ -746,34 +746,37 @@ function drawArcGuides(pose, steerRad) {
   const half = CAR.wid / 2;
 
   function sampleArc(limit, dir) {
-    const outer = [], inner = [], wfl = [], wfr = [];
+    const cFL = [], cFR = [], cRL = [], cRR = [];
+    const wFL = [], wFR = [], wRL = [], wRR = [];
     for (let i = 0; i <= N; i++) {
       const p = advance(pose, steerRad, dir * limit * i / N);
-      const c = Math.cos(p.h), s = Math.sin(p.h);
-      const w = (lx, ly) => ({ x: p.x + c * lx - s * ly, y: p.y + s * lx + c * ly });
-      // outer corner = front-right for left turn, front-left for right turn
-      if (steerRad >= 0) {
-        outer.push(w(fLen,       -half));
-        inner.push(w(-CAR.rOver,  half));
-      } else {
-        outer.push(w(fLen,        half));
-        inner.push(w(-CAR.rOver, -half));
-      }
-      wfl.push(w(CAR.wb,  half));
-      wfr.push(w(CAR.wb, -half));
+      const cs = Math.cos(p.h), sn = Math.sin(p.h);
+      const w = (lx, ly) => ({ x: p.x + cs * lx - sn * ly, y: p.y + sn * lx + cs * ly });
+      cFL.push(w(fLen,        half));
+      cFR.push(w(fLen,       -half));
+      cRL.push(w(-CAR.rOver,  half));
+      cRR.push(w(-CAR.rOver, -half));
+      wFL.push(w(CAR.wb,  half));
+      wFR.push(w(CAR.wb, -half));
+      wRL.push(w(0,        half));
+      wRR.push(w(0,       -half));
     }
-    return { outer, inner, wfl, wfr };
+    return { cFL, cFR, cRL, cRR, wFL, wFR, wRL, wRR };
   }
 
   for (const [limit, dir] of [[fwdLimit, 1], [bwdLimit, -1]]) {
     if (limit < 0.2) continue;
-    const { outer, inner, wfl, wfr } = sampleArc(limit, dir);
-    const col  = dir > 0 ? 'rgba(69,196,255,0.38)' : 'rgba(255,159,67,0.38)';
-    const wCol = dir > 0 ? 'rgba(69,196,255,0.60)' : 'rgba(255,159,67,0.60)';
-    drawPath(outer, col, false, 0.06);
-    drawPath(inner, col, false, 0.06);
-    drawPath(wfl,  wCol,  true, 0.05);
-    drawPath(wfr,  wCol,  true, 0.05);
+    const { cFL, cFR, cRL, cRR, wFL, wFR, wRL, wRR } = sampleArc(limit, dir);
+    const col  = dir > 0 ? 'rgba(69,196,255,0.28)' : 'rgba(255,159,67,0.28)';
+    const wCol = dir > 0 ? 'rgba(69,196,255,0.50)' : 'rgba(255,159,67,0.50)';
+    drawPath(cFL, col, false, 0.06);
+    drawPath(cFR, col, false, 0.06);
+    drawPath(cRL, col, false, 0.06);
+    drawPath(cRR, col, false, 0.06);
+    drawPath(wFL, wCol, true, 0.05);
+    drawPath(wFR, wCol, true, 0.05);
+    drawPath(wRL, wCol, true, 0.05);
+    drawPath(wRR, wCol, true, 0.05);
   }
 }
 
@@ -852,6 +855,9 @@ function draw(now) {
   ctx.stroke();
   ctx.setLineDash([]);
 
+  // arc guides (all 4 corners + all 4 wheels) — drawn first so they sit behind everything
+  if (!anim) drawArcGuides(editStartPose(), rad(editSteer));
+
   // committed plan: paths + ghosts
   // When editing move editIdx: skip that move's arc (replaced by live preview),
   // and dim any moves that come after it (their start poses will shift on commit).
@@ -920,11 +926,6 @@ function draw(now) {
     ctx.lineWidth = 0.07;
     ctx.strokeStyle = '#ff5252';
     ctx.stroke();
-  }
-
-  // arc guides when distance is 0 but wheels are turned (no active animation)
-  if (!anim && Math.abs(editDist) < 0.01) {
-    drawArcGuides(editStartPose(), rad(editSteer));
   }
 
   // the car: animated along the plan, or sitting at start
