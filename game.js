@@ -1021,7 +1021,9 @@ function finishRun() {
     const best = loadBest();
     const prec = parkingClearance(end);
     const precCm = Math.round(prec * 100);
-    const precLabel = prec >= 0.25 ? 'Perfect' : prec >= 0.12 ? 'Good' : prec >= 0.05 ? 'Tight' : 'Squeezed';
+    // Thresholds calibrated to real geometry: a 2.2 m zone with a 1.8 m car
+    // gives ~20 cm max clearance per side when perfectly centred.
+    const precLabel = prec >= 0.15 ? 'Perfect' : prec >= 0.07 ? 'Good' : prec >= 0.02 ? 'Tight' : 'Squeezed';
     $('ovStats').innerHTML =
       `<div class="sc-row"><span class="sc-label">Time</span><span class="sc-val">${st.time.toFixed(1)} s</span></div>` +
       `<div class="sc-row"><span class="sc-label">Clearance</span><span class="sc-val">${precCm} cm <span class="sc-note">${precLabel}</span></span></div>` +
