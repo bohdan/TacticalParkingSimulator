@@ -7,6 +7,22 @@
 const CAR = { len: 4.4, wid: 1.8, wb: 2.7, rOver: 0.85, maxSteer: 35 };
 CAR.fOver = CAR.len - CAR.wb - CAR.rOver;
 
+// Fixed sedan dimensions used for static obstacle cars regardless of player vehicle
+const SEDAN = { len: 4.4, wid: 1.8, wb: 2.7, rOver: 0.85, fOver: 0.85, maxSteer: 35 };
+
+const VEHICLES = {
+  default: { len: 4.4,  wid: 1.8,  wb: 2.7,  rOver: 0.85, maxSteer: 35 },
+  miata:   { len: 3.97, wid: 1.72, wb: 2.265, rOver: 0.73, maxSteer: 40 },
+  bus:     { len: 12.0, wid: 2.55, wb: 6.5,   rOver: 2.5,  maxSteer: 45 },
+};
+
+function setVehicle(name) {
+  const v = VEHICLES[name] || VEHICLES.default;
+  CAR.len = v.len; CAR.wid = v.wid; CAR.wb = v.wb;
+  CAR.rOver = v.rOver; CAR.maxSteer = v.maxSteer;
+  CAR.fOver = CAR.len - CAR.wb - CAR.rOver;
+}
+
 const SAMPLE_STEP = 0.06;    // m, collision sampling along path
 
 const rad = d => d * Math.PI / 180;
@@ -65,14 +81,18 @@ function ptSegDist(px, py, ax, ay, bx, by) {
   return Math.hypot(px-ax-t*dx, py-ay-t*dy);
 }
 
+function goalPoly(g) {
+  return g.ang
+    ? obbPoly(g.cx, g.cy, g.w, g.h, g.ang)
+    : [{ x: g.cx-g.w/2, y: g.cy-g.h/2 }, { x: g.cx+g.w/2, y: g.cy-g.h/2 },
+       { x: g.cx+g.w/2, y: g.cy+g.h/2 }, { x: g.cx-g.w/2, y: g.cy+g.h/2 }];
+}
+
 // Min distance from any car corner to the goal zone boundary.
 // Maximised when the car is centred in the spot.
 function parkingClearance(pose) {
   const cp = carPoly(pose);
-  const g = level.goal;
-  const x0 = g.cx - g.w / 2, x1 = g.cx + g.w / 2;
-  const y0 = g.cy - g.h / 2, y1 = g.cy + g.h / 2;
-  const zone = [{x:x0,y:y0},{x:x1,y:y0},{x:x1,y:y1},{x:x0,y:y1}];
+  const zone = goalPoly(level.goal);
   let minGap = Infinity;
   for (const v of cp)
     for (let j = 0; j < zone.length; j++) {
@@ -410,6 +430,153 @@ const LEVELS = [
     hint: "Only 5.5 m of corridor — a true shuffle marathon.",
     solution: [{ steer: -35, dist: 1.5 }, { steer: 20, dist: 6 }, { steer: -35, dist: -2 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 3 }],
   },
+
+  // ── Curved-road parallel parking ──────────────────────────────────────────
+
+  {
+    // Outer-bend parallel: parking spots follow the outside of a right-hand curve.
+    // Cars and the goal zone are all angled +12° so the player must steer into
+    // the curve before reversing in — exactly like a real curved-street park.
+    name: "Outer Bend Park", tier: "Hard", mode: "moves", w: 30, h: 15,
+    vehicle: 'default',
+    start: { x: 2.5, y: 7, h: 0 },
+    goal: { cx: 14.5, cy: 12.2, w: 7.2, h: 2.3, ang: rad(12), heads: [12], tol: 12 },
+    walls: [
+      // outer curb (angled, follows the bend)
+      { cx: 14.5, cy: 13.55, w: 30, h: 1.5, ang: rad(12), kind: 'curb' },
+      // inner road edge / median
+      { x: 0, y: 0, w: 30, h: 1.6, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 5.4,  cy: 11.5, h: rad(12) },
+      { cx: 23.6, cy: 12.8, h: rad(12) },
+    ],
+    traffic: [
+      { x: -6, y: 4.5, h: 0,        speed: 6,   loop: 42, offset: 0 },
+      { x: -6, y: 7.2, h: 0,        speed: 4.2, loop: 36, offset: 18 },
+      { x: 36, y: 3.2, h: Math.PI,  speed: 5,   loop: 42, offset: 0 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [20, 31],
+    hint: "Follow the road's curve, then reverse into the angled bay.",
+    solution: [{ steer: 0, dist: 13.5 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3.2 }],
+  },
+
+  {
+    // Inner-bend parallel: parking on the inside of a left-hand curve.
+    // When reversing in, the car's tail swings toward oncoming traffic —
+    // tighter margins, same spot size as "Outer Bend".
+    name: "Inner Bend Park", tier: "Expert", mode: "moves", w: 30, h: 15,
+    vehicle: 'default',
+    start: { x: 2.5, y: 8.5, h: 0 },
+    goal: { cx: 15, cy: 2.9, w: 7.2, h: 2.3, ang: rad(-12), heads: [-12], tol: 12 },
+    walls: [
+      // inner curb (outside of a left-hand curve = top of screen)
+      { cx: 15, cy: 1.55, w: 30, h: 1.5, ang: rad(-12), kind: 'curb' },
+      // outer road edge / kerb
+      { x: 0, y: 13.4, w: 30, h: 1.6, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 6.1,  cy: 3.6, h: rad(-12) },
+      { cx: 23.9, cy: 2.3, h: rad(-12) },
+    ],
+    traffic: [
+      { x: -6, y: 11, h: 0,       speed: 5.5, loop: 42, offset: 0  },
+      { x: 36, y: 9,  h: Math.PI, speed: 4,   loop: 36, offset: 12 },
+      { x: 36, y: 12, h: Math.PI, speed: 6,   loop: 42, offset: 24 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [22, 34],
+    hint: "Inside of the bend — your tail swings wide when you reverse in.",
+    solution: [{ steer: 0, dist: 14 }, { steer: -35, dist: -3 }, { steer: 35, dist: -3.2 }],
+  },
+
+  // ── Mazda Miata (sports car) ───────────────────────────────────────────────
+
+  {
+    // Tiny roadster: shorter, narrower, tighter turning circle than the sedan.
+    name: "Miata Alley", tier: "Medium", mode: "moves", w: 20, h: 10,
+    vehicle: 'miata',
+    start: { x: 2.5, y: 5.5, h: 0 },
+    goal: { cx: 15.2, cy: 2.2, w: 4.9, h: 2.5, heads: [90, -90], tol: 12 },
+    walls: [],
+    cars: [
+      { cx: 5.4,  cy: 2.2, h: Math.PI / 2 },
+      { cx: 8.1,  cy: 2.2, h: Math.PI / 2 },
+      { cx: 12.5, cy: 2.2, h: Math.PI / 2 },
+      { cx: 18.2, cy: 2.2, h: Math.PI / 2 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [15, 23],
+    hint: "The Miata turns on a dime — use that tight radius.",
+    solution: [{ steer: -35, dist: 5.5 }, { steer: 35, dist: -3.5 }, { steer: 0, dist: -1.2 }],
+  },
+
+  {
+    // Diagonal bay in a sports-car-sized world — demands precision.
+    name: "Miata Corner", tier: "Hard", mode: "moves", w: 22, h: 12,
+    vehicle: 'miata',
+    start: { x: 2.5, y: 9, h: 0 },
+    goal: { cx: 15, cy: 2.8, w: 5, h: 5, heads: [-45], tol: 8 },
+    walls: [
+      { x: 0, y: 0, w: 22, h: 0.5, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 6.5,  cy: 2.8, h: -Math.PI / 4 },
+      { cx: 10.5, cy: 2.8, h: -Math.PI / 4 },
+      { cx: 19.5, cy: 2.8, h: -Math.PI / 4 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [14, 22],
+    hint: "Angled bay — the Miata's extra steering lock is your friend.",
+    solution: [{ steer: -20, dist: 6 }, { steer: 5, dist: 3.5 }, { steer: -35, dist: 0.8 }],
+  },
+
+  // ── Bus ────────────────────────────────────────────────────────────────────
+
+  {
+    // Wide bay sized for a 12 m city bus. The challenge is the enormous
+    // swept volume when reversing — the rear overhang swings far left/right.
+    name: "Bus Depot", tier: "Hard", mode: "moves", w: 36, h: 18,
+    vehicle: 'bus',
+    start: { x: 3, y: 11, h: 0 },
+    goal: { cx: 26, cy: 3.5, w: 14, h: 7, heads: [90, -90], tol: 10 },
+    walls: [
+      { x: 0, y: 0, w: 36, h: 0.5, kind: 'curb' },
+      { x: 0, y: 17.5, w: 36, h: 0.5, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 10, cy: 3.5, h: Math.PI / 2, type: 'bus' },
+      { cx: 8,  cy: 14,  h: 0 },
+      { cx: 14, cy: 14,  h: 0 },
+      { cx: 30, cy: 14,  h: 0 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [28, 44],
+    hint: "12 m of bus — watch the rear swing when you steer.",
+    solution: [{ steer: 0, dist: 20 }, { steer: 45, dist: -12 }, { steer: 0, dist: -5 }],
+  },
+
+  {
+    // Bus must reverse into a terminal stand: goal is head-on (heading 180°).
+    name: "Bus Terminal", tier: "Expert", mode: "moves", w: 40, h: 20,
+    vehicle: 'bus',
+    start: { x: 3, y: 12, h: 0 },
+    goal: { cx: 34, cy: 5.5, w: 13.5, h: 6, heads: [-90], tol: 10 },
+    walls: [
+      { x: 28, y: 0,  w: 0.6, h: 7   },
+      { x: 28, y: 9,  w: 0.6, h: 11  },
+      { x: 0,  y: 17.5, w: 40, h: 2.5, kind: 'curb' },
+      { x: 0,  y: 0,    w: 40, h: 0.5, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 10, cy: 5.5,  h: Math.PI / 2, type: 'bus' },
+      { cx: 16, cy: 14,   h: 0 },
+      { cx: 24, cy: 14,   h: 0 },
+    ],
+    traffic: [
+      { x: -6, y: 10, h: 0,       speed: 3, loop: 50, offset: 0  },
+      { x: 46, y: 13, h: Math.PI, speed: 4, loop: 50, offset: 25 },
+    ],
+    starThresh: [4, 6], starThreshQuick: [38, 59],
+    hint: "Thread the terminal door, then ease the 12 m bus into the stand.",
+    solution: [{ steer: 0, dist: 26 }, { steer: -45, dist: -14 }, { steer: 45, dist: 3 }, { steer: -10, dist: -4 }],
+  },
 ];
 
 function buildLevel(def) {
@@ -420,10 +587,16 @@ function buildLevel(def) {
   obstacles.push({ kind: 'border', poly: rectPoly(-B, 0, B, def.h) });
   obstacles.push({ kind: 'border', poly: rectPoly(def.w, 0, B, def.h) });
   for (const r of def.walls) {
-    obstacles.push({ kind: r.kind || 'wall', rect: r, poly: rectPoly(r.x, r.y, r.w, r.h) });
+    const poly = r.ang != null
+      ? obbPoly(r.cx, r.cy, r.w, r.h, r.ang)
+      : rectPoly(r.x, r.y, r.w, r.h);
+    obstacles.push({ kind: r.kind || 'wall', rect: r, poly });
   }
   for (const c of def.cars) {
-    obstacles.push({ kind: 'car', pose: c, poly: obbPoly(c.cx, c.cy, CAR.len, CAR.wid, c.h) });
+    const sp = (c.type && VEHICLES[c.type])
+      ? { ...VEHICLES[c.type], fOver: VEHICLES[c.type].len - VEHICLES[c.type].wb - VEHICLES[c.type].rOver }
+      : SEDAN;
+    obstacles.push({ kind: 'car', pose: c, carSpec: sp, poly: obbPoly(c.cx, c.cy, sp.len, sp.wid, c.h) });
   }
   return Object.assign({ obstacles }, def);
 }
@@ -432,10 +605,8 @@ function inGoal(pose, goal) {
   const okHead = goal.heads.some(
     hd => Math.abs(normAng(pose.h - rad(hd))) <= rad(goal.tol));
   if (!okHead) return false;
-  const x0 = goal.cx - goal.w / 2, x1 = goal.cx + goal.w / 2;
-  const y0 = goal.cy - goal.h / 2, y1 = goal.cy + goal.h / 2;
-  return carPoly(pose).every(
-    v => v.x >= x0 && v.x <= x1 && v.y >= y0 && v.y <= y1);
+  const poly = goalPoly(goal);
+  return carPoly(pose).every(v => pointInPoly(v, poly));
 }
 
 // ── Leaderboard (Supabase) ─────────────────────────────────────────────────
@@ -664,27 +835,32 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
-function drawCarBody(pose, opts) {
+function drawCarBody(pose, opts, spec) {
+  spec = spec || CAR;
   ctx.save();
   ctx.translate(pose.x, pose.y);
   ctx.rotate(pose.h);
-  const x0 = -CAR.rOver, len = CAR.len, w = CAR.wid;
+  const x0 = -spec.rOver, len = spec.len, w = spec.wid;
+  // wheel offset from car centerline (inset by ~0.16 m regardless of vehicle width)
+  const wy = w / 2 - 0.16;
+  // wheel box scales with vehicle length; bus wheels are larger
+  const wl = Math.min(0.9, len * 0.075), wt = Math.min(0.18, w * 0.10);
 
   if (opts.wheels) {
     ctx.fillStyle = '#10131a';
-    for (const [wx, wy, a] of [
-      [0, -0.74, 0], [0, 0.74, 0],
-      [CAR.wb, -0.74, opts.steer || 0], [CAR.wb, 0.74, opts.steer || 0],
+    for (const [wx, wya, a] of [
+      [0, -wy, 0], [0, wy, 0],
+      [spec.wb, -wy, opts.steer || 0], [spec.wb, wy, opts.steer || 0],
     ]) {
       ctx.save();
-      ctx.translate(wx, wy);
+      ctx.translate(wx, wya);
       ctx.rotate(a);
-      ctx.fillRect(-0.33, -0.13, 0.66, 0.26);
+      ctx.fillRect(-wl / 2, -wt, wl, wt * 2);
       ctx.restore();
     }
   }
 
-  roundRect(x0, -w / 2, len, w, 0.3);
+  roundRect(x0, -w / 2, len, w, Math.min(0.3, w * 0.17));
   ctx.fillStyle = opts.fill;
   ctx.fill();
   if (opts.stroke) {
@@ -694,33 +870,37 @@ function drawCarBody(pose, opts) {
   }
 
   if (opts.detail) {
-    // windshield + rear window
+    // windshield and rear window, scaled to vehicle length
+    const wsX = x0 + len * 0.30;  // windshield x
+    const rwX = x0 + len * 0.09;  // rear window x
+    const glH = w - 0.44;
     ctx.fillStyle = 'rgba(8,12,18,0.45)';
-    roundRect(CAR.wb * 0.42, -w / 2 + 0.22, 0.85, w - 0.44, 0.15);
+    roundRect(wsX, -w / 2 + 0.22, Math.min(0.85, len * 0.20), glH, 0.15);
     ctx.fill();
-    roundRect(x0 + 0.45, -w / 2 + 0.25, 0.6, w - 0.5, 0.15);
+    roundRect(rwX, -w / 2 + 0.25, Math.min(0.6, len * 0.13), glH, 0.15);
     ctx.fill();
     // headlights
     ctx.fillStyle = '#ffe9a8';
-    ctx.fillRect(x0 + len - 0.18, -w / 2 + 0.15, 0.12, 0.3);
-    ctx.fillRect(x0 + len - 0.18, w / 2 - 0.45, 0.12, 0.3);
+    ctx.fillRect(x0 + len - 0.18, -w / 2 + 0.15, 0.12, Math.min(0.3, w * 0.17));
+    ctx.fillRect(x0 + len - 0.18,  w / 2 - 0.45, 0.12, Math.min(0.3, w * 0.17));
   }
   ctx.restore();
 }
 
 function drawGhost(pose, color, steer = 0) {
+  const wy = CAR.wid / 2 - 0.13;
   ctx.save();
   ctx.translate(pose.x, pose.y);
   ctx.rotate(pose.h);
   ctx.lineWidth = 0.07;
   ctx.strokeStyle = color;
   ctx.setLineDash([0.25, 0.18]);
-  for (const [wx, wy, a] of [
-    [0, -0.74, 0], [0, 0.74, 0],
-    [CAR.wb, -0.74, steer], [CAR.wb, 0.74, steer],
+  for (const [wx, wya, a] of [
+    [0, -wy, 0], [0, wy, 0],
+    [CAR.wb, -wy, steer], [CAR.wb, wy, steer],
   ]) {
     ctx.save();
-    ctx.translate(wx, wy);
+    ctx.translate(wx, wya);
     ctx.rotate(a);
     ctx.strokeRect(-0.33, -0.13, 0.66, 0.26);
     ctx.restore();
@@ -842,24 +1022,42 @@ function draw(now) {
 
   // goal zone
   const g = level.goal;
+  const gPoly = goalPoly(g);
+  drawPoly(gPoly);
   ctx.fillStyle = 'rgba(61,220,132,0.10)';
-  ctx.fillRect(g.cx - g.w / 2, g.cy - g.h / 2, g.w, g.h);
+  ctx.fill();
   ctx.lineWidth = 0.1;
   ctx.strokeStyle = '#3ddc84';
   ctx.setLineDash([0.45, 0.3]);
-  ctx.strokeRect(g.cx - g.w / 2, g.cy - g.h / 2, g.w, g.h);
+  ctx.stroke();
   ctx.setLineDash([]);
   for (const hd of g.heads) {
     drawArrow(g.cx, g.cy, rad(hd), Math.min(g.w, g.h) * 0.45, 'rgba(61,220,132,0.7)');
   }
 
+  // decorative traffic (non-collision, animated sedans outside parking zone)
+  if (level.traffic) {
+    const tSec = now / 1000;
+    for (const tr of level.traffic) {
+      const d = (tSec * tr.speed + tr.offset) % tr.loop;
+      const tx = tr.x + Math.cos(tr.h) * d;
+      const ty = tr.y + Math.sin(tr.h) * d;
+      const rearX = tx - Math.cos(tr.h) * (SEDAN.len / 2 - SEDAN.rOver);
+      const rearY = ty - Math.sin(tr.h) * (SEDAN.len / 2 - SEDAN.rOver);
+      drawCarBody({ x: rearX, y: rearY, h: tr.h },
+                  { fill: tr.color || '#4e5a6e', stroke: '#3a4255', detail: false, wheels: false },
+                  SEDAN);
+    }
+  }
+
   // obstacles
   for (const o of level.obstacles) {
     if (o.kind === 'car') {
-      drawCarBody({ x: o.pose.cx - Math.cos(o.pose.h) * (CAR.len / 2 - CAR.rOver),
-                    y: o.pose.cy - Math.sin(o.pose.h) * (CAR.len / 2 - CAR.rOver),
+      const sp = o.carSpec || SEDAN;
+      drawCarBody({ x: o.pose.cx - Math.cos(o.pose.h) * (sp.len / 2 - sp.rOver),
+                    y: o.pose.cy - Math.sin(o.pose.h) * (sp.len / 2 - sp.rOver),
                     h: o.pose.h },
-                  { fill: '#737d8c', stroke: '#525a66', detail: true, wheels: true });
+                  { fill: '#737d8c', stroke: '#525a66', detail: true, wheels: true }, sp);
     } else {
       drawPoly(o.poly);
       ctx.fillStyle = o.kind === 'curb' ? '#3a4148' : '#39404e';
@@ -1044,6 +1242,9 @@ function setLevel(i) {
   const prevIdx = levelIdx;
   levelIdx = (i + LEVELS.length) % LEVELS.length;
   localStorage.setItem('parking.level', String(levelIdx));
+  setVehicle(LEVELS[levelIdx].vehicle || 'default');
+  steerEl.min = -CAR.maxSteer;
+  steerEl.max = CAR.maxSteer;
   level = buildLevel(LEVELS[levelIdx]);
   moves = [];
   planSims = [];
