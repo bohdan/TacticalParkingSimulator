@@ -94,10 +94,16 @@ input[type="range"] {
   background: transparent;
   min-width: 0;
 }
+/* --zero marks the neutral position (0° / 0 m); set from JS when the
+   distance range is asymmetric. */
 input[type="range"]::-webkit-slider-runnable-track {
   height: 10px;
   border-radius: 5px;
-  background: linear-gradient(90deg, #2a3140 49.5%, #46506377 49.5%, #46506377 50.5%, #2a3140 50.5%);
+  background: linear-gradient(90deg,
+    #2a3140 calc(var(--zero, 50%) - 1.5px),
+    #76849e calc(var(--zero, 50%) - 1.5px),
+    #76849e calc(var(--zero, 50%) + 1.5px),
+    #2a3140 calc(var(--zero, 50%) + 1.5px));
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -110,7 +116,11 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="range"]::-moz-range-track {
   height: 10px;
   border-radius: 5px;
-  background: #2a3140;
+  background: linear-gradient(90deg,
+    #2a3140 calc(var(--zero, 50%) - 1.5px),
+    #76849e calc(var(--zero, 50%) - 1.5px),
+    #76849e calc(var(--zero, 50%) + 1.5px),
+    #2a3140 calc(var(--zero, 50%) + 1.5px));
 }
 input[type="range"]::-moz-range-thumb {
   width: 28px; height: 28px;

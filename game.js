@@ -273,14 +273,16 @@ const LEVELS = [
     starThresh: [16, 22], starThreshQuick: [42, 64],
     hint: 'A 5.8 m corridor — the simple U-turn no longer fits.',
     solution: [
-      { steer: -20, dist:  2   },
-      { steer:  35, dist:  3   },
-      { steer: -35, dist: -2.5 },
-      { steer:  35, dist:  1   },
-      { steer: -35, dist: -1   },
-      { steer:  35, dist:  1   },
-      { steer: -35, dist: -1   },
-      { steer:  35, dist:  3   },
+      { steer:   0, dist:  5   },
+      { steer: -35, dist:  1   },
+      { steer:  35, dist: -2.5 },
+      { steer: -35, dist:  0.5 },
+      { steer:  35, dist: -1   },
+      { steer: -35, dist:  1   },
+      { steer:  35, dist: -1   },
+      { steer: -35, dist:  1   },
+      { steer:  35, dist: -0.5 },
+      { steer: -35, dist:  3   },
     ],
   },
 
@@ -356,20 +358,21 @@ const LEVELS = [
       { x: 18.4, y: 0, w: 3.6, h: 11 },
     ],
     cars: [],
-    starThresh: [17, 23], starThreshQuick: [54, 84],
+    starThresh: [18, 25], starThreshQuick: [54, 84],
     hint: '5.6 m to turn around — shuffle, inch by inch.',
     solution: [
-      { steer: -20, dist:  2   },
-      { steer:  35, dist:  3   },
-      { steer: -35, dist: -2   },
+      { steer: -35, dist:  1   },
+      { steer:  20, dist:  5   },
+      { steer: -35, dist: -2.5 },
       { steer:  35, dist:  0.5 },
-      { steer: -35, dist: -1   },
-      { steer:  20, dist:  1   },
-      { steer: -20, dist: -1   },
-      { steer:  35, dist:  1   },
       { steer: -35, dist: -0.5 },
-      { steer:  35, dist:  3   },
+      { steer:  35, dist:  0.5 },
       { steer: -35, dist: -0.5 },
+      { steer:  35, dist:  0.5 },
+      { steer: -35, dist: -0.5 },
+      { steer:  35, dist:  0.5 },
+      { steer: -35, dist: -0.5 },
+      { steer:  35, dist:  4   },
     ],
   },
 
@@ -398,30 +401,30 @@ const LEVELS = [
   {
     name: 'The Gauntlet', mode: 'dist', w: 22, h: 11,
     start: { x: 3.2, y: 5.5, h: 0 },
-    goal: { cx: 4.6, cy: 5.5, w: 8, h: 5.4, heads: [180], tol: 12 },
+    goal: { cx: 4.6, cy: 5.5, w: 8, h: 5.5, heads: [180], tol: 12 },
     walls: [
-      { x: 0, y: 0,    w: 22, h: 2.8 },
-      { x: 0, y: 8.2,  w: 22, h: 2.8 },
-      { x: 18.4, y: 0, w: 3.6, h: 11 },
+      { x: 0, y: 0,    w: 22, h: 2.75 },
+      { x: 0, y: 8.25, w: 22, h: 2.75 },
+      { x: 18.4, y: 0, w: 3.6, h: 11  },
     ],
     cars: [],
-    starThresh: [17, 23], starThreshQuick: [63, 97],
-    hint: 'Only 5.4 m of corridor — a true shuffle marathon.',
+    starThresh: [20, 28], starThreshQuick: [63, 97],
+    hint: 'Only 5.5 m of corridor — a true shuffle marathon.',
     solution: [
-      { steer: -20, dist:  1   },
-      { steer:   0, dist:  3   },
-      { steer:  35, dist: -3   },
-      { steer:  35, dist: -0.5 },
-      { steer: -35, dist:  0.5 },
-      { steer:  35, dist: -0.5 },
-      { steer: -35, dist:  0.5 },
-      { steer:  35, dist: -0.5 },
-      { steer: -35, dist:  0.5 },
-      { steer:  35, dist: -0.5 },
-      { steer: -35, dist:  0.5 },
-      { steer:  35, dist: -0.5 },
       { steer: -35, dist:  1.5 },
-      { steer:  35, dist: -2   },
+      { steer:  20, dist:  6   },
+      { steer: -35, dist: -2   },
+      { steer:  35, dist:  0.5 },
+      { steer: -35, dist: -0.5 },
+      { steer:  35, dist:  0.5 },
+      { steer: -35, dist: -0.5 },
+      { steer:  35, dist:  0.5 },
+      { steer: -35, dist: -0.5 },
+      { steer:  35, dist:  0.5 },
+      { steer: -35, dist: -0.5 },
+      { steer:  35, dist:  0.5 },
+      { steer: -35, dist: -0.5 },
+      { steer:  35, dist:  3   },
     ],
   },
 ];
@@ -507,6 +510,7 @@ let moves = [];        // [{steer (rad), dist (m)}]
 let planSims = [];     // cached simulateMove result per move
 let editSteer = 0;     // degrees, from slider
 let editDist = 0;      // meters, signed
+let distMin = 0, distMax = 0; // drivable range at current steer/start pose
 let editSim = null;
 let editSimOpp = null; // preview for the opposite direction (same |dist|, opposite sign)
 let editIdx = null;    // index of the move being tweaked (null = composing next move)
@@ -521,9 +525,15 @@ function planEnd() {
   return planSims.length ? planSims[planSims.length - 1].end : level.start;
 }
 
-// Per-move distance cap: one move can span the whole field.
-function maxMoveDist() {
-  return Math.max(level.w, level.h);
+// How far the car can roll from `pose` before hitting something — at most
+// one full circle when steering, the field span when straight. Rounded down
+// to the slider step so 0 stays reachable on the range input.
+function driveLimit(pose, steer, dir) {
+  const R = Math.abs(steer) < 1e-4 ? Infinity : Math.abs(CAR.wb / Math.tan(steer));
+  const cap = Math.min(level.w + level.h, 2 * Math.PI * R);
+  const n = Math.max(2, Math.ceil(cap / SAMPLE_STEP));
+  const sim = simulateMove(pose, steer, dir * cap, level.obstacles);
+  return Math.floor((sim.pts.length - 1) / n * cap * 10) / 10;
 }
 
 function recomputePlan() {
@@ -542,9 +552,21 @@ function recomputeEdit() {
   const startPose = editIdx !== null
     ? (editIdx === 0 ? level.start : planSims[editIdx - 1].end)
     : planEnd();
+  const s = rad(editSteer);
+  // slider range = what's actually drivable from here at this steering angle
+  distMax = driveLimit(startPose, s, 1);
+  distMin = -driveLimit(startPose, s, -1);
+  editDist = clamp(editDist, distMin, distMax);
+  distEl.min = distMin;
+  distEl.max = distMax;
+  distEl.value = editDist;
+  const span = distMax - distMin;
+  distEl.style.setProperty('--zero', span > 0 ? `${(-distMin / span * 100).toFixed(1)}%` : '50%');
+  $('distVal').textContent = editDist === 0 ? '—'
+    : `${editDist < 0 ? 'Rev' : 'Fwd'} ${Math.abs(editDist).toFixed(1)} m`;
   if (Math.abs(editDist) > 0.01) {
-    editSim    = simulateMove(startPose, rad(editSteer),  editDist, level.obstacles);
-    editSimOpp = simulateMove(startPose, rad(editSteer), -editDist, level.obstacles);
+    editSim    = simulateMove(startPose, s,  editDist, level.obstacles);
+    editSimOpp = simulateMove(startPose, s, -editDist, level.obstacles);
   } else {
     editSim = editSimOpp = null;
   }
@@ -1006,9 +1028,8 @@ function setLevel(i) {
   levelIdx = (i + LEVELS.length) % LEVELS.length;
   localStorage.setItem('parking.level', String(levelIdx));
   level = buildLevel(LEVELS[levelIdx]);
-  distEl.min = -maxMoveDist();
-  distEl.max = maxMoveDist();
   moves = [];
+  planSims = [];
   anim = null;
   editIdx = null;
   solutionUsed = false;
@@ -1019,16 +1040,15 @@ function setLevel(i) {
 /* ===================== Input ===================== */
 
 const steerEl = $('steer'), distEl = $('dist');
+// Steer slider is always ±35° (symmetric), so the neutral tick is fixed at 50%.
+steerEl.style.setProperty('--zero', '50%');
 
 function setEdit(steerDeg, dist) {
   editSteer = clamp(Math.abs(steerDeg) <= 2 ? 0 : steerDeg, -CAR.maxSteer, CAR.maxSteer);
-  editDist = Math.abs(dist) < 0.15 ? 0 : clamp(dist, -maxMoveDist(), maxMoveDist());
+  editDist = Math.abs(dist) < 0.15 ? 0 : dist; // clamped to drivable range in recomputeEdit
   steerEl.value = editSteer;
-  distEl.value = editDist;
   $('steerVal').textContent = editSteer === 0 ? '0°'
     : `${Math.abs(editSteer)}° ${editSteer < 0 ? 'left' : 'right'}`;
-  $('distVal').textContent = editDist === 0 ? '—'
-    : `${editDist < 0 ? 'Rev' : 'Fwd'} ${Math.abs(editDist).toFixed(1)} m`;
   recomputeEdit();
   updateHUD();
 }
