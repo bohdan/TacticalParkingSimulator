@@ -738,7 +738,6 @@ function drawPath(pts, color, dashed, lw = 0.09) {
 // Four solid curves = all 4 bounding-box corners swept path.
 // Four dashed curves = all 4 wheel tracks (front-left, front-right, rear-left, rear-right).
 function drawArcGuides(pose, steerRad) {
-  if (Math.abs(steerRad) < rad(1.5)) return;
   const N = 60;
   const fwdLimit = driveLimit(pose, steerRad, 1);
   const bwdLimit = driveLimit(pose, steerRad, -1);
@@ -879,19 +878,6 @@ function draw(now) {
     if (dimmed) ctx.globalAlpha = 0.3;
     drawGhost(planSims[i].end, isAnchor
       ? 'rgba(233,240,250,0.85)' : 'rgba(160,175,195,0.5)', moves[i].steer);
-    ctx.restore();
-  }
-
-  // opposite-direction ghost (same |dist|, opposite sign) — shown dim so the
-  // player can see both options at once without it competing with the active arc
-  if (editSimOpp) {
-    const oppFwd = editDist < 0; // opposite of current direction
-    ctx.save();
-    ctx.globalAlpha = 0.32;
-    drawPath(editSimOpp.pts,
-             oppFwd ? 'rgba(69,196,255,0.9)' : 'rgba(255,159,67,0.9)', !oppFwd);
-    drawGhost(editSimOpp.end,
-              oppFwd ? 'rgba(69,196,255,0.9)' : 'rgba(255,159,67,0.9)', rad(editSteer));
     ctx.restore();
   }
 
