@@ -265,17 +265,13 @@ button:active:not(:disabled) { filter: brightness(1.25); }
 }
 .menu-card button.primary { background: #1d4f6b; border-color: #2d7396; text-align: center; }
 
-/* ── Intro (90s terminal briefing) ─────────────────────────────────────── */
+/* ── Dashboard intro animation ──────────────────────────────────────────── */
 #intro {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: #030904;
-  font-family: "Courier New", Courier, monospace;
-  color: #4eff6a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: #080b12;
+  display: block;
 }
 #intro.hidden { display: none; }
 #intro::after {
@@ -283,75 +279,57 @@ button:active:not(:disabled) { filter: brightness(1.25); }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.30) 0 1px, transparent 1px 3px);
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 3px);
+  z-index: 2;
 }
 #intro::before {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.6));
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55));
+  z-index: 3;
 }
-.intro-frame {
-  width: min(92vw, 540px);
-  max-height: 86vh;
-  overflow: hidden;
-  border: 2px solid #1e7a33;
-  outline: 2px solid #0c3315;
-  outline-offset: 4px;
-  padding: 20px 18px;
-  background: rgba(4, 18, 8, 0.9);
-  box-shadow: inset 0 0 50px rgba(38, 255, 90, 0.10);
-}
-.intro-title {
-  font-size: clamp(19px, 5.4vw, 28px);
-  font-weight: bold;
-  letter-spacing: 3px;
-  text-align: center;
-  color: #7dffa0;
-  text-shadow: 0 0 14px rgba(60, 255, 110, 0.7);
-  border-bottom: 1px solid #1e7a33;
-  padding-bottom: 12px;
-  margin-bottom: 14px;
-  animation: introFlicker 5s infinite;
-}
-#introText {
-  white-space: pre-wrap;
-  font-size: 13px;
-  line-height: 1.75;
-  min-height: 245px;
-  text-shadow: 0 0 6px rgba(60, 255, 110, 0.45);
+#introCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 #introSkip {
   position: absolute;
   top: calc(12px + env(safe-area-inset-top));
   right: 14px;
-  z-index: 41;
-  background: none;
-  border: 1px solid #1e7a33;
+  z-index: 45;
+  background: rgba(8,11,18,0.7);
+  border: 1px solid #2a3a28;
   color: #4eff6a;
-  font-family: inherit;
+  font-family: "Courier New", monospace;
   font-size: 12px;
   letter-spacing: 2px;
   padding: 8px 14px;
 }
 #introGo {
-  display: block;
-  margin: 16px auto 0;
-  background: #0c2c14;
-  border: 1px solid #2ecf57;
+  position: absolute;
+  bottom: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  background: #0a2212;
+  border: 2px solid #2ecf57;
   color: #7dffa0;
-  font-family: inherit;
+  font-family: "Courier New", monospace;
   font-size: 15px;
   font-weight: bold;
-  letter-spacing: 2px;
-  padding: 13px 26px;
-  text-shadow: 0 0 8px rgba(60, 255, 110, 0.6);
+  letter-spacing: 3px;
+  padding: 14px 32px;
+  text-shadow: 0 0 8px rgba(60,255,110,0.6);
+  white-space: nowrap;
   animation: introPulse 1.3s infinite;
 }
 #introGo.hidden { display: none; }
-@keyframes introPulse { 50% { box-shadow: 0 0 20px rgba(46, 207, 87, 0.55); } }
-@keyframes introFlicker { 0%, 92%, 95.5%, 100% { opacity: 1; } 93.5%, 95% { opacity: 0.5; } }
+@keyframes introPulse { 50% { box-shadow: 0 0 24px rgba(46,207,87,0.6); } }
 
 .quick-badge {
   display: inline-block;

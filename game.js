@@ -1024,6 +1024,7 @@ function finishRun() {
 /* ===================== Level switching ===================== */
 
 function setLevel(i) {
+  const prevIdx = levelIdx;
   levelIdx = (i + LEVELS.length) % LEVELS.length;
   localStorage.setItem('parking.level', String(levelIdx));
   level = buildLevel(LEVELS[levelIdx]);
@@ -1034,6 +1035,12 @@ function setLevel(i) {
   solutionUsed = false;
   setEdit(0, 0);
   recomputePlan();
+  // Show dashboard intro when leaving the last tutorial level for the first time
+  const firstEasyIdx = LEVELS.findIndex(l => l.tier !== 'Tutorial');
+  if (levelIdx === firstEasyIdx && prevIdx === firstEasyIdx - 1
+      && !localStorage.getItem('parking.dashIntroSeen')) {
+    setTimeout(playIntroDash, 80);
+  }
 }
 
 /* ===================== Input ===================== */
@@ -1133,7 +1140,7 @@ $('menuLb').addEventListener('click', () => {
 });
 $('menuIntro').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
-  playIntro();
+  playIntroDash();
 });
 $('helpClose').addEventListener('click', () => $('helpOverlay').classList.add('hidden'));
 $('lbClose').addEventListener('click', () => $('lbOverlay').classList.add('hidden'));
@@ -1351,59 +1358,266 @@ document.addEventListener('gesturestart', e => e.preventDefault());
 
 /* ===================== Intro briefing ===================== */
 
-const INTRO_LINES = [
-  '> INCOMING TRANSMISSION ▒▒▒▒▒▒',
-  '> CLEARANCE LEVEL: ULTRAVIOLET — EYES ONLY',
-  '',
-  '> AGENT 7 — CODENAME "VALET".',
-  '> SITUATION CRITICAL. THE PACKAGE MUST BE',
-  '  IN POSITION BEFORE DAWN.',
-  '',
-  '> EVERY STREET IS WATCHED.',
-  '> EVERY CAMERA IS LIVE.',
-  '> YOU GET ONE ROUTE. PLAN EVERY METER.',
-  '',
-  '> NO SECOND CHANCES.',
-  '> NO SCRATCHES ON THE PAINT.',
-  '',
-  '> YOUR VEHICLE IS WAITING, AGENT.',
-];
+/* ===================== Dashboard intro animation ===================== */
 
-let introTimer = null;
-function playIntro() {
+let introAnimId = null;
+
+function playIntroDash() {
+  cancelAnimationFrame(introAnimId);
   $('intro').classList.remove('hidden');
   $('introGo').classList.add('hidden');
-  const el = $('introText');
-  let li = 0, ci = 0, out = '';
-  clearInterval(introTimer);
-  introTimer = setInterval(() => {
-    if (li >= INTRO_LINES.length) {
-      clearInterval(introTimer);
-      el.textContent = out;
-      $('introGo').classList.remove('hidden');
-      return;
+
+  const canvas = $('introCanvas');
+  const c = canvas.getContext('2d');
+  c.imageSmoothingEnabled = false;
+
+  // Fixed virtual resolution — CSS scales it up with pixelated rendering
+  const VW = 320, VH = 180;
+  canvas.width = VW; canvas.height = VH;
+
+  const MSG = [
+    '> INCOMING SIGNAL...',
+    '',
+    '  AGENT 7',
+    '  CODENAME: VALET',
+    '',
+    '  DELIVER PKG BY 0300.',
+    '  NO SCRATCHES.',
+    '',
+    '> MISSION START.',
+  ];
+
+  // Seeded deterministic pseudo-random (same visual every playback)
+  const rnd = n => { let x = Math.sin(n) * 10000; return x - Math.floor(x); };
+  const rain = Array.from({ length: 24 }, (_, i) => ({
+    x: Math.floor(rnd(i * 7.3) * VW),
+    y0: rnd(i * 3.1) * 54,
+    spd: 16 + rnd(i * 5.7) * 20,
+    len: 3 + Math.floor(rnd(i * 2.2) * 5),
+  }));
+
+  // Building silhouette: [x, y, w, h]
+  const BLDGS = [
+    [0,42,18,20],[8,32,14,30],[20,46,16,16],[34,40,14,22],[46,44,18,18],
+    [62,34,12,28],[72,48,16,14],[88,42,14,20],[200,46,16,16],[214,37,14,25],
+    [226,44,20,18],[244,33,14,29],[256,44,22,18],[276,40,14,22],[290,47,30,15],
+  ];
+
+  let msgShown = false;
+  const t0 = performance.now();
+
+  // Draw a pixel-filled circle (no anti-aliasing)
+  function fillCirclePx(cx, cy, r, color) {
+    c.fillStyle = color;
+    for (let dy = -r; dy <= r; dy++) {
+      const dx = Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
+      c.fillRect(cx - dx, cy + dy, dx * 2 + 1, 1);
     }
-    const line = INTRO_LINES[li];
-    if (ci < line.length) {
-      out += line[ci++];
+  }
+
+  function frame(now) {
+    const ms = now - t0;
+
+    // ── Sky / windshield (rows 0–62) ─────────────────────────────
+    c.fillStyle = '#080b12';
+    c.fillRect(0, 0, VW, 62);
+
+    // City silhouette + lit windows
+    for (const [bx, by, bw, bh] of BLDGS) {
+      c.fillStyle = '#0c0f19';
+      c.fillRect(bx, by, bw, bh);
+      for (let wy = by + 2; wy < by + bh - 4; wy += 4) {
+        for (let wx = bx + 2; wx < bx + bw - 2; wx += 4) {
+          if (rnd(wx * 11 + wy * 7) < 0.28) {
+            c.fillStyle = rnd(wx + wy * 3) < 0.55 ? '#ffe880' : '#8899cc';
+            c.fillRect(wx, wy, 2, 2);
+          }
+        }
+      }
+    }
+
+    // Rearview mirror
+    c.fillStyle = '#1a1d2a'; c.fillRect(110, 1, 100, 13);
+    c.fillStyle = '#0a0d18'; c.fillRect(112, 3, 96, 9);
+    // Tiny reflection buildings in mirror
+    c.fillStyle = '#0e1122'; c.fillRect(116, 4, 16, 7);
+    c.fillStyle = '#0e1122'; c.fillRect(140, 5, 12, 6);
+    c.fillStyle = '#0e1122'; c.fillRect(172, 4, 20, 7);
+    c.fillStyle = '#ffe880'; c.fillRect(118, 6, 2, 2);
+    c.fillStyle = '#8899cc'; c.fillRect(128, 5, 2, 2);
+    c.fillStyle = '#ffe880'; c.fillRect(148, 7, 2, 1);
+
+    // Rain
+    if (ms > 300) {
+      const t = ms / 1000;
+      c.fillStyle = 'rgba(90,130,200,0.55)';
+      for (const dr of rain) {
+        const y = (dr.y0 + dr.spd * t) % 58;
+        c.fillRect(dr.x, Math.floor(y), 1, dr.len);
+      }
+    }
+
+    // ── Dashboard panel (rows 62–VH) ─────────────────────────────
+    c.fillStyle = '#141720';
+    c.fillRect(0, 62, VW, VH - 62);
+    c.fillStyle = '#20242e'; c.fillRect(0, 62, VW, 2); // highlight edge
+
+    // ── LED strip ─────────────────────────────────────────────────
+    const commBlink = ms > 1600 && Math.floor(ms / 210) % 2 === 0;
+    for (const [lx, col, blink] of [
+      [128, '#2e3545', false], [140, '#5a1e1e', false],
+      [152, '#4a3200', false], [164, '#1a4a28', commBlink], [176, '#2e3545', false],
+    ]) {
+      c.fillStyle = '#0d1018'; c.fillRect(lx - 3, 65, 8, 5);
+      c.fillStyle = blink ? (col === '#1a4a28' ? '#4eff6a' : col) : col;
+      c.fillRect(lx - 2, 66, 6, 3);
+      if (blink) {
+        c.globalAlpha = 0.35; c.fillStyle = '#4eff6a';
+        c.fillRect(lx - 5, 63, 12, 8); c.globalAlpha = 1;
+      }
+    }
+
+    // ── Speedometer (left) ────────────────────────────────────────
+    const sx = 52, sy = 106, sr = 28;
+    fillCirclePx(sx, sy, sr, '#0c0f18');
+    fillCirclePx(sx, sy, sr - 3, '#181c26');
+    // Tick marks
+    for (let ti = 0; ti <= 8; ti++) {
+      const a = Math.PI * 0.75 + ti * (Math.PI * 1.5 / 8);
+      const r1 = sr - 5, r2 = sr - 8;
+      c.fillStyle = ti === 0 ? '#3a4560' : '#22283a';
+      c.fillRect(Math.round(sx + Math.cos(a) * r1), Math.round(sy + Math.sin(a) * r1), 1, 1);
+      c.fillRect(Math.round(sx + Math.cos(a) * r2), Math.round(sy + Math.sin(a) * r2), 1, 1);
+    }
+    // Needle at rest (parked = 0 mph)
+    const na = Math.PI * 0.77;
+    c.fillStyle = '#cc3333';
+    const nLen = sr - 6;
+    for (let ni = 0; ni <= nLen; ni++) {
+      c.fillRect(Math.round(sx + Math.cos(na) * ni), Math.round(sy + Math.sin(na) * ni), 1, 1);
+    }
+    fillCirclePx(sx, sy, 3, '#cc3333'); // center cap
+    // "0" label
+    c.fillStyle = '#38445a'; c.font = '4px monospace'; c.textAlign = 'center';
+    c.fillText('0', sx, sy + sr - 2);
+
+    // ── Fuel + RPM (right) ────────────────────────────────────────
+    // Fuel gauge
+    c.fillStyle = '#0c0f18'; c.fillRect(235, 68, 68, 28);
+    c.fillStyle = '#181c26'; c.fillRect(237, 70, 64, 24);
+    c.fillStyle = '#22283a'; c.fillRect(240, 79, 58, 6); // bar bg
+    c.fillStyle = '#c97d00'; c.fillRect(240, 79, 10, 6); // low fuel amber
+    c.fillStyle = '#3a4460'; c.font = '4px monospace'; c.textAlign = 'left';
+    c.fillText('FUEL', 240, 77);
+    c.fillText('E', 238, 90); c.textAlign = 'right'; c.fillText('F', 300, 90);
+    // RPM mini dial
+    const rx = 265, ry = 114, rsr = 14;
+    fillCirclePx(rx, ry, rsr, '#0c0f18');
+    fillCirclePx(rx, ry, rsr - 3, '#181c26');
+    fillCirclePx(rx, ry, 3, '#cc3333');
+    c.fillStyle = '#38445a'; c.font = '4px monospace'; c.textAlign = 'center';
+    c.fillText('RPM', rx, ry + rsr + 6);
+
+    // ── Center CRT screen ─────────────────────────────────────────
+    const scX = 106, scY = 68, scW = 108, scH = 65;
+    c.fillStyle = '#0a0c14'; c.fillRect(scX - 5, scY - 5, scW + 10, scH + 10);
+    c.fillStyle = '#060810'; c.fillRect(scX - 3, scY - 3, scW + 6, scH + 6);
+
+    if (ms < 1400) {
+      // Screen off
+      c.fillStyle = '#010203'; c.fillRect(scX, scY, scW, scH);
+    } else if (ms < 2100) {
+      // Static noise
+      c.fillStyle = '#010203'; c.fillRect(scX, scY, scW, scH);
+      const density = Math.floor((ms - 1400) / 700 * 200);
+      for (let n = 0; n < density; n++) {
+        c.fillStyle = Math.random() > 0.45 ? '#36cc5a' : '#183325';
+        c.fillRect(scX + Math.floor(Math.random() * scW), scY + Math.floor(Math.random() * scH), 1, 1);
+      }
+    } else if (ms < 2500) {
+      // Phosphor glow warming up
+      const p = (ms - 2100) / 400;
+      c.fillStyle = `rgb(${Math.floor(p*3)},${Math.floor(p*22)},${Math.floor(p*11)})`;
+      c.fillRect(scX, scY, scW, scH);
     } else {
-      out += '\n';
-      li++; ci = 0;
+      // Active: typewriter text
+      c.fillStyle = '#010a04'; c.fillRect(scX, scY, scW, scH);
+      // Scanlines on screen
+      c.globalAlpha = 0.15; c.fillStyle = '#000';
+      for (let sy2 = scY; sy2 < scY + scH; sy2 += 2) c.fillRect(scX, sy2, scW, 1);
+      c.globalAlpha = 1;
+
+      const charRate = 22;
+      let remaining = Math.floor((ms - 2500) / 1000 * charRate);
+      c.fillStyle = '#4eff6a';
+      c.font = '5px "Courier New", monospace';
+      c.textAlign = 'left';
+      let allDone = true;
+      for (let li = 0; li < MSG.length; li++) {
+        const line = MSG[li];
+        if (remaining <= 0) { allDone = false; break; }
+        const take = line.length === 0 ? 1 : line.length;
+        if (remaining >= take) {
+          c.fillText(line, scX + 5, scY + 11 + li * 7);
+          remaining -= take;
+        } else {
+          c.fillText(line.slice(0, remaining) + '█', scX + 5, scY + 11 + li * 7);
+          remaining = 0;
+          allDone = false;
+          break;
+        }
+      }
+      if (allDone && !msgShown) {
+        msgShown = true;
+        $('introGo').classList.remove('hidden');
+      }
+      // Screen glow
+      c.globalAlpha = 0.07; c.fillStyle = '#4eff6a';
+      c.fillRect(scX - 8, scY - 8, scW + 16, scH + 16);
+      c.globalAlpha = 1;
     }
-    el.textContent = out + '█';
-  }, 26);
+
+    // ── Steering wheel (top arc barely peeking at bottom) ─────────
+    const wX = VW / 2, wY = VH + 48, wR = 66;
+    // Outer rim
+    c.strokeStyle = '#1a1e2e'; c.lineWidth = 7;
+    c.beginPath(); c.arc(wX, wY, wR, Math.PI * 1.14, Math.PI * 1.86); c.stroke();
+    c.strokeStyle = '#22273a'; c.lineWidth = 4;
+    c.beginPath(); c.arc(wX, wY, wR, Math.PI * 1.14, Math.PI * 1.86); c.stroke();
+    // Spokes
+    c.strokeStyle = '#1a1e2e'; c.lineWidth = 2;
+    for (const a of [Math.PI * 1.22, Math.PI * 1.5, Math.PI * 1.78]) {
+      c.beginPath();
+      c.moveTo(wX + Math.cos(a) * 18, wY + Math.sin(a) * 18);
+      c.lineTo(wX + Math.cos(a) * (wR - 5), wY + Math.sin(a) * (wR - 5));
+      c.stroke();
+    }
+    // Hub
+    fillCirclePx(wX, wY, 16, '#181c2c');
+    c.fillStyle = '#242838'; c.fillRect(wX - 8, wY - 4, 17, 9);
+    c.fillStyle = '#3a4058'; c.fillRect(wX - 6, wY - 2, 13, 5);
+
+    // ── Global scanlines (CRT overlay, done by CSS ::after) ───────
+
+    if (!$('intro').classList.contains('hidden')) {
+      introAnimId = requestAnimationFrame(frame);
+    }
+  }
+
+  introAnimId = requestAnimationFrame(frame);
 }
 
-function closeIntro() {
-  clearInterval(introTimer);
+function closeIntroDash() {
+  cancelAnimationFrame(introAnimId);
+  introAnimId = null;
   $('intro').classList.add('hidden');
-  localStorage.setItem('parking.introSeen', '1');
+  $('introGo').classList.add('hidden');
+  localStorage.setItem('parking.dashIntroSeen', '1');
 }
-$('introSkip').addEventListener('click', closeIntro);
-$('introGo').addEventListener('click', closeIntro);
+$('introSkip').addEventListener('click', closeIntroDash);
+$('introGo').addEventListener('click', closeIntroDash);
 
 /* ===================== Boot ===================== */
 
 setLevel(levelIdx);
 requestAnimationFrame(draw);
-if (!localStorage.getItem('parking.introSeen')) playIntro();
