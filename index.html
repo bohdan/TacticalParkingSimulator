@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#171a21">
 <title>Park Planner</title>
-<link rel="stylesheet" href="style.css?v=3014d91">
+<link rel="stylesheet" href="style.css?v=4422ddb">
 </head>
 <body>
 <div id="app">
@@ -59,7 +59,7 @@
       <button id="ovNext" class="primary">Next &#8250;</button>
     </div>
     <div class="row" id="ovSubmitRow" style="margin-top:8px;display:none;">
-      <button id="ovSubmit" class="lb">&#8679; Submit to leaderboard</button>
+      <button id="ovSubmit" class="lb">Submit to leaderboard</button>
     </div>
   </div>
 </div>
@@ -67,7 +67,6 @@
 <div id="menuOverlay" class="hidden">
   <div class="card menu-card">
     <button id="menuHelp">? &nbsp;How to play</button>
-    <button id="menuMode">&#9733; &nbsp;Scoring: Precise</button>
     <button id="menuLb">&#127942; &nbsp;Leaderboard</button>
     <button id="menuSol">&#128161; &nbsp;Show solution</button>
     <button id="menuIntro">&#9654; &nbsp;Replay intro</button>
@@ -92,12 +91,10 @@
       <b>Plan moves</b> — Drag on the canvas: the ghost car follows your finger along a drivable arc. Use the sliders for fine control. Tap <i>Add move</i> (or <b>double-tap</b> the canvas) to queue it up.<br><br>
       <b>Run</b> — Animates your full plan. The last pending move is auto-committed when you hit Run.<br><br>
       <b>Edit past moves</b> — Tap a numbered badge on the canvas to load that move back into the sliders. <i>Update #N</i> saves the change; <i>Cancel</i> discards it.<br><br>
-      <b>&#9733; Stars</b><br>
-      &nbsp;&#9733;&#9733;&#9733; — Perfect (meets 3-star threshold)<br>
+      <b>&#9733; Stars</b> — based on estimated time (car accelerates/brakes at 2 m/s&sup2; up to 3 m/s, steering 60&deg;/s, +1.5s per direction reversal):<br>
+      &nbsp;&#9733;&#9733;&#9733; — Perfect<br>
       &nbsp;&#9733;&#9733;&#9734; — Good<br>
-      &nbsp;&#9733;&#9734;&#9734; — Parked, but can do better<br><br>
-      <b>Precise mode</b> — Stars based on fewest moves (or shortest distance for Dead End).<br><br>
-      <b>Quick mode</b> — Stars based on estimated time: car accelerates/brakes at 2 m/s&sup2; up to 3 m/s top speed, steering 60&deg;/s, +1.5s per direction reversal. Short moves are penalised heavily because you can&rsquo;t build up speed.<br><br>
+      &nbsp;&#9733;&#9734;&#9734; — Parked, keep improving<br><br>
       <b>&#128161; Solution</b> — Loads the verified optimal move sequence. Using it disables leaderboard submission for the level until you press <i>Reset</i>.
     </div>
     <div style="text-align:center;margin-top:16px;">
@@ -130,6 +127,6 @@
 
 <div id="toast" class="hidden"></div>
 
-<script src="game.js?v=3014d91"></script>
+<script src="game.js?v=4422ddb"></script>
 </body>
 </html>

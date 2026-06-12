@@ -477,7 +477,6 @@ let editIdx = null;    // index of the move being tweaked (null = composing next
 let anim = null;       // {samples, cum, total, t0, speed}
 let pendingLb = null;  // {levelIdx, stars, st} — awaiting leaderboard submit
 let solutionUsed = false; // viewing the solution locks leaderboard until Reset
-let scoringMode = 'precise'; // 'precise' | 'quick'
 let view = { scale: 1, ox: 0, oy: 0 };
 
 function planEnd() {
@@ -540,13 +539,8 @@ function planStats() {
 }
 
 function computeStars(st) {
-  if (scoringMode === 'quick') {
-    const thresh = level.starThreshQuick || [999, 9999];
-    return st.time <= thresh[0] ? 3 : st.time <= thresh[1] ? 2 : 1;
-  }
-  const v = level.mode === 'dist' ? st.dist : st.moves;
-  const t = level.starThresh;
-  return v <= t[0] ? 3 : v <= t[1] ? 2 : 1;
+  const thresh = level.starThreshQuick || [999, 9999];
+  return st.time <= thresh[0] ? 3 : st.time <= thresh[1] ? 2 : 1;
 }
 
 /* ===================== HUD ===================== */
@@ -559,22 +553,18 @@ function starStr(n, total = 3) {
 
 function updateHUD() {
   $('lvName').textContent = `${levelIdx + 1}/${LEVELS.length} · ${level.name}`;
-  $('objective').textContent = `${level.tier} · ` +
-    (level.mode === 'dist' ? 'Shortest distance wins' : 'Fewest moves wins');
+  $('objective').textContent = `${level.tier} · Quick time`;
   const planning = moves.length > 0 || Math.abs(editDist) > 0.01;
   const best = loadBest();
-  const modeLabel = scoringMode === 'quick' ? `<span class="quick-badge">⏱ QUICK</span>` : '';
   if (planning) {
     const st = planStats();
     $('stats').innerHTML =
-      `${modeLabel}Moves <b>${st.moves}</b> · ${st.dist.toFixed(1)} m · ~${st.time.toFixed(1)}s` +
+      `Moves <b>${st.moves}</b> · ${st.dist.toFixed(1)} m · ~${st.time.toFixed(1)}s` +
       (best ? ` · Best <span class="star">${starStr(best.stars)}</span>` : '');
   } else {
-    // idle: show guidance (tutorial step or hint) plus the saved best
-    $('stats').innerHTML = modeLabel + escHtml(level.tut || level.hint) +
+    $('stats').innerHTML = escHtml(level.tut || level.hint) +
       (best ? ` · <span class="star">${starStr(best.stars)}</span>` : '');
   }
-  $('menuMode').textContent = scoringMode === 'precise' ? '★  Scoring: Precise' : '⏱  Scoring: Quick';
   $('undoBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
   $('undoBtn').textContent = editIdx !== null ? 'Cancel' : '↶ Undo';
   $('resetBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
@@ -582,18 +572,15 @@ function updateHUD() {
 }
 
 function loadBest() {
-  try { return JSON.parse(localStorage.getItem(`parking.best.${scoringMode}.${levelIdx}`)); }
+  try { return JSON.parse(localStorage.getItem(`parking.best.${levelIdx}`)); }
   catch (e) { return null; }
 }
 
 function saveBest(st, stars) {
   const prev = loadBest();
-  const metric = scoringMode === 'quick' ? st.time :
-    level.mode === 'dist' ? st.dist : st.moves;
-  const prevMetric = prev ? (scoringMode === 'quick' ? (prev.time||999) :
-    level.mode === 'dist' ? prev.dist : prev.moves) : Infinity;
-  if (!prev || stars > prev.stars || (stars === prev.stars && metric < prevMetric)) {
-    localStorage.setItem(`parking.best.${scoringMode}.${levelIdx}`,
+  const prevTime = prev ? (prev.time || 999) : Infinity;
+  if (!prev || stars > prev.stars || (stars === prev.stars && st.time < prevTime)) {
+    localStorage.setItem(`parking.best.${levelIdx}`,
       JSON.stringify({ moves: st.moves, dist: st.dist, time: st.time, stars }));
   }
 }
@@ -968,16 +955,19 @@ function finishRun() {
     $('ovTitle').textContent = 'Parked!';
     $('ovStars').innerHTML =
       starStr(stars).replace(/☆/g, '<span class="dim">★</span>');
-    $('ovStats').textContent = `${st.moves} moves · ${st.dist.toFixed(1)} m`;
+    const best = loadBest();
+    $('ovStats').innerHTML =
+      `<div>${st.moves} moves &nbsp;·&nbsp; ${st.dist.toFixed(1)} m &nbsp;·&nbsp; ${st.time.toFixed(1)} s</div>` +
+      (best && best.time < st.time - 0.05
+        ? `<div class="sub" style="margin-top:4px">Best: ${best.time.toFixed(1)} s &nbsp;·&nbsp; ${starStr(best.stars)}</div>`
+        : '');
     $('ovTip').textContent = stars === 3 ? 'Perfect!' :
-      (level.mode === 'dist'
-        ? `3★ ≤ ${level.starThresh[0]} m`
-        : `3★ ≤ ${level.starThresh[0]} moves`);
+      `3★ ≤ ${(level.starThreshQuick || [999])[0]} s`;
     $('ovNext').style.display = levelIdx < LEVELS.length - 1 ? '' : 'none';
     pendingLb = solutionUsed ? null : { levelIdx, stars, st: { ...st } };
     $('ovSubmitRow').style.display = (lbEnabled() && !solutionUsed) ? '' : 'none';
     $('ovSubmit').disabled = false;
-    $('ovSubmit').textContent = '⭹ Submit to leaderboard';
+    $('ovSubmit').textContent = 'Submit to leaderboard';
     $('overlay').classList.remove('hidden');
   } else {
     toast('Not parked yet — keep planning');
@@ -1089,7 +1079,6 @@ $('menuSol').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
   showSolution();
 });
-$('menuMode').addEventListener('click', toggleMode);
 $('menuLb').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
   if (lbEnabled()) openLeaderboard(levelIdx);
@@ -1163,19 +1152,17 @@ async function lbPost(levelIdx, player, stars, st) {
       player, level: levelIdx, level_name: level.name,
       stars, moves: st.moves,
       dist: +st.dist.toFixed(2), time_s: +st.time.toFixed(1),
-      mode: scoringMode,
+      mode: 'quick',
     }),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
 }
 
 async function lbGet(levelIdx) {
-  const col = scoringMode === 'quick' ? 'time_s' : 'moves';
-  // filter by name, not index — level order can change between versions
   const p = new URLSearchParams({
     select: 'player,stars,moves,dist,time_s',
-    level_name: `eq.${LEVELS[levelIdx].name}`, mode: `eq.${scoringMode}`,
-    order: `stars.desc,${col}.asc`, limit: '50',
+    level_name: `eq.${LEVELS[levelIdx].name}`, mode: 'eq.quick',
+    order: 'stars.desc,time_s.asc', limit: '50',
   });
   const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
     headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
@@ -1185,7 +1172,7 @@ async function lbGet(levelIdx) {
 }
 
 async function openLeaderboard(idx) {
-  $('lbTitle').textContent = `${LEVELS[idx].name} · ${scoringMode === 'quick' ? '⏱ Quick' : '★ Precise'}`;
+  $('lbTitle').textContent = `${LEVELS[idx].name} · Best Time`;
   $('lbTable').innerHTML = '<tr><td colspan="4" class="lb-empty">Loading…</td></tr>';
   $('lbOverlay').classList.remove('hidden');
   try {
@@ -1199,7 +1186,7 @@ async function openLeaderboard(idx) {
     }
     $('lbTable').innerHTML = top.map((r, i) => {
       const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
-      const metric = scoringMode === 'quick' ? `${r.time_s.toFixed(1)}s` : `${r.moves}mv`;
+      const metric = `${r.time_s.toFixed(1)}s`;
       const stars = '★'.repeat(r.stars) + `<span class="lb-dim">★</span>`.repeat(3 - r.stars);
       return `<tr class="${cls}"><td class="lb-rank">${i + 1}</td><td class="lb-name">${escHtml(r.player)}</td><td class="lb-stars">${stars}</td><td class="lb-metric">${metric}</td></tr>`;
     }).join('');
@@ -1220,7 +1207,7 @@ async function doLbSubmit(player) {
   } catch (e) {
     toast(`Submit failed: ${e.message}`);
     $('ovSubmit').disabled = false;
-    $('ovSubmit').textContent = '⭹ Submit to leaderboard';
+    $('ovSubmit').textContent = 'Submit to leaderboard';
   }
 }
 
@@ -1235,10 +1222,6 @@ function showSolution() {
   toast('Solution loaded — leaderboard disabled until Reset');
 }
 
-function toggleMode() {
-  scoringMode = scoringMode === 'precise' ? 'quick' : 'precise';
-  updateHUD();
-}
 
 // Drag directly on the canvas: the ghost car chases the pointer. The arc
 // from the current move's start pose through the pointer's world position
