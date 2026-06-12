@@ -1391,8 +1391,8 @@ function playIntroDash() {
   const SC_X = Math.floor((VW - SC_W) / 2);
   const SC_Y = DASH_Y + Math.floor(DASH_H * 0.07);
   const SC_H = DASH_H - Math.floor(DASH_H * 0.12);
-  // Font: sized so all MSG lines (lh ≈ FS×1.65) fit within SC_H
-  const FS = Math.max(3, Math.floor((SC_H - 4) / (MSG.length * 1.65)));
+  // Font: sized so all 9 MSG lines (lh ≈ FS×1.65) fit within SC_H
+  const FS = Math.max(3, Math.floor((SC_H - 4) / (9 * 1.65)));
 
   // Side clusters (speedo + fuel) only when screen is wide enough relative to height
   const showSide = VW > VH * 0.62;
