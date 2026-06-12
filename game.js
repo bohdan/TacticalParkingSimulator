@@ -1371,44 +1371,83 @@ function playIntroDash() {
   const c = canvas.getContext('2d');
   c.imageSmoothingEnabled = false;
 
-  // Fixed virtual resolution — CSS scales it up with pixelated rendering
-  const VW = 320, VH = 180;
-  canvas.width = VW; canvas.height = VH;
+  // Virtual resolution: one "pixel" = PX physical pixels, matching screen aspect ratio
+  const cW = canvas.offsetWidth  || window.innerWidth;
+  const cH = canvas.offsetHeight || window.innerHeight;
+  const PX = Math.max(2, Math.round(Math.min(cW, cH) / 96));
+  const VW = Math.floor(cW / PX);
+  const VH = Math.floor(cH / PX);
+  canvas.width  = VW;  canvas.height = VH;
+  canvas.style.width  = cW + 'px';
+  canvas.style.height = cH + 'px';
 
+  // Layout bands (proportional to VH)
+  const SKY_H = Math.floor(VH * 0.36);
+  const DASH_Y = SKY_H;
+  const DASH_H = Math.floor(VH * 0.46);
+
+  // Centre CRT screen: width bounded by both orientation limits so it fits
+  const SC_W = Math.min(Math.floor(VW * 0.70), Math.floor(VH * 0.78));
+  const SC_X = Math.floor((VW - SC_W) / 2);
+  const SC_Y = DASH_Y + Math.floor(DASH_H * 0.07);
+  const SC_H = DASH_H - Math.floor(DASH_H * 0.12);
+  // Font: tall enough to read, short enough to fit ~14-char lines in SC_W
+  const FS = Math.max(4, Math.min(8, Math.floor(SC_H / 10)));
+
+  // Side clusters (speedo + fuel) only when screen is wide enough relative to height
+  const showSide = VW > VH * 0.62;
+  const SP_CX = Math.floor(VW * 0.12);
+  const SP_CY = Math.floor(DASH_Y + DASH_H * 0.52);
+  const SP_R  = showSide ? Math.max(5, Math.min(SC_X - 3, Math.floor(DASH_H * 0.38))) : 0;
+  const RC_X  = SC_X + SC_W + 3;
+  const RC_W  = VW - RC_X - 1;
+
+  // LEDs centred in dashboard
+  const LED_Y  = DASH_Y + 2;
+  const LED_XS = [0.37, 0.41, 0.45, 0.49, 0.53].map(f => Math.floor(VW * f));
+
+  // Rearview mirror
+  const MIR_X = Math.floor(VW * 0.34), MIR_W = Math.floor(VW * 0.32);
+
+  // Message — max 14 chars per line so it fits on narrow portrait screens
   const MSG = [
-    '> INCOMING SIGNAL...',
+    '> MSG INCOMING',
     '',
     '  AGENT 7',
-    '  CODENAME: VALET',
+    '  VALET',
     '',
-    '  DELIVER PKG BY 0300.',
+    '  PKG BY 0300.',
     '  NO SCRATCHES.',
     '',
-    '> MISSION START.',
+    '> MISSION: GO.',
   ];
 
-  // Seeded deterministic pseudo-random (same visual every playback)
-  const rnd = n => { let x = Math.sin(n) * 10000; return x - Math.floor(x); };
-  const rain = Array.from({ length: 24 }, (_, i) => ({
-    x: Math.floor(rnd(i * 7.3) * VW),
-    y0: rnd(i * 3.1) * 54,
-    spd: 16 + rnd(i * 5.7) * 20,
-    len: 3 + Math.floor(rnd(i * 2.2) * 5),
+  const rnd = n => { let x = Math.sin(n) * 1e4; return x - Math.floor(x); };
+
+  // Rain proportional to sky area
+  const RAIN = Array.from({ length: Math.max(8, Math.floor(VW * 0.22)) }, (_, i) => ({
+    x:   Math.floor(rnd(i * 7.3) * VW),
+    y0:  rnd(i * 3.1) * (SKY_H - 4),
+    spd: (2.5 + rnd(i * 5.7) * 4) * SKY_H / 55,
+    len: 2 + Math.floor(rnd(i * 2.2) * 3),
   }));
 
-  // Building silhouette: [x, y, w, h]
+  // Buildings as proportions [xFrac, yFrac, wFrac]
   const BLDGS = [
-    [0,42,18,20],[8,32,14,30],[20,46,16,16],[34,40,14,22],[46,44,18,18],
-    [62,34,12,28],[72,48,16,14],[88,42,14,20],[200,46,16,16],[214,37,14,25],
-    [226,44,20,18],[244,33,14,29],[256,44,22,18],[276,40,14,22],[290,47,30,15],
-  ];
+    [0.00,0.70,0.056],[0.04,0.53,0.038],[0.08,0.76,0.044],[0.12,0.65,0.033],
+    [0.15,0.73,0.046],[0.19,0.56,0.036],[0.23,0.80,0.038],
+    [0.63,0.73,0.046],[0.67,0.56,0.038],[0.71,0.74,0.046],[0.75,0.52,0.036],
+    [0.79,0.70,0.053],[0.83,0.63,0.040],[0.88,0.77,0.050],[0.93,0.68,0.07],
+  ].map(([xf, yf, wf]) => [
+    Math.floor(xf * VW), Math.floor(yf * SKY_H),
+    Math.max(2, Math.floor(wf * VW)), Math.ceil((1 - yf) * SKY_H),
+  ]);
 
   let msgShown = false;
   const t0 = performance.now();
 
-  // Draw a pixel-filled circle (no anti-aliasing)
-  function fillCirclePx(cx, cy, r, color) {
-    c.fillStyle = color;
+  function fillCirclePx(cx, cy, r, col) {
+    c.fillStyle = col;
     for (let dy = -r; dy <= r; dy++) {
       const dx = Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
       c.fillRect(cx - dx, cy + dy, dx * 2 + 1, 1);
@@ -1418,190 +1457,148 @@ function playIntroDash() {
   function frame(now) {
     const ms = now - t0;
 
-    // ── Sky / windshield (rows 0–62) ─────────────────────────────
-    c.fillStyle = '#080b12';
-    c.fillRect(0, 0, VW, 62);
+    // Background
+    c.fillStyle = '#080b12'; c.fillRect(0, 0, VW, VH);
 
-    // City silhouette + lit windows
+    // ── Sky ──────────────────────────────────────────────────────
     for (const [bx, by, bw, bh] of BLDGS) {
-      c.fillStyle = '#0c0f19';
-      c.fillRect(bx, by, bw, bh);
-      for (let wy = by + 2; wy < by + bh - 4; wy += 4) {
-        for (let wx = bx + 2; wx < bx + bw - 2; wx += 4) {
-          if (rnd(wx * 11 + wy * 7) < 0.28) {
+      c.fillStyle = '#0c0f19'; c.fillRect(bx, by, bw, bh);
+      const sw = Math.max(1, Math.floor(bw / 3)), sh = Math.max(2, Math.floor(bh / 5));
+      for (let wy = by + 1; wy < by + bh - 1; wy += sh)
+        for (let wx = bx + 1; wx < bx + bw - 1; wx += sw)
+          if (rnd(wx * 11 + wy * 7) < 0.30) {
             c.fillStyle = rnd(wx + wy * 3) < 0.55 ? '#ffe880' : '#8899cc';
-            c.fillRect(wx, wy, 2, 2);
+            c.fillRect(wx, wy, Math.max(1, Math.floor(bw / 4)), Math.max(1, Math.floor(bh / 7)));
           }
-        }
-      }
     }
 
     // Rearview mirror
-    c.fillStyle = '#1a1d2a'; c.fillRect(110, 1, 100, 13);
-    c.fillStyle = '#0a0d18'; c.fillRect(112, 3, 96, 9);
-    // Tiny reflection buildings in mirror
-    c.fillStyle = '#0e1122'; c.fillRect(116, 4, 16, 7);
-    c.fillStyle = '#0e1122'; c.fillRect(140, 5, 12, 6);
-    c.fillStyle = '#0e1122'; c.fillRect(172, 4, 20, 7);
-    c.fillStyle = '#ffe880'; c.fillRect(118, 6, 2, 2);
-    c.fillStyle = '#8899cc'; c.fillRect(128, 5, 2, 2);
-    c.fillStyle = '#ffe880'; c.fillRect(148, 7, 2, 1);
+    const mirH = Math.max(3, Math.floor(SKY_H * 0.21));
+    c.fillStyle = '#1a1d2a'; c.fillRect(MIR_X - 1, 1, MIR_W + 2, mirH + 2);
+    c.fillStyle = '#0a0d18'; c.fillRect(MIR_X, 2, MIR_W, mirH);
+    c.fillStyle = '#0e1122';
+    c.fillRect(MIR_X + 2, 3, Math.floor(MIR_W * .18), mirH - 2);
+    c.fillRect(MIR_X + Math.floor(MIR_W * .33), 4, Math.floor(MIR_W * .14), mirH - 3);
+    c.fillRect(MIR_X + Math.floor(MIR_W * .62), 3, Math.floor(MIR_W * .18), mirH - 2);
+    c.fillStyle = '#ffe880'; c.fillRect(MIR_X + 4, 4, 1, 1);
+    c.fillStyle = '#8899cc'; c.fillRect(MIR_X + Math.floor(MIR_W * .17), 3, 1, 1);
 
     // Rain
     if (ms > 300) {
       const t = ms / 1000;
-      c.fillStyle = 'rgba(90,130,200,0.55)';
-      for (const dr of rain) {
-        const y = (dr.y0 + dr.spd * t) % 58;
-        c.fillRect(dr.x, Math.floor(y), 1, dr.len);
+      c.fillStyle = 'rgba(90,130,200,.65)';
+      for (const dr of RAIN)
+        c.fillRect(dr.x, Math.floor((dr.y0 + dr.spd * t) % (SKY_H - 1)), 1, dr.len);
+    }
+
+    // ── Dashboard ────────────────────────────────────────────────
+    c.fillStyle = '#141720'; c.fillRect(0, DASH_Y, VW, VH - DASH_Y);
+    c.fillStyle = '#20242e'; c.fillRect(0, DASH_Y, VW, 1);
+
+    // LEDs
+    const blink = ms > 1600 && Math.floor(ms / 210) % 2 === 0;
+    const lW = Math.max(2, Math.floor(VW * .025)), lH = Math.max(2, Math.floor(VH * .014));
+    for (let i = 0; i < LED_XS.length; i++) {
+      const lx = LED_XS[i], on = i === 3 && blink;
+      c.fillStyle = '#0d1018'; c.fillRect(lx - 1, LED_Y, lW + 2, lH + 2);
+      c.fillStyle = on ? '#4eff6a' : (i === 3 ? '#1a4a28' : '#22283a');
+      c.fillRect(lx, LED_Y + 1, lW, lH);
+      if (on) { c.globalAlpha = .28; c.fillStyle = '#4eff6a'; c.fillRect(lx - 2, LED_Y - 1, lW + 4, lH + 4); c.globalAlpha = 1; }
+    }
+
+    // Speedo (landscape only)
+    if (showSide && SP_R > 0) {
+      fillCirclePx(SP_CX, SP_CY, SP_R, '#0c0f18');
+      fillCirclePx(SP_CX, SP_CY, SP_R - Math.max(1, Math.floor(SP_R * .11)), '#181c26');
+      const r1 = SP_R - Math.floor(SP_R * .20), r2 = SP_R - Math.floor(SP_R * .34);
+      for (let ti = 0; ti <= 8; ti++) {
+        const a = Math.PI * .75 + ti * (Math.PI * 1.5 / 8);
+        c.fillStyle = ti === 0 ? '#3a4560' : '#22283a';
+        for (let tr = r2; tr <= r1; tr++)
+          c.fillRect(Math.round(SP_CX + Math.cos(a) * tr), Math.round(SP_CY + Math.sin(a) * tr), 1, 1);
       }
+      const na = Math.PI * .77;
+      c.fillStyle = '#cc3333';
+      for (let ni = 1; ni <= SP_R - Math.floor(SP_R * .22); ni++)
+        c.fillRect(Math.round(SP_CX + Math.cos(na) * ni), Math.round(SP_CY + Math.sin(na) * ni), 1, 1);
+      fillCirclePx(SP_CX, SP_CY, Math.max(1, Math.floor(SP_R * .10)), '#cc3333');
     }
 
-    // ── Dashboard panel (rows 62–VH) ─────────────────────────────
-    c.fillStyle = '#141720';
-    c.fillRect(0, 62, VW, VH - 62);
-    c.fillStyle = '#20242e'; c.fillRect(0, 62, VW, 2); // highlight edge
-
-    // ── LED strip ─────────────────────────────────────────────────
-    const commBlink = ms > 1600 && Math.floor(ms / 210) % 2 === 0;
-    for (const [lx, col, blink] of [
-      [128, '#2e3545', false], [140, '#5a1e1e', false],
-      [152, '#4a3200', false], [164, '#1a4a28', commBlink], [176, '#2e3545', false],
-    ]) {
-      c.fillStyle = '#0d1018'; c.fillRect(lx - 3, 65, 8, 5);
-      c.fillStyle = blink ? (col === '#1a4a28' ? '#4eff6a' : col) : col;
-      c.fillRect(lx - 2, 66, 6, 3);
-      if (blink) {
-        c.globalAlpha = 0.35; c.fillStyle = '#4eff6a';
-        c.fillRect(lx - 5, 63, 12, 8); c.globalAlpha = 1;
-      }
+    // Fuel strip (landscape only, right of screen)
+    if (showSide && RC_W > 5) {
+      const rcH = Math.floor(DASH_H * .36), rcY = SC_Y;
+      c.fillStyle = '#0c0f18'; c.fillRect(RC_X, rcY, RC_W, rcH);
+      c.fillStyle = '#181c26'; c.fillRect(RC_X + 1, rcY + 1, RC_W - 2, rcH - 2);
+      const fbY = rcY + Math.floor(rcH * .48), fbH = Math.max(1, Math.floor(VH * .02));
+      c.fillStyle = '#252c3a'; c.fillRect(RC_X + 2, fbY, RC_W - 4, fbH);
+      c.fillStyle = '#c97d00'; c.fillRect(RC_X + 2, fbY, Math.max(1, Math.floor((RC_W - 4) * .14)), fbH);
+      c.fillStyle = '#3a4460'; c.font = `${FS}px monospace`; c.textAlign = 'left';
+      c.fillText('FUEL', RC_X + 2, rcY + Math.floor(rcH * .32));
     }
 
-    // ── Speedometer (left) ────────────────────────────────────────
-    const sx = 52, sy = 106, sr = 28;
-    fillCirclePx(sx, sy, sr, '#0c0f18');
-    fillCirclePx(sx, sy, sr - 3, '#181c26');
-    // Tick marks
-    for (let ti = 0; ti <= 8; ti++) {
-      const a = Math.PI * 0.75 + ti * (Math.PI * 1.5 / 8);
-      const r1 = sr - 5, r2 = sr - 8;
-      c.fillStyle = ti === 0 ? '#3a4560' : '#22283a';
-      c.fillRect(Math.round(sx + Math.cos(a) * r1), Math.round(sy + Math.sin(a) * r1), 1, 1);
-      c.fillRect(Math.round(sx + Math.cos(a) * r2), Math.round(sy + Math.sin(a) * r2), 1, 1);
-    }
-    // Needle at rest (parked = 0 mph)
-    const na = Math.PI * 0.77;
-    c.fillStyle = '#cc3333';
-    const nLen = sr - 6;
-    for (let ni = 0; ni <= nLen; ni++) {
-      c.fillRect(Math.round(sx + Math.cos(na) * ni), Math.round(sy + Math.sin(na) * ni), 1, 1);
-    }
-    fillCirclePx(sx, sy, 3, '#cc3333'); // center cap
-    // "0" label
-    c.fillStyle = '#38445a'; c.font = '4px monospace'; c.textAlign = 'center';
-    c.fillText('0', sx, sy + sr - 2);
-
-    // ── Fuel + RPM (right) ────────────────────────────────────────
-    // Fuel gauge
-    c.fillStyle = '#0c0f18'; c.fillRect(235, 68, 68, 28);
-    c.fillStyle = '#181c26'; c.fillRect(237, 70, 64, 24);
-    c.fillStyle = '#22283a'; c.fillRect(240, 79, 58, 6); // bar bg
-    c.fillStyle = '#c97d00'; c.fillRect(240, 79, 10, 6); // low fuel amber
-    c.fillStyle = '#3a4460'; c.font = '4px monospace'; c.textAlign = 'left';
-    c.fillText('FUEL', 240, 77);
-    c.fillText('E', 238, 90); c.textAlign = 'right'; c.fillText('F', 300, 90);
-    // RPM mini dial
-    const rx = 265, ry = 114, rsr = 14;
-    fillCirclePx(rx, ry, rsr, '#0c0f18');
-    fillCirclePx(rx, ry, rsr - 3, '#181c26');
-    fillCirclePx(rx, ry, 3, '#cc3333');
-    c.fillStyle = '#38445a'; c.font = '4px monospace'; c.textAlign = 'center';
-    c.fillText('RPM', rx, ry + rsr + 6);
-
-    // ── Center CRT screen ─────────────────────────────────────────
-    const scX = 106, scY = 68, scW = 108, scH = 65;
-    c.fillStyle = '#0a0c14'; c.fillRect(scX - 5, scY - 5, scW + 10, scH + 10);
-    c.fillStyle = '#060810'; c.fillRect(scX - 3, scY - 3, scW + 6, scH + 6);
+    // ── Centre CRT screen ─────────────────────────────────────────
+    c.fillStyle = '#0a0c14'; c.fillRect(SC_X - 2, SC_Y - 2, SC_W + 4, SC_H + 4);
+    c.fillStyle = '#060810'; c.fillRect(SC_X - 1, SC_Y - 1, SC_W + 2, SC_H + 2);
 
     if (ms < 1400) {
-      // Screen off
-      c.fillStyle = '#010203'; c.fillRect(scX, scY, scW, scH);
+      c.fillStyle = '#010203'; c.fillRect(SC_X, SC_Y, SC_W, SC_H);
     } else if (ms < 2100) {
-      // Static noise
-      c.fillStyle = '#010203'; c.fillRect(scX, scY, scW, scH);
-      const density = Math.floor((ms - 1400) / 700 * 200);
-      for (let n = 0; n < density; n++) {
-        c.fillStyle = Math.random() > 0.45 ? '#36cc5a' : '#183325';
-        c.fillRect(scX + Math.floor(Math.random() * scW), scY + Math.floor(Math.random() * scH), 1, 1);
+      c.fillStyle = '#010203'; c.fillRect(SC_X, SC_Y, SC_W, SC_H);
+      const n = Math.floor((ms - 1400) / 700 * SC_W * SC_H * .14);
+      for (let i = 0; i < n; i++) {
+        c.fillStyle = Math.random() > .45 ? '#36cc5a' : '#183325';
+        c.fillRect(SC_X + Math.floor(Math.random() * SC_W), SC_Y + Math.floor(Math.random() * SC_H), 1, 1);
       }
     } else if (ms < 2500) {
-      // Phosphor glow warming up
       const p = (ms - 2100) / 400;
-      c.fillStyle = `rgb(${Math.floor(p*3)},${Math.floor(p*22)},${Math.floor(p*11)})`;
-      c.fillRect(scX, scY, scW, scH);
+      c.fillStyle = `rgb(${Math.floor(p * 3)},${Math.floor(p * 22)},${Math.floor(p * 11)})`;
+      c.fillRect(SC_X, SC_Y, SC_W, SC_H);
     } else {
-      // Active: typewriter text
-      c.fillStyle = '#010a04'; c.fillRect(scX, scY, scW, scH);
-      // Scanlines on screen
-      c.globalAlpha = 0.15; c.fillStyle = '#000';
-      for (let sy2 = scY; sy2 < scY + scH; sy2 += 2) c.fillRect(scX, sy2, scW, 1);
+      c.fillStyle = '#010a04'; c.fillRect(SC_X, SC_Y, SC_W, SC_H);
+      c.globalAlpha = .14; c.fillStyle = '#000';
+      for (let sy2 = SC_Y; sy2 < SC_Y + SC_H; sy2 += 2) c.fillRect(SC_X, sy2, SC_W, 1);
       c.globalAlpha = 1;
 
-      const charRate = 22;
-      let remaining = Math.floor((ms - 2500) / 1000 * charRate);
       c.fillStyle = '#4eff6a';
-      c.font = '5px "Courier New", monospace';
-      c.textAlign = 'left';
-      let allDone = true;
+      c.font = `${FS}px "Courier New", monospace`; c.textAlign = 'left';
+      const lh = Math.ceil(FS * 1.6);
+      let rem = Math.floor((ms - 2500) / 1000 * 18), done = true;
       for (let li = 0; li < MSG.length; li++) {
         const line = MSG[li];
-        if (remaining <= 0) { allDone = false; break; }
-        const take = line.length === 0 ? 1 : line.length;
-        if (remaining >= take) {
-          c.fillText(line, scX + 5, scY + 11 + li * 7);
-          remaining -= take;
+        if (rem <= 0) { done = false; break; }
+        const take = Math.max(1, line.length);
+        if (rem >= take) {
+          c.fillText(line, SC_X + 3, SC_Y + FS + li * lh); rem -= take;
         } else {
-          c.fillText(line.slice(0, remaining) + '█', scX + 5, scY + 11 + li * 7);
-          remaining = 0;
-          allDone = false;
-          break;
+          c.fillText(line.slice(0, rem) + '█', SC_X + 3, SC_Y + FS + li * lh);
+          rem = 0; done = false; break;
         }
       }
-      if (allDone && !msgShown) {
-        msgShown = true;
-        $('introGo').classList.remove('hidden');
-      }
-      // Screen glow
-      c.globalAlpha = 0.07; c.fillStyle = '#4eff6a';
-      c.fillRect(scX - 8, scY - 8, scW + 16, scH + 16);
-      c.globalAlpha = 1;
+      if (done && !msgShown) { msgShown = true; $('introGo').classList.remove('hidden'); }
+      c.globalAlpha = .06; c.fillStyle = '#4eff6a';
+      c.fillRect(SC_X - 4, SC_Y - 4, SC_W + 8, SC_H + 8); c.globalAlpha = 1;
     }
 
-    // ── Steering wheel (top arc barely peeking at bottom) ─────────
-    const wX = VW / 2, wY = VH + 48, wR = 66;
-    // Outer rim
-    c.strokeStyle = '#1a1e2e'; c.lineWidth = 7;
+    // ── Steering wheel (top arc at bottom of canvas) ──────────────
+    const wX = Math.floor(VW / 2), wY = VH + Math.floor(VH * .28);
+    const wR = Math.floor(VH * .44), hubR = Math.floor(wR * .24);
+    c.strokeStyle = '#1a1e2e'; c.lineWidth = Math.max(2, Math.floor(wR * .09));
     c.beginPath(); c.arc(wX, wY, wR, Math.PI * 1.14, Math.PI * 1.86); c.stroke();
-    c.strokeStyle = '#22273a'; c.lineWidth = 4;
+    c.strokeStyle = '#22273a'; c.lineWidth = Math.max(1, Math.floor(wR * .055));
     c.beginPath(); c.arc(wX, wY, wR, Math.PI * 1.14, Math.PI * 1.86); c.stroke();
-    // Spokes
-    c.strokeStyle = '#1a1e2e'; c.lineWidth = 2;
+    c.strokeStyle = '#1a1e2e'; c.lineWidth = Math.max(1, Math.floor(wR * .04));
     for (const a of [Math.PI * 1.22, Math.PI * 1.5, Math.PI * 1.78]) {
       c.beginPath();
-      c.moveTo(wX + Math.cos(a) * 18, wY + Math.sin(a) * 18);
-      c.lineTo(wX + Math.cos(a) * (wR - 5), wY + Math.sin(a) * (wR - 5));
+      c.moveTo(wX + Math.cos(a) * hubR, wY + Math.sin(a) * hubR);
+      c.lineTo(wX + Math.cos(a) * (wR - Math.floor(wR * .07)), wY + Math.sin(a) * (wR - Math.floor(wR * .07)));
       c.stroke();
     }
-    // Hub
-    fillCirclePx(wX, wY, 16, '#181c2c');
-    c.fillStyle = '#242838'; c.fillRect(wX - 8, wY - 4, 17, 9);
-    c.fillStyle = '#3a4058'; c.fillRect(wX - 6, wY - 2, 13, 5);
+    fillCirclePx(wX, wY, hubR, '#181c2c');
+    c.fillStyle = '#242838';
+    c.fillRect(wX - Math.floor(hubR * .55), wY - Math.floor(hubR * .35), Math.floor(hubR * 1.1), Math.floor(hubR * .7));
 
-    // ── Global scanlines (CRT overlay, done by CSS ::after) ───────
-
-    if (!$('intro').classList.contains('hidden')) {
+    if (!$('intro').classList.contains('hidden'))
       introAnimId = requestAnimationFrame(frame);
-    }
   }
 
   introAnimId = requestAnimationFrame(frame);
