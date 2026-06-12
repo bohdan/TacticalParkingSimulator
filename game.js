@@ -58,6 +58,35 @@ function polysCollide(A, B) {
   return true;
 }
 
+function ptSegDist(px, py, ax, ay, bx, by) {
+  const dx = bx-ax, dy = by-ay, l2 = dx*dx+dy*dy;
+  if (!l2) return Math.hypot(px-ax, py-ay);
+  const t = Math.max(0, Math.min(1, ((px-ax)*dx+(py-ay)*dy)/l2));
+  return Math.hypot(px-ax-t*dx, py-ay-t*dy);
+}
+
+function parkingClearance(pose) {
+  const cp = carPoly(pose);
+  let minGap = Infinity;
+  for (const obs of level.obstacles) {
+    for (let i = 0; i < cp.length; i++) {
+      const v = cp[i];
+      for (let j = 0; j < obs.poly.length; j++) {
+        const a = obs.poly[j], b = obs.poly[(j+1) % obs.poly.length];
+        minGap = Math.min(minGap, ptSegDist(v.x, v.y, a.x, a.y, b.x, b.y));
+      }
+    }
+    for (let i = 0; i < obs.poly.length; i++) {
+      const v = obs.poly[i];
+      for (let j = 0; j < cp.length; j++) {
+        const a = cp[j], b = cp[(j+1) % cp.length];
+        minGap = Math.min(minGap, ptSegDist(v.x, v.y, a.x, a.y, b.x, b.y));
+      }
+    }
+  }
+  return isFinite(minGap) ? minGap : 0;
+}
+
 function pointInPoly(pt, poly) {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -990,12 +1019,16 @@ function finishRun() {
     $('ovStars').innerHTML =
       starStr(stars).replace(/☆/g, '<span class="dim">★</span>');
     const best = loadBest();
+    const prec = parkingClearance(end);
+    const precCm = Math.round(prec * 100);
+    const precLabel = prec >= 0.25 ? 'Perfect' : prec >= 0.12 ? 'Good' : prec >= 0.05 ? 'Tight' : 'Squeezed';
     $('ovStats').innerHTML =
-      `<div>${st.moves} moves &nbsp;·&nbsp; ${st.dist.toFixed(1)} m &nbsp;·&nbsp; ${st.time.toFixed(1)} s</div>` +
+      `<div class="sc-row"><span class="sc-label">Time</span><span class="sc-val">${st.time.toFixed(1)} s</span></div>` +
+      `<div class="sc-row"><span class="sc-label">Clearance</span><span class="sc-val">${precCm} cm <span class="sc-note">${precLabel}</span></span></div>` +
       (best && best.time < st.time - 0.05
-        ? `<div class="sub" style="margin-top:4px">Best: ${best.time.toFixed(1)} s &nbsp;·&nbsp; ${starStr(best.stars)}</div>`
+        ? `<div class="sub" style="margin-top:6px">Best: ${best.time.toFixed(1)} s &nbsp;·&nbsp; ${starStr(best.stars)}</div>`
         : '');
-    $('ovTip').textContent = stars === 3 ? 'Perfect!' :
+    $('ovTip').textContent = stars === 3 ? 'Perfect run!' :
       `3★ ≤ ${(level.starThreshQuick || [999])[0]} s`;
     $('ovNext').style.display = levelIdx < LEVELS.length - 1 ? '' : 'none';
     pendingLb = solutionUsed ? null : { levelIdx, stars, st: { ...st } };
