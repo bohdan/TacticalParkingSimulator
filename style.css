@@ -129,6 +129,30 @@ input[type="range"]::-moz-range-thumb {
   border: 3px solid #15405a;
 }
 
+/* Collision warning: distance slider turns amber */
+#dist.hit::-webkit-slider-runnable-track {
+  background: linear-gradient(90deg,
+    #2e1800 calc(var(--zero, 50%) - 1.5px),
+    #b36000 calc(var(--zero, 50%) - 1.5px),
+    #b36000 calc(var(--zero, 50%) + 1.5px),
+    #2e1800 calc(var(--zero, 50%) + 1.5px));
+}
+#dist.hit::-webkit-slider-thumb {
+  background: #ffa726;
+  border-color: #7a4400;
+}
+#dist.hit::-moz-range-track {
+  background: linear-gradient(90deg,
+    #2e1800 calc(var(--zero, 50%) - 1.5px),
+    #b36000 calc(var(--zero, 50%) - 1.5px),
+    #b36000 calc(var(--zero, 50%) + 1.5px),
+    #2e1800 calc(var(--zero, 50%) + 1.5px));
+}
+#dist.hit::-moz-range-thumb {
+  background: #ffa726;
+  border-color: #7a4400;
+}
+
 #btns {
   display: flex;
   flex-direction: column;

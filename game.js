@@ -511,24 +511,23 @@ function recomputeEdit() {
     ? (editIdx === 0 ? level.start : planSims[editIdx - 1].end)
     : planEnd();
   const s = rad(editSteer);
-  // slider range = what's actually drivable from here at this steering angle
-  distMax = driveLimit(startPose, s, 1);
-  distMin = -driveLimit(startPose, s, -1);
-  editDist = clamp(editDist, distMin, distMax);
-  distEl.min = distMin;
-  distEl.max = distMax;
-  distEl.value = editDist;
-  const span = distMax - distMin;
-  distEl.style.setProperty('--zero', span > 0 ? `${(-distMin / span * 100).toFixed(1)}%` : '50%');
-  $('distVal').textContent = editDist === 0 ? '—'
-    : `${editDist < 0 ? 'Rev' : 'Fwd'} ${Math.abs(editDist).toFixed(1)} m`;
+  // Fixed symmetric range so the distance value is preserved when the player
+  // adjusts the steering angle. Collision is shown via yellow highlight instead.
+  const fieldRange = Math.max(40, Math.ceil(Math.hypot(level.w, level.h)));
+  distMax = fieldRange; distMin = -fieldRange;
+  distEl.min = distMin; distEl.max = distMax; distEl.value = editDist;
+  distEl.style.setProperty('--zero', '50%');
   if (Math.abs(editDist) > 0.01) {
     editSim    = simulateMove(startPose, s,  editDist, level.obstacles);
     editSimOpp = simulateMove(startPose, s, -editDist, level.obstacles);
   } else {
     editSim = editSimOpp = null;
   }
-  $('addBtn').disabled = !editSim || !!editSim.hit || !!anim;
+  const hit = !!(editSim?.hit);
+  distEl.classList.toggle('hit', hit);
+  $('distVal').textContent = editDist === 0 ? '—'
+    : `${editDist < 0 ? 'Rev' : 'Fwd'} ${Math.abs(editDist).toFixed(1)} m${hit ? ' ⚠' : ''}`;
+  $('addBtn').disabled = !editSim || editSim.pts.length < 2 || !!anim;
   $('addBtn').textContent = editIdx !== null ? `Update #${editIdx + 1}` : 'Add move';
 }
 
@@ -568,7 +567,7 @@ function updateHUD() {
   $('undoBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
   $('undoBtn').textContent = editIdx !== null ? 'Cancel' : '↶ Undo';
   $('resetBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
-  $('goBtn').disabled = (moves.length === 0 && (!editSim || !!editSim.hit)) || !!anim;
+  $('goBtn').disabled = (moves.length === 0 && (!editSim || editSim.pts.length < 2)) || !!anim;
 }
 
 function loadBest() {
@@ -723,16 +722,59 @@ function drawGhost(pose, color, steer = 0) {
   ctx.fill();
 }
 
-function drawPath(pts, color, dashed) {
+function drawPath(pts, color, dashed, lw = 0.09) {
   if (pts.length < 2) return;
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.lineWidth = 0.09;
+  ctx.lineWidth = lw;
   ctx.strokeStyle = color;
   if (dashed) ctx.setLineDash([0.35, 0.25]);
   ctx.stroke();
   ctx.setLineDash([]);
+}
+
+// Arc guides: shown when dist=0 but wheels are turned.
+// Two solid curves = outer / inner edges of the car's swept path.
+// Two dashed curves = front-left and front-right wheel tracks.
+function drawArcGuides(pose, steerRad) {
+  if (Math.abs(steerRad) < rad(1.5)) return;
+  const N = 60;
+  const fwdLimit = driveLimit(pose, steerRad, 1);
+  const bwdLimit = driveLimit(pose, steerRad, -1);
+  const fLen = CAR.wb + CAR.fOver;
+  const half = CAR.wid / 2;
+
+  function sampleArc(limit, dir) {
+    const outer = [], inner = [], wfl = [], wfr = [];
+    for (let i = 0; i <= N; i++) {
+      const p = advance(pose, steerRad, dir * limit * i / N);
+      const c = Math.cos(p.h), s = Math.sin(p.h);
+      const w = (lx, ly) => ({ x: p.x + c * lx - s * ly, y: p.y + s * lx + c * ly });
+      // outer corner = front-right for left turn, front-left for right turn
+      if (steerRad >= 0) {
+        outer.push(w(fLen,       -half));
+        inner.push(w(-CAR.rOver,  half));
+      } else {
+        outer.push(w(fLen,        half));
+        inner.push(w(-CAR.rOver, -half));
+      }
+      wfl.push(w(CAR.wb,  half));
+      wfr.push(w(CAR.wb, -half));
+    }
+    return { outer, inner, wfl, wfr };
+  }
+
+  for (const [limit, dir] of [[fwdLimit, 1], [bwdLimit, -1]]) {
+    if (limit < 0.2) continue;
+    const { outer, inner, wfl, wfr } = sampleArc(limit, dir);
+    const col  = dir > 0 ? 'rgba(69,196,255,0.38)' : 'rgba(255,159,67,0.38)';
+    const wCol = dir > 0 ? 'rgba(69,196,255,0.60)' : 'rgba(255,159,67,0.60)';
+    drawPath(outer, col, false, 0.06);
+    drawPath(inner, col, false, 0.06);
+    drawPath(wfl,  wCol,  true, 0.05);
+    drawPath(wfr,  wCol,  true, 0.05);
+  }
 }
 
 function drawArrow(x, y, ang, len, color) {
@@ -880,6 +922,11 @@ function draw(now) {
     ctx.stroke();
   }
 
+  // arc guides when distance is 0 but wheels are turned (no active animation)
+  if (!anim && Math.abs(editDist) < 0.01) {
+    drawArcGuides(editStartPose(), rad(editSteer));
+  }
+
   // the car: animated along the plan, or sitting at start
   let carPose = level.start, carSteer = rad(editSteer);
   if (anim) {
@@ -1009,7 +1056,7 @@ steerEl.addEventListener('input', () => setEdit(parseFloat(steerEl.value), editD
 distEl.addEventListener('input', () => setEdit(editSteer, parseFloat(distEl.value)));
 
 function commitMove() {
-  if (!editSim || editSim.hit || anim) return false;
+  if (!editSim || editSim.pts.length < 2 || anim) return false;
   if (editIdx !== null) {
     moves[editIdx] = { steer: rad(editSteer), dist: editDist };
     editIdx = null;
@@ -1053,7 +1100,7 @@ $('resetBtn').addEventListener('click', () => {
 $('goBtn').addEventListener('click', () => {
   if (anim) return;
   // Auto-commit a valid pending move so the player doesn't have to press Add first
-  if (editSim && !editSim.hit && editIdx === null) {
+  if (editSim && editSim.pts.length >= 2 && editIdx === null) {
     moves.push({ steer: rad(editSteer), dist: editDist });
     editIdx = null;
     setEdit(editSteer, 0);
