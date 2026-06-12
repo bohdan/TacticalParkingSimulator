@@ -65,25 +65,20 @@ function ptSegDist(px, py, ax, ay, bx, by) {
   return Math.hypot(px-ax-t*dx, py-ay-t*dy);
 }
 
+// Min distance from any car corner to the goal zone boundary.
+// Maximised when the car is centred in the spot.
 function parkingClearance(pose) {
   const cp = carPoly(pose);
+  const g = level.goal;
+  const x0 = g.cx - g.w / 2, x1 = g.cx + g.w / 2;
+  const y0 = g.cy - g.h / 2, y1 = g.cy + g.h / 2;
+  const zone = [{x:x0,y:y0},{x:x1,y:y0},{x:x1,y:y1},{x:x0,y:y1}];
   let minGap = Infinity;
-  for (const obs of level.obstacles) {
-    for (let i = 0; i < cp.length; i++) {
-      const v = cp[i];
-      for (let j = 0; j < obs.poly.length; j++) {
-        const a = obs.poly[j], b = obs.poly[(j+1) % obs.poly.length];
-        minGap = Math.min(minGap, ptSegDist(v.x, v.y, a.x, a.y, b.x, b.y));
-      }
+  for (const v of cp)
+    for (let j = 0; j < zone.length; j++) {
+      const a = zone[j], b = zone[(j+1) % zone.length];
+      minGap = Math.min(minGap, ptSegDist(v.x, v.y, a.x, a.y, b.x, b.y));
     }
-    for (let i = 0; i < obs.poly.length; i++) {
-      const v = obs.poly[i];
-      for (let j = 0; j < cp.length; j++) {
-        const a = cp[j], b = cp[(j+1) % cp.length];
-        minGap = Math.min(minGap, ptSegDist(v.x, v.y, a.x, a.y, b.x, b.y));
-      }
-    }
-  }
   return isFinite(minGap) ? minGap : 0;
 }
 
