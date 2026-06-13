@@ -536,6 +536,73 @@ const LEVELS = [
   {
     // 12 m city bus reverses into a depot bay. The swept rear overhang is massive.
     // Verified 2-move solution: fwd 28 m, steer -45 rev 10 m → heading 88°.
+    name: "Easy Exit", tier: "Easy", mode: "moves", w: 22, h: 13,
+    start: { x: 9.65, y: 8.5, h: 0 },
+    goal: { cx: 17, cy: 3.8, w: 10, h: 3, heads: [0], tol: 20 },
+    walls: [
+      { x: 0, y: 10.5, w: 22, h: 2.5, kind: 'curb' },
+      { x: 0, y: 0,    w: 22, h: 1.6, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 4.6,  cy: 9.4, h: 0 },
+      { cx: 17.0, cy: 9.4, h: 0 },
+      { cx: 9.5,  cy: 2.55, h: Math.PI },
+    ],
+    starThresh: [2, 3], starThreshQuick: [12, 18],
+    hint: "Swing the nose out toward the lane, then counter-steer and glide away.",
+    solution: [{ steer: -35, dist: 4.5 }, { steer: 35, dist: 4.5 }],
+  },
+  {
+    name: "Street Squeeze", tier: "Medium", mode: "moves", w: 22, h: 13,
+    start: { x: 9.65, y: 8.5, h: 0 },
+    goal: { cx: 17, cy: 3.8, w: 10, h: 3, heads: [0], tol: 18 },
+    walls: [
+      { x: 0, y: 10.5, w: 22, h: 2.5, kind: 'curb' },
+      { x: 0, y: 0,    w: 22, h: 1.6, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 5.6,  cy: 9.4, h: 0 },
+      { cx: 16.0, cy: 9.4, h: 0 },
+      { cx: 12.0, cy: 2.55, h: Math.PI },
+    ],
+    starThresh: [3, 4], starThreshQuick: [14, 21],
+    hint: "Nudge back first to gain the extra inch you need.",
+    solution: [{ steer: 0, dist: -0.8 }, { steer: -35, dist: 4.5 }, { steer: 35, dist: 4.5 }],
+  },
+  {
+    name: "Boxed In", tier: "Hard", mode: "moves", w: 22, h: 13,
+    start: { x: 9.65, y: 8.5, h: 0 },
+    goal: { cx: 16, cy: 6.3, w: 10, h: 3, heads: [0], tol: 15 },
+    walls: [
+      { x: 0, y: 10.5, w: 22, h: 2.5, kind: 'curb' },
+      { x: 0, y: 0,    w: 22, h: 1.6, kind: 'curb' },
+    ],
+    cars: [
+      { cx: 5.9,  cy: 9.4, h: 0 },
+      { cx: 15.9, cy: 9.4, h: 0 },
+      { cx: 9.5,  cy: 2.55, h: Math.PI },
+    ],
+    starThresh: [3, 4], starThreshQuick: [15, 22],
+    hint: "Centimetre gaps — a tiny nudge back opens just enough room.",
+    solution: [{ steer: 0, dist: -0.4 }, { steer: -35, dist: 3 }, { steer: 35, dist: 3 }],
+  },
+  {
+    name: "Bay Escape", tier: "Medium", mode: "moves", w: 20, h: 13,
+    start: { x: 10, y: 5.5, h: -90 },
+    goal: { cx: 6, cy: 6, w: 8, h: 3, heads: [180], tol: 15 },
+    walls: [
+      { x: 0, y: 0,  w: 20, h: 1.5, kind: 'curb' },
+      { x: 0, y: 11, w: 20, h: 2,   kind: 'curb' },
+    ],
+    cars: [
+      { cx: 12.7, cy: 5.3, h: -Math.PI / 2 },
+      { cx: 15.0, cy: 9.5, h: 0 },
+    ],
+    starThresh: [2, 3], starThreshQuick: [13, 20],
+    hint: "Reverse straight out of the bay, then sweep left into the lane.",
+    solution: [{ steer: 0, dist: -4.4 }, { steer: -35, dist: 6 }],
+  },
+  {
     name: "Bus Depot", tier: "Hard", mode: "moves", w: 36, h: 21,
     vehicle: 'bus',
     start: { x: 3, y: 16, h: 0 },
