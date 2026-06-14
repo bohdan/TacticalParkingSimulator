@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Park Planner — Level Editor</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0e1117;color:#c8d0dc;font:13px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+#toolbar{background:#171a21;border-bottom:1px solid #2a3040;padding:7px 12px;display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap}
+#toolbar h1{font-size:14px;font-weight:700;color:#e7ecf3;margin-right:4px}
+.sep{width:1px;background:#2a3040;height:22px;margin:0 2px}
+#main{display:flex;flex:1;min-height:0}
+#cvWrap{flex:1;position:relative;overflow:hidden;background:#080a0e;cursor:crosshair}
+canvas{display:block;touch-action:none}
+#sidebar{width:230px;background:#13161e;border-left:1px solid #2a3040;overflow-y:auto;flex-shrink:0;padding:10px 10px 20px}
+h2{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#5a6a80;margin:14px 0 5px;border-bottom:1px solid #1f2636;padding-bottom:3px}
+h2:first-child{margin-top:0}
+.row{display:flex;gap:5px;margin-bottom:5px;align-items:center}
+.row label{flex:0 0 52px;font-size:11px;color:#7080a0}
+.row input,.row select{flex:1;background:#1d2330;border:1px solid #2a3040;color:#c8d0dc;border-radius:5px;padding:3px 6px;font-size:12px;min-width:0}
+.row input:focus,.row select:focus{outline:none;border-color:#3d8fbf}
+.row input[type=number]{-moz-appearance:textfield}
+.row input[type=number]::-webkit-inner-spin-button{display:none}
+button{background:#1d4f6b;border:1px solid #2d7396;color:#c8d0dc;border-radius:6px;padding:4px 9px;font-size:12px;cursor:pointer;white-space:nowrap}
+button:hover{background:#235d7d}
+button.active,button.primary{background:#1a6e3e;border-color:#27a35e;color:#e7ecf3}
+button.active:hover,button.primary:hover{background:#1f7d47}
+button.danger{background:#5c1e1e;border-color:#8b3030}
+button.danger:hover{background:#6e2424}
+.sel-hint{font-size:11px;color:#506080;font-style:italic;margin-top:6px}
+#overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99;justify-content:center;align-items:center}
+#overlay.show{display:flex}
+#exportBox{background:#13161e;border:1px solid #2a3040;border-radius:10px;padding:16px;width:660px;max-height:82vh;display:flex;flex-direction:column;gap:10px}
+#exportBox h3{font-size:14px;color:#e7ecf3}
+#exportText{flex:1;background:#080a0e;color:#7dc87d;font:12px/1.65 Menlo,Consolas,monospace;border:1px solid #2a3040;border-radius:6px;padding:10px;resize:none;min-height:320px;overflow:auto;white-space:pre;tab-size:2}
+#loadSel{max-width:180px}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <h1>Level Editor</h1>
+  <div class="sep"></div>
+  <button id="btnLoad">Load level ▾</button>
+  <select id="loadSel" style="display:none"></select>
+  <div class="sep"></div>
+  <button id="toolSelect" class="active" title="Select / move objects  [V]">Select</button>
+  <button id="toolWall"   title="Draw wall  [W]">+ Wall</button>
+  <button id="toolCurb"   title="Draw curb  [C]">+ Curb</button>
+  <button id="toolCar"    title="Place obstacle car  [A]">+ Car</button>
+  <button id="toolTraffic" title="Place traffic car  [T]">+ Traffic</button>
+  <div class="sep"></div>
+  <button class="primary" id="btnExport">Export ↗</button>
+</div>
+
+<div id="main">
+  <div id="cvWrap"><canvas id="cv"></canvas></div>
+  <div id="sidebar">
+    <h2>Level</h2>
+    <div class="row"><label>Name</label><input id="sName" type="text"></div>
+    <div class="row"><label>Tier</label>
+      <select id="sTier"><option>Tutorial</option><option>Easy</option><option>Medium</option><option>Hard</option><option>Expert</option></select>
+    </div>
+    <div class="row"><label>Mode</label>
+      <select id="sMode"><option value="moves">moves</option><option value="dist">dist</option></select>
+    </div>
+    <div class="row"><label>Vehicle</label>
+      <select id="sVehicle"><option value="default">Sedan</option><option value="miata">Miata</option><option value="bus">Bus</option></select>
+    </div>
+    <div class="row"><label>W × H</label>
+      <input id="sW" type="number" step="1" min="5" style="flex:.5"> ×
+      <input id="sH" type="number" step="1" min="5" style="flex:.5">
+    </div>
+    <div class="row"><label>Stars</label>
+      <input id="sStar3" type="number" step="1" placeholder="★★★" style="flex:.5">
+      <input id="sStar2" type="number" step="1" placeholder="★★" style="flex:.5">
+    </div>
+    <div class="row"><label>Hint</label><input id="sHint" type="text" placeholder="player hint"></div>
+
+    <h2>Start  <span style="font-size:10px;color:#3d8fbf">(rear axle)</span></h2>
+    <div class="row"><label>x</label><input id="stX" type="number" step="0.05"></div>
+    <div class="row"><label>y</label><input id="stY" type="number" step="0.05"></div>
+    <div class="row"><label>h °</label><input id="stH" type="number" step="5"></div>
+
+    <h2>Goal</h2>
+    <div class="row"><label>cx</label><input id="gCx" type="number" step="0.1"></div>
+    <div class="row"><label>cy</label><input id="gCy" type="number" step="0.1"></div>
+    <div class="row"><label>w</label><input id="gW" type="number" step="0.1" min="0.5"></div>
+    <div class="row"><label>h</label><input id="gH" type="number" step="0.1" min="0.5"></div>
+    <div class="row"><label>ang °</label><input id="gAng" type="number" step="5" placeholder="0"></div>
+    <div class="row"><label>heads</label><input id="gHeads" type="text" placeholder="0  or  0,180"></div>
+    <div class="row"><label>tol °</label><input id="gTol" type="number" step="1" min="1"></div>
+
+    <h2>Selected</h2>
+    <div id="selPanel"><p class="sel-hint">Click an object on the canvas.<br>Delete key removes it.</p></div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div id="exportBox">
+    <h3>Paste into the LEVELS array in game.js</h3>
+    <textarea id="exportText" readonly spellcheck="false"></textarea>
+    <div style="display:flex;gap:8px">
+      <button id="btnCopy" class="primary">Copy to clipboard</button>
+      <button id="btnCloseExport">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ── Vehicle specs ────────────────────────────────────────────────────────────
+const VSPEC = {
+  default:{ len:4.4,  wid:1.8,  rOver:0.85, wb:2.7   },
+  miata:  { len:3.97, wid:1.72, rOver:0.73, wb:2.265  },
+  bus:    { len:12.0, wid:2.55, rOver:2.5,  wb:6.5    },
+};
+
+// ── Level state ──────────────────────────────────────────────────────────────
+let L = newLevel();
+function newLevel(){
+  return {
+    name:'New Level', tier:'Easy', mode:'moves', vehicle:'default',
+    w:22, h:13,
+    start:{ x:3, y:7, h:0 },
+    goal:{ cx:11, cy:9.5, w:8, h:2.2, ang:0, heads:[0], tol:12 },
+    walls:[
+      { x:0, y:10.5, w:22, h:2.5, kind:'curb' },
+      { x:0, y:0,    w:22, h:1.6, kind:'curb' },
+    ],
+    cars:[], traffic:[],
+    starThresh:[3,5], starThreshQuick:[17,26],
+    hint:'', solution:[],
+  };
+}
+
+// ── View ─────────────────────────────────────────────────────────────────────
+let V = { scale:40, ox:30, oy:30 };
+
+// ── Tool / selection / drag ──────────────────────────────────────────────────
+let tool = 'select';
+let sel  = null;   // {kind:'start'|'goal'|'wall'|'car'|'traffic', idx?}
+let drag = null;   // {handle:'body'|'corner0-3'|'rotate', startW, orig}
+let drawRect = null; // for wall/curb drawing mode
+let panning = false, panOrigin = null;
+
+// ── Canvas ───────────────────────────────────────────────────────────────────
+const cv  = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+function resize(){
+  const wrap = document.getElementById('cvWrap');
+  cv.width  = wrap.clientWidth;
+  cv.height = wrap.clientHeight;
+  // auto-fit level on first resize
+  fitLevel();
+  render();
+}
+function fitLevel(){
+  const pad = 40;
+  const wrap = document.getElementById('cvWrap');
+  const sx = (wrap.clientWidth  - pad*2) / L.w;
+  const sy = (wrap.clientHeight - pad*2) / L.h;
+  V.scale = Math.min(sx, sy, 80);
+  V.ox = (wrap.clientWidth  - L.w * V.scale) / 2;
+  V.oy = (wrap.clientHeight - L.h * V.scale) / 2;
+}
+new ResizeObserver(resize).observe(document.getElementById('cvWrap'));
+
+// ── Math helpers ─────────────────────────────────────────────────────────────
+const π   = Math.PI;
+const rad = d => d*π/180;
+const deg = r => r*180/π;
+const snap = (v,s=0.05) => Math.round(v/s)*s;
+function norm(a){ while(a>π)a-=2*π; while(a<-π)a+=2*π; return a; }
+function fmt(n,d=2){ return +n.toFixed(d); }
+
+function w2c(x,y){ return {x:x*V.scale+V.ox, y:y*V.scale+V.oy}; }
+function c2w(cx,cy){ return {x:(cx-V.ox)/V.scale, y:(cy-V.oy)/V.scale}; }
+
+function ptInRect(px,py,rx,ry,rw,rh){ return px>=rx&&px<=rx+rw&&py>=ry&&py<=ry+rh; }
+function ptInOBB(px,py,cx,cy,w,h,a){
+  const c=Math.cos(-a),s=Math.sin(-a);
+  const lx=(px-cx)*c-(py-cy)*s, ly=(px-cx)*s+(py-cy)*c;
+  return Math.abs(lx)<=w/2&&Math.abs(ly)<=h/2;
+}
+function dist2(ax,ay,bx,by){ return (ax-bx)**2+(ay-by)**2; }
+
+// ── Car helpers ──────────────────────────────────────────────────────────────
+function playerSpec(){ return VSPEC[L.vehicle]||VSPEC.default; }
+function carSpec(c){ return (c.type&&VSPEC[c.type])||VSPEC.default; }
+// Start is stored as rear-axle; compute body center for drawing
+function startCenter(){
+  const s=playerSpec();
+  return {
+    x:L.start.x+(s.len/2-s.rOver)*Math.cos(L.start.h),
+    y:L.start.y+(s.len/2-s.rOver)*Math.sin(L.start.h),
+  };
+}
+
+// ── Drawing ──────────────────────────────────────────────────────────────────
+function applyXf(){ ctx.setTransform(V.scale,0,0,V.scale,V.ox,V.oy); }
+const PX = ()=>1/V.scale;
+
+function rrect(x,y,w,h,r){
+  r=Math.min(r,w/2,h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+
+function drawCar(cx,cy,h,sp,fill,stroke,alpha=1){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.translate(cx,cy); ctx.rotate(h);
+  const hl=sp.len/2,hw=sp.wid/2;
+  rrect(-hl,-hw,sp.len,sp.wid,0.25);
+  ctx.fillStyle=fill; ctx.fill();
+  ctx.strokeStyle=stroke; ctx.lineWidth=2*PX(); ctx.stroke();
+  // front band
+  ctx.fillStyle=stroke;
+  ctx.fillRect(hl-0.35,-hw+0.2,0.25,sp.wid-0.4);
+  ctx.restore();
+}
+
+function drawSelBox(cx,cy,w,h,a){
+  ctx.save();
+  ctx.translate(cx,cy); if(a)ctx.rotate(a);
+  ctx.strokeStyle='#ffe040'; ctx.lineWidth=3*PX();
+  ctx.setLineDash([4*PX(),3*PX()]);
+  ctx.strokeRect(-w/2-0.12,-h/2-0.12,w+0.24,h+0.24);
+  ctx.setLineDash([]); ctx.restore();
+}
+
+// Draw a handle dot (in canvas pixels)
+function handle(wx,wy,r,fill='#ffe040'){
+  const p=w2c(wx,wy);
+  ctx.resetTransform();
+  ctx.beginPath(); ctx.arc(p.x,p.y,r,0,2*π);
+  ctx.fillStyle=fill; ctx.fill();
+  ctx.strokeStyle='#0a0c10'; ctx.lineWidth=1.5; ctx.stroke();
+  applyXf();
+}
+
+// Returns {cx,cy,w,h,ang} regardless of wall format
+function wallBounds(w){
+  return w.ang!=null
+    ? {cx:w.cx,cy:w.cy,w:w.w,h:w.h,ang:w.ang}
+    : {cx:w.x+w.w/2,cy:w.y+w.h/2,w:w.w,h:w.h,ang:0};
+}
+
+function render(){
+  ctx.resetTransform();
+  ctx.fillStyle='#080a0e';
+  ctx.fillRect(0,0,cv.width,cv.height);
+  applyXf();
+  const p=PX();
+
+  // Grid
+  ctx.strokeStyle='#13181f'; ctx.lineWidth=p;
+  for(let x=0;x<=L.w;x++){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,L.h);ctx.stroke();}
+  for(let y=0;y<=L.h;y++){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(L.w,y);ctx.stroke();}
+  // Map border
+  ctx.strokeStyle='#304060'; ctx.lineWidth=3*p;
+  ctx.strokeRect(0,0,L.w,L.h);
+
+  // Walls
+  for(let i=0;i<L.walls.length;i++){
+    const w=L.walls[i], isCurb=w.kind==='curb';
+    ctx.save();
+    if(w.ang!=null){ctx.translate(w.cx,w.cy);ctx.rotate(w.ang);rrect(-w.w/2,-w.h/2,w.w,w.h,.1);}
+    else rrect(w.x,w.y,w.w,w.h,.1);
+    ctx.fillStyle=isCurb?'#202a42':'#2e2020';
+    ctx.fill();
+    ctx.strokeStyle=isCurb?'#3a5080':'#5a3838';
+    ctx.lineWidth=1.5*p; ctx.stroke(); ctx.restore();
+    if(sel&&sel.kind==='wall'&&sel.idx===i){
+      const b=wallBounds(w); drawSelBox(b.cx,b.cy,b.w,b.h,b.ang);
+      // corner handles
+      const hw2=b.w/2,hh2=b.h/2,a=b.ang,c=Math.cos(a),s=Math.sin(a);
+      for(const [lx,ly] of [[-hw2,-hh2],[hw2,-hh2],[hw2,hh2],[-hw2,hh2]]){
+        handle(b.cx+lx*c-ly*s,b.cy+lx*s+ly*c,5);
+      }
+    }
+  }
+
+  // Goal
+  const g=L.goal, ga=g.ang||0;
+  ctx.save();
+  ctx.translate(g.cx,g.cy); if(ga)ctx.rotate(ga);
+  rrect(-g.w/2,-g.h/2,g.w,g.h,.15);
+  ctx.fillStyle='rgba(61,220,132,.1)'; ctx.fill();
+  ctx.strokeStyle='#3ddc84'; ctx.lineWidth=1.5*p;
+  ctx.setLineDash([.45,.3]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+  for(const hd of(g.heads||[0])){
+    const a=rad(hd);
+    ctx.save();
+    ctx.translate(g.cx,g.cy); ctx.rotate(a);
+    const al=Math.min(g.w,g.h)*.4;
+    ctx.strokeStyle='rgba(61,220,132,.7)'; ctx.lineWidth=2*p;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(al,0);
+    ctx.moveTo(al,0);ctx.lineTo(al-.35,-.15);ctx.moveTo(al,0);ctx.lineTo(al-.35,.15);
+    ctx.stroke(); ctx.restore();
+  }
+  if(sel&&sel.kind==='goal'){
+    drawSelBox(g.cx,g.cy,g.w,g.h,ga);
+    // corner handles + rotate handle
+    const hw2=g.w/2,hh2=g.h/2,c=Math.cos(ga),s=Math.sin(ga);
+    for(const [lx,ly] of [[-hw2,-hh2],[hw2,-hh2],[hw2,hh2],[-hw2,hh2]]){
+      handle(g.cx+lx*c-ly*s,g.cy+lx*s+ly*c,5);
+    }
+    handle(g.cx+(g.w/2+0.6)*c,g.cy+(g.w/2+0.6)*s,6,'#80e0ff');
+  }
+
+  // Obstacle cars
+  for(let i=0;i<L.cars.length;i++){
+    const c=L.cars[i], sp=carSpec(c);
+    const isSel=sel&&sel.kind==='car'&&sel.idx===i;
+    drawCar(c.cx,c.cy,c.h,sp,isSel?'#806020':'#4e5a6e',isSel?'#c09030':'#3a4255');
+    if(isSel){
+      drawSelBox(c.cx,c.cy,sp.len,sp.wid,c.h);
+      handle(c.cx+(sp.len/2+0.5)*Math.cos(c.h),c.cy+(sp.len/2+0.5)*Math.sin(c.h),6,'#80e0ff');
+    }
+  }
+
+  // Traffic
+  for(let i=0;i<L.traffic.length;i++){
+    const t=L.traffic[i], sp=VSPEC.default;
+    const isSel=sel&&sel.kind==='traffic'&&sel.idx===i;
+    const col=t.color||'#4e5a6e';
+    drawCar(t.x+(sp.len/2-sp.rOver)*Math.cos(t.h), t.y+(sp.len/2-sp.rOver)*Math.sin(t.h),
+            t.h,sp,col,'#2a3050',.7);
+    // path arrow
+    ctx.save();ctx.translate(t.x,t.y);ctx.rotate(t.h);
+    ctx.strokeStyle='rgba(80,128,220,.4)';ctx.lineWidth=1.5*p;
+    ctx.setLineDash([.4,.3]);
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.min(t.loop||20,L.w),0);ctx.stroke();
+    ctx.setLineDash([]);ctx.restore();
+    if(isSel){
+      const scx=t.x+(sp.len/2-sp.rOver)*Math.cos(t.h),scy=t.y+(sp.len/2-sp.rOver)*Math.sin(t.h);
+      drawSelBox(scx,scy,sp.len,sp.wid,t.h);
+      handle(scx+(sp.len/2+.5)*Math.cos(t.h),scy+(sp.len/2+.5)*Math.sin(t.h),6,'#80e0ff');
+    }
+  }
+
+  // Start car (green)
+  {
+    const sp=playerSpec(), sc=startCenter();
+    const isSel=sel&&sel.kind==='start';
+    drawCar(sc.x,sc.y,L.start.h,sp,isSel?'#1f6e30':'#1a8a3a',isSel?'#50d070':'#27c455');
+    // rear axle dot
+    ctx.save();ctx.fillStyle='#ffe040';
+    ctx.beginPath();ctx.arc(L.start.x,L.start.y,4*p,0,2*π);ctx.fill();ctx.restore();
+    if(isSel){
+      drawSelBox(sc.x,sc.y,sp.len,sp.wid,L.start.h);
+      handle(sc.x+(sp.len/2+.5)*Math.cos(L.start.h),sc.y+(sp.len/2+.5)*Math.sin(L.start.h),6,'#80e0ff');
+    }
+  }
+
+  // Wall drawing preview
+  if(drawRect){
+    const {ax,ay,bx,by}=drawRect;
+    const x=Math.min(ax,bx),y=Math.min(ay,by),w=Math.abs(bx-ax),h=Math.abs(by-ay);
+    ctx.strokeStyle='#ffe040';ctx.lineWidth=2*p;ctx.setLineDash([.3,.2]);
+    ctx.strokeRect(x,y,w,h);ctx.setLineDash([]);
+  }
+}
+
+// ── Hit testing ──────────────────────────────────────────────────────────────
+const HR = 8; // handle radius in pixels
+
+function hitHandle(wx,wy, hx,hy){
+  const p=w2c(hx,hy), q=w2c(wx,wy);
+  return dist2(p.x,p.y,q.x,q.y) <= HR*HR;
+}
+
+// Returns {handle:'body'|'corner0-3'|'rotate'} or null
+function hitObjHandles(wx,wy){
+  if(!sel) return null;
+
+  if(sel.kind==='goal'){
+    const g=L.goal, ga=g.ang||0, c=Math.cos(ga),s=Math.sin(ga);
+    // rotate handle
+    const rx=g.cx+(g.w/2+.6)*c, ry=g.cy+(g.w/2+.6)*s;
+    if(hitHandle(wx,wy,rx,ry)) return {handle:'rotate'};
+    // corners
+    const corners=[[-g.w/2,-g.h/2],[g.w/2,-g.h/2],[g.w/2,g.h/2],[-g.w/2,g.h/2]];
+    for(let i=0;i<4;i++){
+      const [lx,ly]=corners[i];
+      if(hitHandle(wx,wy,g.cx+lx*c-ly*s,g.cy+lx*s+ly*c)) return {handle:'corner'+i};
+    }
+  }
+  if(sel.kind==='wall'){
+    const b=wallBounds(L.walls[sel.idx]);
+    const c=Math.cos(b.ang),s=Math.sin(b.ang);
+    const corners=[[-b.w/2,-b.h/2],[b.w/2,-b.h/2],[b.w/2,b.h/2],[-b.w/2,b.h/2]];
+    for(let i=0;i<4;i++){
+      const [lx,ly]=corners[i];
+      if(hitHandle(wx,wy,b.cx+lx*c-ly*s,b.cy+lx*s+ly*c)) return {handle:'corner'+i};
+    }
+  }
+  if(sel.kind==='car'){
+    const c=L.cars[sel.idx], sp=carSpec(c);
+    if(hitHandle(wx,wy,c.cx+(sp.len/2+.5)*Math.cos(c.h),c.cy+(sp.len/2+.5)*Math.sin(c.h))) return {handle:'rotate'};
+  }
+  if(sel.kind==='traffic'){
+    const t=L.traffic[sel.idx], sp=VSPEC.default;
+    const scx=t.x+(sp.len/2-sp.rOver)*Math.cos(t.h),scy=t.y+(sp.len/2-sp.rOver)*Math.sin(t.h);
+    if(hitHandle(wx,wy,scx+(sp.len/2+.5)*Math.cos(t.h),scy+(sp.len/2+.5)*Math.sin(t.h))) return {handle:'rotate'};
+  }
+  if(sel.kind==='start'){
+    const sp=playerSpec(),sc=startCenter();
+    if(hitHandle(wx,wy,sc.x+(sp.len/2+.5)*Math.cos(L.start.h),sc.y+(sp.len/2+.5)*Math.sin(L.start.h))) return {handle:'rotate'};
+  }
+  return null;
+}
+
+function hitTestAll(wx,wy){
+  // cars (reverse order = top first)
+  for(let i=L.cars.length-1;i>=0;i--){
+    const c=L.cars[i], sp=carSpec(c);
+    if(ptInOBB(wx,wy,c.cx,c.cy,sp.len,sp.wid,c.h)) return {kind:'car',idx:i};
+  }
+  // traffic
+  for(let i=L.traffic.length-1;i>=0;i--){
+    const t=L.traffic[i], sp=VSPEC.default;
+    const scx=t.x+(sp.len/2-sp.rOver)*Math.cos(t.h),scy=t.y+(sp.len/2-sp.rOver)*Math.sin(t.h);
+    if(ptInOBB(wx,wy,scx,scy,sp.len,sp.wid,t.h)) return {kind:'traffic',idx:i};
+  }
+  // start
+  {
+    const sp=playerSpec(),sc=startCenter();
+    if(ptInOBB(wx,wy,sc.x,sc.y,sp.len,sp.wid,L.start.h)) return {kind:'start'};
+  }
+  // goal
+  if(ptInOBB(wx,wy,L.goal.cx,L.goal.cy,L.goal.w,L.goal.h,L.goal.ang||0)) return {kind:'goal'};
+  // walls (reverse)
+  for(let i=L.walls.length-1;i>=0;i--){
+    const b=wallBounds(L.walls[i]);
+    if(ptInOBB(wx,wy,b.cx,b.cy,b.w,b.h,b.ang)) return {kind:'wall',idx:i};
+  }
+  return null;
+}
+
+// ── Mouse helpers ────────────────────────────────────────────────────────────
+function mouseWorld(e){
+  const r=cv.getBoundingClientRect();
+  return c2w(e.clientX-r.left, e.clientY-r.top);
+}
+function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+
+// Snap to 0.1m grid when near a grid line
+function snapW(v){ return Math.round(v*10)/10; }
+
+// ── Mouse events ─────────────────────────────────────────────────────────────
+cv.addEventListener('mousedown', e=>{
+  e.preventDefault();
+  const mw=mouseWorld(e);
+
+  // Pan: middle button or right button
+  if(e.button===1||e.button===2){
+    panning=true; panOrigin={mx:e.clientX,my:e.clientY,ox:V.ox,oy:V.oy}; return;
+  }
+
+  if(tool!=='select'){
+    // Add mode
+    if(tool==='car'){
+      L.cars.push({cx:snapW(mw.x),cy:snapW(mw.y),h:0});
+      sel={kind:'car',idx:L.cars.length-1};
+      updateSidebar(); render(); return;
+    }
+    if(tool==='traffic'){
+      L.traffic.push({x:snapW(mw.x),y:snapW(mw.y),h:0,speed:4,loop:30,offset:0});
+      sel={kind:'traffic',idx:L.traffic.length-1};
+      updateSidebar(); render(); return;
+    }
+    // wall / curb: start drag
+    drawRect={ax:snapW(mw.x),ay:snapW(mw.y),bx:snapW(mw.x),by:snapW(mw.y)};
+    return;
+  }
+
+  // Select mode
+  const hh=hitObjHandles(mw.x,mw.y);
+  if(hh){
+    // start drag on existing selection
+    drag={...hh, startW:mw, orig:deepClone(sel.kind==='wall'?L.walls[sel.idx]:
+           sel.kind==='car'?L.cars[sel.idx]:sel.kind==='traffic'?L.traffic[sel.idx]:
+           sel.kind==='goal'?L.goal:L.start)};
+    return;
+  }
+  const hit=hitTestAll(mw.x,mw.y);
+  if(hit){
+    sel=hit;
+    drag={handle:'body', startW:mw, orig:deepClone(
+           hit.kind==='wall'?L.walls[hit.idx]:
+           hit.kind==='car'?L.cars[hit.idx]:
+           hit.kind==='traffic'?L.traffic[hit.idx]:
+           hit.kind==='goal'?L.goal:L.start)};
+    updateSidebar(); render();
+  } else {
+    sel=null; drag=null; updateSidebar(); render();
+  }
+});
+
+cv.addEventListener('mousemove', e=>{
+  if(panning){
+    const dx=e.clientX-panOrigin.mx, dy=e.clientY-panOrigin.my;
+    V.ox=panOrigin.ox+dx; V.oy=panOrigin.oy+dy; render(); return;
+  }
+  if(drawRect){
+    const mw=mouseWorld(e);
+    drawRect.bx=snapW(mw.x); drawRect.by=snapW(mw.y); render(); return;
+  }
+  if(!drag) return;
+  const mw=mouseWorld(e);
+  const dx=snapW(mw.x-drag.startW.x), dy=snapW(mw.y-drag.startW.y);
+  const o=drag.orig;
+
+  if(drag.handle==='body'){
+    if(sel.kind==='goal')   { L.goal.cx=snapW(o.cx+dx); L.goal.cy=snapW(o.cy+dy); }
+    else if(sel.kind==='start'){ L.start.x=snapW(o.x+dx); L.start.y=snapW(o.y+dy); }
+    else if(sel.kind==='car')  { L.cars[sel.idx].cx=snapW(o.cx+dx); L.cars[sel.idx].cy=snapW(o.cy+dy); }
+    else if(sel.kind==='traffic'){ L.traffic[sel.idx].x=snapW(o.x+dx); L.traffic[sel.idx].y=snapW(o.y+dy); }
+    else if(sel.kind==='wall'){
+      const w=L.walls[sel.idx];
+      if(w.ang!=null){ w.cx=snapW(o.cx+dx); w.cy=snapW(o.cy+dy); }
+      else { w.x=snapW(o.x+dx); w.y=snapW(o.y+dy); }
+    }
+  }
+  else if(drag.handle.startsWith('corner')){
+    const ci=+drag.handle.slice(6);
+    if(sel.kind==='goal'){
+      // drag one corner, opposite stays fixed — update w,h,cx,cy (no rotation)
+      const b=L.goal, ga=b.ang||0, c=Math.cos(ga),s=Math.sin(ga);
+      const corners=[[-1,-1],[1,-1],[1,1],[-1,1]];
+      const opp=(ci+2)%4, [ox2,oy2]=corners[opp];
+      // Opposite corner world pos
+      const fcx=o.cx+ox2*(o.w/2)*c-oy2*(o.h/2)*s;
+      const fcy=o.cy+ox2*(o.w/2)*s+oy2*(o.h/2)*c;
+      // New moving corner
+      const nmx=mw.x, nmy=mw.y;
+      // Center = midpoint
+      b.cx=snapW((nmx+fcx)/2); b.cy=snapW((nmy+fcy)/2);
+      // In local frame
+      const dlx=(nmx-fcx)*c+(nmy-fcy)*s;
+      const dly=-(nmx-fcx)*s+(nmy-fcy)*c;
+      b.w=Math.max(.5,Math.abs(snapW(dlx))); b.h=Math.max(.5,Math.abs(snapW(dly)));
+    }
+    else if(sel.kind==='wall'){
+      const w=L.walls[sel.idx];
+      if(w.ang!=null){
+        // angled wall: same as goal
+        const ga=w.ang, c=Math.cos(ga),s=Math.sin(ga);
+        const corners=[[-1,-1],[1,-1],[1,1],[-1,1]];
+        const opp=(ci+2)%4,[ox2,oy2]=corners[opp];
+        const fcx=o.cx+ox2*(o.w/2)*c-oy2*(o.h/2)*s;
+        const fcy=o.cy+ox2*(o.w/2)*s+oy2*(o.h/2)*c;
+        w.cx=snapW((mw.x+fcx)/2); w.cy=snapW((mw.y+fcy)/2);
+        const dlx=(mw.x-fcx)*c+(mw.y-fcy)*s;
+        const dly=-(mw.x-fcx)*s+(mw.y-fcy)*c;
+        w.w=Math.max(.2,Math.abs(snapW(dlx))); w.h=Math.max(.2,Math.abs(snapW(dly)));
+      } else {
+        // axis-aligned wall: corners [TL,TR,BR,BL]
+        const corners=[[o.x,o.y],[o.x+o.w,o.y],[o.x+o.w,o.y+o.h],[o.x,o.y+o.h]];
+        const opp=(ci+2)%4;
+        const [fx,fy]=corners[opp];
+        const nx=snapW(mw.x), ny=snapW(mw.y);
+        w.x=Math.min(fx,nx); w.y=Math.min(fy,ny);
+        w.w=Math.max(.2,Math.abs(nx-fx)); w.h=Math.max(.2,Math.abs(ny-fy));
+      }
+    }
+  }
+  else if(drag.handle==='rotate'){
+    if(sel.kind==='goal'){
+      const g=L.goal;
+      g.ang=Math.atan2(mw.y-g.cy, mw.x-g.cx);
+    } else {
+      // car / traffic / start: compute heading from center to mouse
+      let cx2,cy2;
+      if(sel.kind==='car'){cx2=L.cars[sel.idx].cx;cy2=L.cars[sel.idx].cy;}
+      else if(sel.kind==='traffic'){
+        const t=L.traffic[sel.idx],sp=VSPEC.default;
+        cx2=t.x+(sp.len/2-sp.rOver)*Math.cos(t.h);
+        cy2=t.y+(sp.len/2-sp.rOver)*Math.sin(t.h);
+      } else {cx2=startCenter().x;cy2=startCenter().y;}
+      const a=Math.atan2(mw.y-cy2, mw.x-cx2);
+      if(sel.kind==='car') L.cars[sel.idx].h=a;
+      else if(sel.kind==='traffic'){
+        // keep traffic x,y (path start) consistent: back-compute from center
+        const t=L.traffic[sel.idx],sp=VSPEC.default;
+        t.h=a;
+        t.x=cx2-(sp.len/2-sp.rOver)*Math.cos(a);
+        t.y=cy2-(sp.len/2-sp.rOver)*Math.sin(a);
+      } else {
+        // start: rear axle = center - (len/2-rOver) in heading
+        const sp=playerSpec();
+        L.start.h=a;
+        L.start.x=cx2-(sp.len/2-sp.rOver)*Math.cos(a);
+        L.start.y=cy2-(sp.len/2-sp.rOver)*Math.sin(a);
+      }
+    }
+  }
+  updateSidebar(); render();
+});
+
+cv.addEventListener('mouseup', e=>{
+  if(panning){panning=false; panOrigin=null; return;}
+  if(drawRect){
+    const {ax,ay,bx,by}=drawRect;
+    const x=Math.min(ax,bx),y=Math.min(ay,by),w=Math.abs(bx-ax),h=Math.abs(by-ay);
+    if(w>.2&&h>.2){
+      const kind=tool==='curb'?'curb':'wall';
+      L.walls.push({x,y,w,h,kind});
+      sel={kind:'wall',idx:L.walls.length-1};
+      updateSidebar();
+    }
+    drawRect=null; render(); return;
+  }
+  drag=null;
+});
+
+cv.addEventListener('contextmenu', e=>e.preventDefault());
+
+cv.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const r=cv.getBoundingClientRect();
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
+  const factor=e.deltaY<0?1.15:.87;
+  V.ox=mx-(mx-V.ox)*factor;
+  V.oy=my-(my-V.oy)*factor;
+  V.scale=Math.min(200,Math.max(5,V.scale*factor));
+  render();
+},{passive:false});
+
+// ── Keyboard ─────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if(e.key==='Delete'||e.key==='Backspace') deleteSelected();
+  if(e.key==='Escape'){ sel=null; updateSidebar(); render(); }
+  if(e.key==='v'||e.key==='V') setTool('select');
+  if(e.key==='w'||e.key==='W') setTool('wall');
+  if(e.key==='c'||e.key==='C') setTool('curb');
+  if(e.key==='a'||e.key==='A') setTool('car');
+  if(e.key==='t'||e.key==='T') setTool('traffic');
+  if(e.key==='f'||e.key==='F'){ fitLevel(); render(); }
+});
+
+function deleteSelected(){
+  if(!sel) return;
+  if(sel.kind==='wall')  L.walls.splice(sel.idx,1);
+  if(sel.kind==='car')   L.cars.splice(sel.idx,1);
+  if(sel.kind==='traffic') L.traffic.splice(sel.idx,1);
+  sel=null; drag=null; updateSidebar(); render();
+}
+
+// ── Tool buttons ─────────────────────────────────────────────────────────────
+function setTool(t){
+  tool=t;
+  document.querySelectorAll('#toolbar button[id^=tool]').forEach(b=>b.classList.remove('active'));
+  const el=document.getElementById('tool'+t.charAt(0).toUpperCase()+t.slice(1));
+  if(el) el.classList.add('active');
+  cv.style.cursor=t==='select'?'default':'crosshair';
+}
+document.getElementById('toolSelect').onclick=()=>setTool('select');
+document.getElementById('toolWall').onclick=()=>setTool('wall');
+document.getElementById('toolCurb').onclick=()=>setTool('curb');
+document.getElementById('toolCar').onclick=()=>setTool('car');
+document.getElementById('toolTraffic').onclick=()=>setTool('traffic');
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function val(id,v){ const el=document.getElementById(id); if(el&&document.activeElement!==el) el.value=v; }
+
+function updateSidebar(){
+  val('sName',L.name); val('sTier',L.tier); val('sMode',L.mode);
+  val('sVehicle',L.vehicle||'default');
+  val('sW',L.w); val('sH',L.h);
+  val('sStar3',L.starThresh[0]); val('sStar2',L.starThresh[1]);
+  val('sHint',L.hint||'');
+  val('stX',fmt(L.start.x)); val('stY',fmt(L.start.y)); val('stH',fmt(deg(L.start.h),1));
+  val('gCx',fmt(L.goal.cx)); val('gCy',fmt(L.goal.cy));
+  val('gW',fmt(L.goal.w));   val('gH',fmt(L.goal.h));
+  val('gAng',fmt(deg(L.goal.ang||0),1));
+  val('gHeads',(L.goal.heads||[0]).join(', ')); val('gTol',L.goal.tol);
+  updateSelPanel();
+}
+
+function row(label,input){ return `<div class="row"><label>${label}</label>${input}</div>`; }
+
+function updateSelPanel(){
+  const panel=document.getElementById('selPanel');
+  if(!sel){ panel.innerHTML='<p class="sel-hint">Click an object.<br>Del removes it.</p>'; return; }
+  if(sel.kind==='start'||sel.kind==='goal'){
+    panel.innerHTML='<p class="sel-hint">Edit in the fields above.</p>'; return;
+  }
+  let html='';
+  if(sel.kind==='wall'){
+    const w=L.walls[sel.idx];
+    const kOpts=['wall','curb'].map(k=>`<option${w.kind===k?' selected':''}>${k}</option>`).join('');
+    html+=row('Kind',`<select id="seKind">${kOpts}</select>`);
+    if(w.ang!=null){
+      html+=row('cx',`<input type=number step=.1 id=seCx value="${fmt(w.cx)}">`);
+      html+=row('cy',`<input type=number step=.1 id=seCy value="${fmt(w.cy)}">`);
+      html+=row('w', `<input type=number step=.1 id=seW  value="${fmt(w.w)}">`);
+      html+=row('h', `<input type=number step=.1 id=seH  value="${fmt(w.h)}">`);
+      html+=row('ang°',`<input type=number step=5 id=seAng value="${fmt(deg(w.ang||0),1)}">`);
+    } else {
+      html+=row('x',`<input type=number step=.1 id=seX value="${fmt(w.x)}">`);
+      html+=row('y',`<input type=number step=.1 id=seY value="${fmt(w.y)}">`);
+      html+=row('w',`<input type=number step=.1 id=seW value="${fmt(w.w)}">`);
+      html+=row('h',`<input type=number step=.1 id=seH value="${fmt(w.h)}">`);
+    }
+  } else if(sel.kind==='car'){
+    const c=L.cars[sel.idx];
+    const tOpts=[['','Sedan'],['miata','Miata'],['bus','Bus']].map(([v,l])=>`<option value="${v}"${(c.type||'')=== v?' selected':''}>${l}</option>`).join('');
+    html+=row('cx',`<input type=number step=.1 id=seCx value="${fmt(c.cx)}">`);
+    html+=row('cy',`<input type=number step=.1 id=seCy value="${fmt(c.cy)}">`);
+    html+=row('h°', `<input type=number step=5  id=seAng value="${fmt(deg(c.h),1)}">`);
+    html+=row('Type',`<select id=seType>${tOpts}</select>`);
+  } else if(sel.kind==='traffic'){
+    const t=L.traffic[sel.idx];
+    html+=row('x',    `<input type=number step=.1  id=seX      value="${fmt(t.x)}">`);
+    html+=row('y',    `<input type=number step=.1  id=seY      value="${fmt(t.y)}">`);
+    html+=row('h°',   `<input type=number step=5   id=seAng    value="${fmt(deg(t.h),1)}">`);
+    html+=row('speed',`<input type=number step=.5  id=seSpeed  value="${t.speed||4}">`);
+    html+=row('loop', `<input type=number step=1   id=seLoop   value="${t.loop||30}">`);
+    html+=row('offset',`<input type=number step=1  id=seOffset value="${t.offset||0}">`);
+    html+=row('color',`<input type=text id=seColor value="${t.color||''}" placeholder="#4e5a6e">`);
+  }
+  html+=`<button class="danger" style="width:100%;margin-top:8px" id="btnDel">Delete</button>`;
+  panel.innerHTML=html;
+  document.getElementById('btnDel').onclick=deleteSelected;
+  // bind live inputs
+  function liv(id,fn){ const el=document.getElementById(id); if(el) el.addEventListener('input',e=>fn(+e.target.value)); }
+  function lis(id,fn){ const el=document.getElementById(id); if(el) el.addEventListener('input',e=>fn(e.target.value)); }
+  if(sel.kind==='wall'){
+    const w=L.walls[sel.idx];
+    liv('seX',v=>{w.x=v;render();}); liv('seY',v=>{w.y=v;render();});
+    liv('seCx',v=>{w.cx=v;render();}); liv('seCy',v=>{w.cy=v;render();});
+    liv('seW',v=>{w.w=v;render();}); liv('seH',v=>{w.h=v;render();});
+    liv('seAng',v=>{w.ang=rad(v);render();});
+    const ke=document.getElementById('seKind'); if(ke)ke.onchange=e=>{w.kind=e.target.value;render();};
+  } else if(sel.kind==='car'){
+    const c=L.cars[sel.idx];
+    liv('seCx',v=>{c.cx=v;render();}); liv('seCy',v=>{c.cy=v;render();});
+    liv('seAng',v=>{c.h=rad(v);render();});
+    const te=document.getElementById('seType'); if(te)te.onchange=e=>{c.type=e.target.value||undefined;render();};
+  } else if(sel.kind==='traffic'){
+    const t=L.traffic[sel.idx];
+    liv('seX',v=>{t.x=v;}); liv('seY',v=>{t.y=v;});
+    liv('seAng',v=>{t.h=rad(v);render();}); liv('seSpeed',v=>t.speed=v);
+    liv('seLoop',v=>t.loop=v); liv('seOffset',v=>t.offset=v);
+    lis('seColor',v=>{t.color=v;render();});
+  }
+}
+
+// Level meta inputs
+function bind(id,fn){ document.getElementById(id).addEventListener('input',fn); }
+bind('sName',  e=>{ L.name=e.target.value; });
+bind('sTier',  e=>{ L.tier=e.target.value; });
+bind('sMode',  e=>{ L.mode=e.target.value; });
+bind('sVehicle',e=>{ L.vehicle=e.target.value; render(); });
+bind('sW',     e=>{ L.w=+e.target.value||L.w; render(); });
+bind('sH',     e=>{ L.h=+e.target.value||L.h; render(); });
+bind('sStar3', e=>{ L.starThresh[0]=+e.target.value; });
+bind('sStar2', e=>{ L.starThresh[1]=+e.target.value; });
+bind('sHint',  e=>{ L.hint=e.target.value; });
+bind('stX',    e=>{ L.start.x=+e.target.value; render(); });
+bind('stY',    e=>{ L.start.y=+e.target.value; render(); });
+bind('stH',    e=>{ L.start.h=rad(+e.target.value); render(); });
+bind('gCx',    e=>{ L.goal.cx=+e.target.value; render(); });
+bind('gCy',    e=>{ L.goal.cy=+e.target.value; render(); });
+bind('gW',     e=>{ L.goal.w=+e.target.value; render(); });
+bind('gH',     e=>{ L.goal.h=+e.target.value; render(); });
+bind('gAng',   e=>{ L.goal.ang=rad(+e.target.value)||0; render(); });
+bind('gHeads', e=>{ L.goal.heads=e.target.value.split(',').map(s=>+s.trim()).filter(n=>!isNaN(n)); render(); });
+bind('gTol',   e=>{ L.goal.tol=+e.target.value; render(); });
+
+// ── Load from game.js ─────────────────────────────────────────────────────────
+document.getElementById('btnLoad').onclick=async()=>{
+  try {
+    const text=await fetch('game.js').then(r=>{ if(!r.ok)throw new Error('fetch failed'); return r.text(); });
+    // Extract just the array literal (from const LEVELS = [ to the closing ];)
+    const m=text.match(/const LEVELS\s*=\s*(\[[\s\S]*?\n\];)/);
+    if(!m) throw new Error('LEVELS array not found in game.js');
+    // Evaluate with Math in scope
+    const levels=new Function('Math','return '+m[1])(Math);
+    const sel2=document.getElementById('loadSel');
+    sel2.innerHTML=`<option value="">— pick a level —</option>`+
+      levels.map((lv,i)=>`<option value="${i}">${i+1}. ${lv.name}</option>`).join('');
+    sel2.style.display='';
+    sel2.onchange=()=>{
+      if(sel2.value==='') return;
+      applyLevel(levels[+sel2.value]);
+    };
+  } catch(err){
+    alert('Could not load game.js: '+err.message);
+  }
+};
+
+function applyLevel(lv){
+  L={
+    name:lv.name||'',
+    tier:lv.tier||'Easy',
+    mode:lv.mode||'moves',
+    vehicle:lv.vehicle||'default',
+    w:lv.w||22, h:lv.h||13,
+    start:{...lv.start},
+    goal:{...lv.goal, ang:lv.goal.ang||0, heads:[...(lv.goal.heads||[0])], tol:lv.goal.tol||12},
+    walls:(lv.walls||[]).map(w=>({...w})),
+    cars:(lv.cars||[]).map(c=>({...c})),
+    traffic:(lv.traffic||[]).map(t=>({...t})),
+    starThresh:[...(lv.starThresh||[3,5])],
+    starThreshQuick:[...(lv.starThreshQuick||[17,26])],
+    hint:lv.hint||'',
+    solution:[...(lv.solution||[])],
+  };
+  sel=null; drag=null;
+  fitLevel();
+  updateSidebar();
+  render();
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+function fmtRad(r){
+  const tbl=[
+    [0,'0'],[Math.PI,'Math.PI'],[-Math.PI,'-Math.PI'],
+    [Math.PI/2,'Math.PI / 2'],[-Math.PI/2,'-Math.PI / 2'],
+    [Math.PI/4,'Math.PI / 4'],[-Math.PI/4,'-Math.PI / 4'],
+    [Math.PI*3/4,'Math.PI * 3 / 4'],[-Math.PI*3/4,'-Math.PI * 3 / 4'],
+    [Math.PI/3,'Math.PI / 3'],[-Math.PI/3,'-Math.PI / 3'],
+    [Math.PI*2/3,'Math.PI * 2 / 3'],[-Math.PI*2/3,'-Math.PI * 2 / 3'],
+    [Math.PI/6,'Math.PI / 6'],[-Math.PI/6,'-Math.PI / 6'],
+    [Math.PI*5/6,'Math.PI * 5 / 6'],[-Math.PI*5/6,'-Math.PI * 5 / 6'],
+    [Math.PI/12,'Math.PI / 12'],[-Math.PI/12,'-Math.PI / 12'],
+  ];
+  for(const [v,s] of tbl) if(Math.abs(r-v)<.0005) return s;
+  const d=Math.round(r*180/Math.PI);
+  if(Math.abs(r-rad(d))<.0005){
+    if(d===0)return '0';
+    if(d%180===0)return d>0?'Math.PI':'-Math.PI';
+    return `${d} * Math.PI / 180`;
+  }
+  return r.toFixed(4);
+}
+function fn(n,d=2){ const s=n.toFixed(d); return parseFloat(s)+''; }
+
+function buildExport(){
+  const l=L, g=l.goal;
+  const lines=[];
+  lines.push(`  {`);
+  lines.push(`    name: ${JSON.stringify(l.name)}, tier: ${JSON.stringify(l.tier)}, mode: ${JSON.stringify(l.mode)}, w: ${l.w}, h: ${l.h},`);
+  if(l.vehicle&&l.vehicle!=='default') lines.push(`    vehicle: ${JSON.stringify(l.vehicle)},`);
+  lines.push(`    start: { x: ${fn(l.start.x)}, y: ${fn(l.start.y)}, h: ${fmtRad(l.start.h)} },`);
+  // goal
+  let gs=`{ cx: ${fn(g.cx)}, cy: ${fn(g.cy)}, w: ${fn(g.w)}, h: ${fn(g.h)}`;
+  if(g.ang) gs+=`, ang: ${fmtRad(g.ang)}`;
+  gs+=`, heads: [${(g.heads||[0]).join(', ')}], tol: ${g.tol} }`;
+  lines.push(`    goal: ${gs},`);
+  // walls
+  if(l.walls.length){
+    lines.push(`    walls: [`);
+    for(const w of l.walls){
+      if(w.ang!=null)
+        lines.push(`      { cx: ${fn(w.cx)}, cy: ${fn(w.cy)}, w: ${fn(w.w)}, h: ${fn(w.h)}, ang: ${fmtRad(w.ang)}, kind: ${JSON.stringify(w.kind||'wall')} },`);
+      else {
+        let ws=`{ x: ${fn(w.x)}, y: ${fn(w.y)}, w: ${fn(w.w)}, h: ${fn(w.h)}`;
+        if(w.kind&&w.kind!=='wall') ws+=`, kind: ${JSON.stringify(w.kind)}`;
+        lines.push(`      ${ws} },`);
+      }
+    }
+    lines.push(`    ],`);
+  } else lines.push(`    walls: [],`);
+  // cars
+  if(l.cars.length){
+    lines.push(`    cars: [`);
+    for(const c of l.cars){
+      let cs=`{ cx: ${fn(c.cx)}, cy: ${fn(c.cy)}, h: ${fmtRad(c.h)}`;
+      if(c.type) cs+=`, type: ${JSON.stringify(c.type)}`;
+      lines.push(`      ${cs} },`);
+    }
+    lines.push(`    ],`);
+  } else lines.push(`    cars: [],`);
+  // traffic
+  if(l.traffic&&l.traffic.length){
+    lines.push(`    traffic: [`);
+    for(const t of l.traffic){
+      let ts=`{ x: ${fn(t.x)}, y: ${fn(t.y)}, h: ${fmtRad(t.h)}, speed: ${t.speed||4}, loop: ${t.loop||30}, offset: ${t.offset||0}`;
+      if(t.color) ts+=`, color: ${JSON.stringify(t.color)}`;
+      lines.push(`      ${ts} },`);
+    }
+    lines.push(`    ],`);
+  }
+  lines.push(`    starThresh: [${l.starThresh.join(', ')}], starThreshQuick: [${(l.starThreshQuick||[17,26]).join(', ')}],`);
+  lines.push(`    hint: ${JSON.stringify(l.hint||'')},`);
+  if(l.solution&&l.solution.length){
+    const sol=l.solution.map(m=>`{ steer: ${m.steer}, dist: ${m.dist} }`).join(', ');
+    lines.push(`    solution: [${sol}],`);
+  } else {
+    lines.push(`    solution: [],`);
+  }
+  lines.push(`  },`);
+  return lines.join('\n');
+}
+
+document.getElementById('btnExport').onclick=()=>{
+  document.getElementById('exportText').value=buildExport();
+  document.getElementById('overlay').classList.add('show');
+};
+document.getElementById('btnCloseExport').onclick=()=>{
+  document.getElementById('overlay').classList.remove('show');
+};
+document.getElementById('btnCopy').onclick=()=>{
+  navigator.clipboard.writeText(document.getElementById('exportText').value)
+    .then(()=>{ document.getElementById('btnCopy').textContent='Copied!'; setTimeout(()=>document.getElementById('btnCopy').textContent='Copy to clipboard',1500); })
+    .catch(()=>{ document.getElementById('exportText').select(); document.execCommand('copy'); });
+};
+document.getElementById('overlay').addEventListener('click',e=>{
+  if(e.target===document.getElementById('overlay')) document.getElementById('overlay').classList.remove('show');
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+updateSidebar();
+resize();
+</script>
+</body>
+</html>
