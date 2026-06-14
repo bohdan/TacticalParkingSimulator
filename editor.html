@@ -28,11 +28,16 @@ button.active:hover,button.primary:hover{background:#1f7d47}
 button.danger{background:#5c1e1e;border-color:#8b3030}
 button.danger:hover{background:#6e2424}
 .sel-hint{font-size:11px;color:#506080;font-style:italic;margin-top:6px}
-#overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99;justify-content:center;align-items:center}
-#overlay.show{display:flex}
+#overlay,#importOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99;justify-content:center;align-items:center}
+#overlay.show,#importOverlay.show{display:flex}
 #exportBox{background:#13161e;border:1px solid #2a3040;border-radius:10px;padding:16px;width:660px;max-height:82vh;display:flex;flex-direction:column;gap:10px}
 #exportBox h3{font-size:14px;color:#e7ecf3}
-#exportText{flex:1;background:#080a0e;color:#7dc87d;font:12px/1.65 Menlo,Consolas,monospace;border:1px solid #2a3040;border-radius:6px;padding:10px;resize:none;min-height:320px;overflow:auto;white-space:pre;tab-size:2}
+#exportText{flex:1;background:#080a0e;color:#7dc87d;font:12px/1.65 Menlo,Consolas,monospace;border:1px solid #2a3040;border-radius:6px;padding:10px;resize:none;min-height:280px;overflow:auto;white-space:pre;tab-size:2}
+.str-row{display:flex;gap:6px;align-items:center}
+.str-row input{flex:1;background:#080a0e;color:#80d0ff;font:11px/1.4 Menlo,Consolas,monospace;border:1px solid #2a3040;border-radius:6px;padding:6px 8px;min-width:0}
+#importBox{background:#13161e;border:1px solid #2a3040;border-radius:10px;padding:16px;width:560px;display:flex;flex-direction:column;gap:10px}
+#importBox h3{font-size:14px;color:#e7ecf3}
+#importText{background:#080a0e;color:#80d0ff;font:11px/1.5 Menlo,Consolas,monospace;border:1px solid #2a3040;border-radius:6px;padding:10px;resize:vertical;height:90px;width:100%}
 #loadSel{max-width:180px}
 </style>
 </head>
@@ -49,6 +54,7 @@ button.danger:hover{background:#6e2424}
   <button id="toolCar"    title="Place obstacle car  [A]">+ Car</button>
   <button id="toolTraffic" title="Place traffic car  [T]">+ Traffic</button>
   <div class="sep"></div>
+  <button id="btnImport">&#8595; Import string</button>
   <button class="primary" id="btnExport">Export ↗</button>
 </div>
 
@@ -99,9 +105,26 @@ button.danger:hover{background:#6e2424}
   <div id="exportBox">
     <h3>Paste into the LEVELS array in game.js</h3>
     <textarea id="exportText" readonly spellcheck="false"></textarea>
-    <div style="display:flex;gap:8px">
-      <button id="btnCopy" class="primary">Copy to clipboard</button>
+    <div style="font-size:11px;color:#5a6a80;margin-top:4px;margin-bottom:2px">Encoded string — paste into "Import string" or share as a URL fragment:</div>
+    <div class="str-row">
+      <input id="exportString" readonly spellcheck="false">
+      <button id="btnCopyStr">Copy string</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button id="btnCopy" class="primary">Copy JS</button>
       <button id="btnCloseExport">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="importOverlay">
+  <div id="importBox">
+    <h3>Import level from string</h3>
+    <div style="font-size:11px;color:#5a6a80;margin-bottom:4px">Paste an encoded level string (from Export ↗) or a URL containing <code>#lvl=…</code></div>
+    <textarea id="importText" spellcheck="false" placeholder="Paste encoded string here…"></textarea>
+    <div style="display:flex;gap:8px">
+      <button id="btnImportLoad" class="primary">Load</button>
+      <button id="btnCloseImport">Cancel</button>
     </div>
   </div>
 </div>
@@ -906,23 +929,81 @@ function buildExport(){
   return lines.join('\n');
 }
 
+// ── Level string encode / decode ──────────────────────────────────────────────
+function levelToString(lv){
+  const json=JSON.stringify(lv);
+  const bytes=new TextEncoder().encode(json);
+  const bin=Array.from(bytes,b=>String.fromCharCode(b)).join('');
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function levelFromString(str){
+  str=str.trim();
+  // Accept full URLs containing #lvl=
+  const hashMatch=str.match(/[#?&]lvl=([A-Za-z0-9\-_]+)/);
+  if(hashMatch) str=hashMatch[1];
+  str=str.replace(/-/g,'+').replace(/_/g,'/');
+  while(str.length%4) str+='=';
+  const bin=atob(str);
+  const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+function copyText(text, btn, label){
+  navigator.clipboard.writeText(text)
+    .then(()=>{ btn.textContent='Copied!'; setTimeout(()=>btn.textContent=label,1500); })
+    .catch(()=>{ /* fallback silent */ });
+}
+
 document.getElementById('btnExport').onclick=()=>{
-  document.getElementById('exportText').value=buildExport();
+  const js=buildExport();
+  const str=levelToString(L);
+  document.getElementById('exportText').value=js;
+  document.getElementById('exportString').value=str;
+  // Update URL hash silently so this view is shareable
+  history.replaceState(null,'','#lvl='+str);
   document.getElementById('overlay').classList.add('show');
 };
 document.getElementById('btnCloseExport').onclick=()=>{
   document.getElementById('overlay').classList.remove('show');
 };
-document.getElementById('btnCopy').onclick=()=>{
-  navigator.clipboard.writeText(document.getElementById('exportText').value)
-    .then(()=>{ document.getElementById('btnCopy').textContent='Copied!'; setTimeout(()=>document.getElementById('btnCopy').textContent='Copy to clipboard',1500); })
-    .catch(()=>{ document.getElementById('exportText').select(); document.execCommand('copy'); });
+document.getElementById('btnCopy').onclick=function(){
+  copyText(document.getElementById('exportText').value, this, 'Copy JS');
+};
+document.getElementById('btnCopyStr').onclick=function(){
+  copyText(document.getElementById('exportString').value, this, 'Copy string');
 };
 document.getElementById('overlay').addEventListener('click',e=>{
   if(e.target===document.getElementById('overlay')) document.getElementById('overlay').classList.remove('show');
 });
 
+// ── Import string ─────────────────────────────────────────────────────────────
+document.getElementById('btnImport').onclick=()=>{
+  document.getElementById('importText').value='';
+  document.getElementById('importOverlay').classList.add('show');
+  document.getElementById('importText').focus();
+};
+document.getElementById('btnCloseImport').onclick=()=>{
+  document.getElementById('importOverlay').classList.remove('show');
+};
+document.getElementById('importOverlay').addEventListener('click',e=>{
+  if(e.target===document.getElementById('importOverlay')) document.getElementById('importOverlay').classList.remove('show');
+});
+document.getElementById('btnImportLoad').onclick=()=>{
+  try{
+    const lv=levelFromString(document.getElementById('importText').value);
+    applyLevel(lv);
+    document.getElementById('importOverlay').classList.remove('show');
+  } catch(err){
+    alert('Could not decode level string: '+err.message);
+  }
+};
+
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Auto-load from URL hash (#lvl=...)
+(()=>{
+  const m=location.hash.match(/[#&]lvl=([A-Za-z0-9\-_]+)/);
+  if(m){ try{ applyLevel(levelFromString(m[1])); }catch(e){/* ignore bad hash */} }
+})();
 updateSidebar();
 resize();
 </script>
