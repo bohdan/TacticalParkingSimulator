@@ -1,95 +1,13 @@
 'use strict';
 
-/* ===================== Car & math ===================== */
+// physics.js (loaded before this file) provides all shared math and physics:
+// CAR, SEDAN, VEHICLES, SAMPLE_STEP, rad, deg, clamp, normAng, advance,
+// carPoly, polysCollide, ptSegDist, rectPoly, obbPoly, goalPoly, pointInPoly,
+// centroid, contactPoint, simulateMove, buildLevel, inGoal, setVehicle.
 
-// All world units are meters. Pose = {x, y, h}; (x,y) is the REAR AXLE
-// center, h is heading in radians (0 = +x, y axis points down on screen).
-const CAR = { len: 4.4, wid: 1.8, wb: 2.7, rOver: 0.85, maxSteer: 35 };
-CAR.fOver = CAR.len - CAR.wb - CAR.rOver;
-
-// Fixed sedan dimensions used for static obstacle cars regardless of player vehicle
-const SEDAN = { len: 4.4, wid: 1.8, wb: 2.7, rOver: 0.85, fOver: 0.85, maxSteer: 35 };
-
-const VEHICLES = {
-  default: { len: 4.4,  wid: 1.8,  wb: 2.7,  rOver: 0.85, maxSteer: 35 },
-  miata:   { len: 3.97, wid: 1.72, wb: 2.265, rOver: 0.73, maxSteer: 40 },
-  bus:     { len: 12.0, wid: 2.55, wb: 6.5,   rOver: 2.5,  maxSteer: 45 },
-};
-
-function setVehicle(name) {
-  const v = VEHICLES[name] || VEHICLES.default;
-  CAR.len = v.len; CAR.wid = v.wid; CAR.wb = v.wb;
-  CAR.rOver = v.rOver; CAR.maxSteer = v.maxSteer;
-  CAR.fOver = CAR.len - CAR.wb - CAR.rOver;
-}
-
-const SAMPLE_STEP = 0.06;    // m, collision sampling along path
-
-const rad = d => d * Math.PI / 180;
-const deg = r => r * 180 / Math.PI;
-const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-
-function normAng(a) {
-  a %= 2 * Math.PI;
-  if (a > Math.PI) a -= 2 * Math.PI;
-  if (a < -Math.PI) a += 2 * Math.PI;
-  return a;
-}
-
-// Kinematic bicycle model: constant steering angle traces a circular arc
-// of the rear axle around the instantaneous center of rotation.
-// steer in radians, s = signed arc length (negative = reverse).
-function advance(p, steer, s) {
-  if (Math.abs(steer) < 1e-4) {
-    return { x: p.x + Math.cos(p.h) * s, y: p.y + Math.sin(p.h) * s, h: p.h };
-  }
-  const R = CAR.wb / Math.tan(steer);
-  const cx = p.x - Math.sin(p.h) * R;
-  const cy = p.y + Math.cos(p.h) * R;
-  const h2 = p.h + s / R;
-  return { x: cx + Math.sin(h2) * R, y: cy - Math.cos(h2) * R, h: h2 };
-}
-
-function carPoly(p, inf = 0) {
-  const c = Math.cos(p.h), s = Math.sin(p.h);
-  const x0 = -CAR.rOver - inf, x1 = CAR.wb + CAR.fOver + inf;
-  const y0 = -CAR.wid / 2 - inf, y1 = CAR.wid / 2 + inf;
-  const pt = (x, y) => ({ x: p.x + c * x - s * y, y: p.y + s * x + c * y });
-  return [pt(x0, y0), pt(x1, y0), pt(x1, y1), pt(x0, y1)];
-}
-
-/* ===================== Collision (SAT, convex) ===================== */
-
-function polysCollide(A, B) {
-  for (const [P, Q] of [[A, B], [B, A]]) {
-    for (let i = 0; i < P.length; i++) {
-      const a = P[i], b = P[(i + 1) % P.length];
-      const nx = b.y - a.y, ny = a.x - b.x;
-      let minP = Infinity, maxP = -Infinity, minQ = Infinity, maxQ = -Infinity;
-      for (const v of P) { const d = v.x * nx + v.y * ny; if (d < minP) minP = d; if (d > maxP) maxP = d; }
-      for (const v of Q) { const d = v.x * nx + v.y * ny; if (d < minQ) minQ = d; if (d > maxQ) maxQ = d; }
-      if (maxP < minQ || maxQ < minP) return false;
-    }
-  }
-  return true;
-}
-
-function ptSegDist(px, py, ax, ay, bx, by) {
-  const dx = bx-ax, dy = by-ay, l2 = dx*dx+dy*dy;
-  if (!l2) return Math.hypot(px-ax, py-ay);
-  const t = Math.max(0, Math.min(1, ((px-ax)*dx+(py-ay)*dy)/l2));
-  return Math.hypot(px-ax-t*dx, py-ay-t*dy);
-}
-
-function goalPoly(g) {
-  return g.ang
-    ? obbPoly(g.cx, g.cy, g.w, g.h, g.ang)
-    : [{ x: g.cx-g.w/2, y: g.cy-g.h/2 }, { x: g.cx+g.w/2, y: g.cy-g.h/2 },
-       { x: g.cx+g.w/2, y: g.cy+g.h/2 }, { x: g.cx-g.w/2, y: g.cy+g.h/2 }];
-}
+/* ===================== Game-specific helpers ===================== */
 
 // Min distance from any car corner to the goal zone boundary.
-// Maximised when the car is centred in the spot.
 function parkingClearance(pose) {
   const cp = carPoly(pose);
   const zone = goalPoly(level.goal);
@@ -102,73 +20,12 @@ function parkingClearance(pose) {
   return isFinite(minGap) ? minGap : 0;
 }
 
-function pointInPoly(pt, poly) {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const a = poly[i], b = poly[j];
-    if ((a.y > pt.y) !== (b.y > pt.y) &&
-        pt.x < (b.x - a.x) * (pt.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
-  }
-  return inside;
-}
-
-function centroid(poly) {
-  let x = 0, y = 0;
-  for (const v of poly) { x += v.x; y += v.y; }
-  return { x: x / poly.length, y: y / poly.length };
-}
-
-// Approximate the point of contact for the hit marker.
-function contactPoint(carP, obsP) {
-  for (const v of carP) if (pointInPoly(v, obsP)) return v;
-  for (const v of obsP) if (pointInPoly(v, carP)) return v;
-  const c = centroid(obsP);
-  let best = carP[0], bd = Infinity;
-  for (const v of carP) {
-    const d = (v.x - c.x) ** 2 + (v.y - c.y) ** 2;
-    if (d < bd) { bd = d; best = v; }
-  }
-  return best;
-}
-
-// Sample the arc of one move; stop at the first colliding pose.
-function simulateMove(start, steer, dist, obstacles) {
-  const n = Math.max(2, Math.ceil(Math.abs(dist) / SAMPLE_STEP));
-  const pts = [start];
-  let hit = null;
-  for (let i = 1; i <= n; i++) {
-    const p = advance(start, steer, dist * i / n);
-    const poly = carPoly(p);
-    for (let oi = 0; oi < obstacles.length; oi++) {
-      if (polysCollide(poly, obstacles[oi].poly)) {
-        hit = { pose: p, point: contactPoint(poly, obstacles[oi].poly) };
-        break;
-      }
-    }
-    if (hit) break;
-    pts.push(p);
-  }
-  return { pts, end: pts[pts.length - 1], hit };
-}
-
 /* ===================== Levels ===================== */
-
-function rectPoly(x, y, w, h) {
-  return [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }];
-}
-
-function obbPoly(cx, cy, w, h, ang) {
-  const c = Math.cos(ang), s = Math.sin(ang);
-  const pt = (x, y) => ({ x: cx + c * x - s * y, y: cy + s * x + c * y });
-  return [pt(-w / 2, -h / 2), pt(w / 2, -h / 2), pt(w / 2, h / 2), pt(-w / 2, h / 2)];
-}
 
 // Editor test level: passed via URL hash (#try=<base64url>) by editor.html.
 // Scoped to this tab/URL only, so it never reorders the real level list.
 let testLevelLoaded = false;
 (()=>{
-  // Clean up the old localStorage mechanism, which permanently reordered
-  // levels (the ★ test level got prepended on every load until cleared).
   try { localStorage.removeItem('parkplanner_testlevel'); } catch (e) {}
   const m = location.hash.match(/[#&]try=([A-Za-z0-9\-_]+)/);
   if (!m) return;
@@ -180,53 +37,57 @@ let testLevelLoaded = false;
     lv._isTest = true;
     LEVELS.unshift(lv);
     testLevelLoaded = true;
-  } catch (e) { /* ignore malformed data */ }
+  } catch (e) {}
 })();
 
-function buildLevel(def) {
-  const obstacles = [];
-  const B = 0.45; // border wall thickness
-  obstacles.push({ kind: 'border', poly: rectPoly(-B, -B, def.w + 2 * B, B) });
-  obstacles.push({ kind: 'border', poly: rectPoly(-B, def.h, def.w + 2 * B, B) });
-  obstacles.push({ kind: 'border', poly: rectPoly(-B, 0, B, def.h) });
-  obstacles.push({ kind: 'border', poly: rectPoly(def.w, 0, B, def.h) });
-  for (const r of def.walls) {
-    const poly = r.ang != null
-      ? obbPoly(r.cx, r.cy, r.w, r.h, r.ang)
-      : rectPoly(r.x, r.y, r.w, r.h);
-    obstacles.push({ kind: r.kind || 'wall', rect: r, poly });
-  }
-  for (const c of def.cars) {
-    const sp = (c.type && VEHICLES[c.type])
-      ? { ...VEHICLES[c.type], fOver: VEHICLES[c.type].len - VEHICLES[c.type].wb - VEHICLES[c.type].rOver }
-      : SEDAN;
-    obstacles.push({ kind: 'car', pose: c, carSpec: sp, poly: obbPoly(c.cx, c.cy, sp.len, sp.wid, c.h) });
-  }
-  return Object.assign({ obstacles }, def);
+/* ===================== Solution encode / decode ===================== */
+
+// Encode a moves array [{steer (rad), dist}] to a URL-safe base64 string.
+function movesToString(mvs) {
+  const arr = mvs.map(m => [+(deg(m.steer).toFixed(1)), +m.dist.toFixed(2)]);
+  const bytes = new TextEncoder().encode(JSON.stringify(arr));
+  let b = '';
+  for (const byte of bytes) b += String.fromCharCode(byte);
+  return btoa(b).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
-function inGoal(pose, goal) {
-  const okHead = goal.heads.some(
-    hd => Math.abs(normAng(pose.h - rad(hd))) <= rad(goal.tol));
-  if (!okHead) return false;
-  const poly = goalPoly(goal);
-  return carPoly(pose).every(v => pointInPoly(v, poly));
+// Decode back to [{steer (rad), dist}], returns null on bad input.
+function movesFromString(str) {
+  try {
+    let s = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    const arr = JSON.parse(new TextDecoder().decode(
+      Uint8Array.from(atob(s), c => c.charCodeAt(0))));
+    if (!Array.isArray(arr)) return null;
+    return arr.map(([steer, dist]) => ({ steer: rad(steer), dist }));
+  } catch { return null; }
 }
+
+// Shared solution loaded via #sol= URL hash — applied after boot setLevel().
+let _solHash = null;
+(()=>{
+  const m = location.hash.match(/[#&]sol=([A-Za-z0-9\-_]+)/);
+  if (m) _solHash = movesFromString(m[1]);
+})();
 
 // ── Leaderboard (Supabase) ─────────────────────────────────────────────────
-// 1. Go to https://supabase.com and sign in with GitHub (no new account needed)
-// 2. Create a project, open the SQL editor, and run:
-//      create table leaderboard (
-//        id bigserial primary key, player text not null,
-//        level int not null, level_name text not null,
-//        stars int not null, moves int, dist real, time_s real,
-//        mode text not null, submitted_at timestamptz default now()
-//      );
-//      alter table leaderboard enable row level security;
-//      create policy "public read"   on leaderboard for select using (true);
-//      create policy "public insert" on leaderboard for insert
-//        with check (char_length(player) between 1 and 20);
-// 3. Fill in Project Settings → API → Project URL and anon/public key below.
+// Schema setup — run once in the Supabase SQL editor:
+//
+//   create table leaderboard (
+//     id bigserial primary key, player text not null,
+//     level int not null, level_name text not null,
+//     stars int not null, moves int, dist real, time_s real,
+//     mode text not null, solution text,
+//     submitted_at timestamptz default now()
+//   );
+//   alter table leaderboard enable row level security;
+//   create policy "public read"   on leaderboard for select using (true);
+//   create policy "public insert" on leaderboard for insert
+//     with check (char_length(player) between 1 and 20);
+//
+// If upgrading an existing table, add the solution column:
+//   alter table leaderboard add column if not exists solution text;
+//
 const LB_URL = 'https://qvjorkpzlwvswsptkwyn.supabase.co';
 const LB_KEY = 'sb_publishable_geHaaCkSfPilYWV3fYQHQA_KZdYNrpC';
 
@@ -914,7 +775,7 @@ function finishRun() {
     $('ovTip').textContent = stars === 3 ? 'Perfect run!' :
       `3★ ≤ ${(level.starThreshQuick || [999])[0]} s`;
     $('ovNext').style.display = nextPlayable(levelIdx, +1) >= 0 ? '' : 'none';
-    pendingLb = solutionUsed ? null : { levelIdx, stars, st: { ...st } };
+    pendingLb = solutionUsed ? null : { levelIdx, stars, st: { ...st }, moves: [...moves] };
     $('ovSubmitRow').style.display = (lbEnabled() && !solutionUsed) ? '' : 'none';
     $('ovSubmit').disabled = false;
     $('ovSubmit').textContent = 'Submit to leaderboard';
@@ -1112,6 +973,13 @@ $('nameOk').addEventListener('click', async () => {
 $('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('nameOk').click(); });
 
 $('ovImprove').addEventListener('click', () => $('overlay').classList.add('hidden'));
+$('ovShare').addEventListener('click', () => {
+  const str = movesToString(moves);
+  const url = location.origin + location.pathname + '#sol=' + str;
+  navigator.clipboard?.writeText(url)
+    .then(() => toast('Solution link copied!'))
+    .catch(() => prompt('Copy this solution link:', url));
+});
 $('ovRetry').addEventListener('click', () => {
   $('overlay').classList.add('hidden');
   moves = [];
@@ -1140,26 +1008,40 @@ function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-async function lbPost(levelIdx, player, stars, st) {
-  const r = await fetch(`${LB_URL}/rest/v1/leaderboard`, {
+async function lbPost(levelIdx, player, stars, st, solutionStr) {
+  const body = {
+    player, level: levelIdx, level_name: level.name,
+    stars, moves: st.moves,
+    dist: +st.dist.toFixed(2), time_s: +st.time.toFixed(1),
+    mode: 'quick',
+    solution: solutionStr || null,
+  };
+  let r = await fetch(`${LB_URL}/rest/v1/leaderboard`, {
     method: 'POST',
     headers: {
       apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}`,
       'Content-Type': 'application/json', Prefer: 'return=minimal',
     },
-    body: JSON.stringify({
-      player, level: levelIdx, level_name: level.name,
-      stars, moves: st.moves,
-      dist: +st.dist.toFixed(2), time_s: +st.time.toFixed(1),
-      mode: 'quick',
-    }),
+    body: JSON.stringify(body),
   });
+  if (!r.ok && r.status === 400) {
+    // solution column may not exist yet — retry without it
+    delete body.solution;
+    r = await fetch(`${LB_URL}/rest/v1/leaderboard`, {
+      method: 'POST',
+      headers: {
+        apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}`,
+        'Content-Type': 'application/json', Prefer: 'return=minimal',
+      },
+      body: JSON.stringify(body),
+    });
+  }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
 }
 
 async function lbGet(levelIdx) {
   const p = new URLSearchParams({
-    select: 'player,stars,moves,dist,time_s',
+    select: 'player,stars,moves,dist,time_s,solution',
     level_name: `eq.${LEVELS[levelIdx].name}`, mode: 'eq.quick',
     order: 'stars.desc,time_s.asc', limit: '50',
   });
@@ -1172,34 +1054,53 @@ async function lbGet(levelIdx) {
 
 async function openLeaderboard(idx) {
   $('lbTitle').textContent = `${LEVELS[idx].name} · Best Time`;
-  $('lbTable').innerHTML = '<tr><td colspan="4" class="lb-empty">Loading…</td></tr>';
+  $('lbTable').innerHTML = '<tr><td colspan="5" class="lb-empty">Loading…</td></tr>';
   $('lbOverlay').classList.remove('hidden');
   try {
     const rows = await lbGet(idx);
-    // keep only each player's first (best) entry since rows are sorted optimally
     const seen = new Set();
-    const top = rows.filter(r => { if (seen.has(r.player)) return false; seen.add(r.player); return true; }).slice(0, 10);
+    const top = rows.filter(r => {
+      if (seen.has(r.player)) return false; seen.add(r.player); return true;
+    }).slice(0, 10);
     if (!top.length) {
-      $('lbTable').innerHTML = '<tr><td colspan="4" class="lb-empty">No entries yet — be first!</td></tr>';
+      $('lbTable').innerHTML = '<tr><td colspan="5" class="lb-empty">No entries yet — be first!</td></tr>';
       return;
     }
     $('lbTable').innerHTML = top.map((r, i) => {
       const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
       const metric = `${r.time_s.toFixed(1)}s`;
       const stars = '★'.repeat(r.stars) + `<span class="lb-dim">★</span>`.repeat(3 - r.stars);
-      return `<tr class="${cls}"><td class="lb-rank">${i + 1}</td><td class="lb-name">${escHtml(r.player)}</td><td class="lb-stars">${stars}</td><td class="lb-metric">${metric}</td></tr>`;
+      const playBtn = r.solution
+        ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button></td>`
+        : '<td></td>';
+      return `<tr class="${cls}"><td class="lb-rank">${i+1}</td><td class="lb-name">${escHtml(r.player)}</td><td class="lb-stars">${stars}</td><td class="lb-metric">${metric}</td>${playBtn}</tr>`;
     }).join('');
   } catch (e) {
-    $('lbTable').innerHTML = `<tr><td colspan="4" class="lb-empty" style="color:#ff7070">Error: ${escHtml(e.message)}</td></tr>`;
+    $('lbTable').innerHTML = `<tr><td colspan="5" class="lb-empty" style="color:#ff7070">Error: ${escHtml(e.message)}</td></tr>`;
   }
 }
 
+// Load a LB entry's solution when its play button is clicked
+$('lbTable').addEventListener('click', e => {
+  const btn = e.target.closest('.lb-sol-btn');
+  if (!btn) return;
+  const mvs = movesFromString(btn.dataset.sol);
+  if (!mvs) { toast('Could not decode solution'); return; }
+  $('lbOverlay').classList.add('hidden');
+  moves = mvs;
+  solutionUsed = true;
+  editIdx = null;
+  setEdit(0, 0);
+  recomputePlan();
+  toast('Solution loaded — leaderboard disabled until Reset');
+});
+
 async function doLbSubmit(player) {
-  const { levelIdx: li, stars, st } = pendingLb;
+  const { levelIdx: li, stars, st, moves: pendingMoves } = pendingLb;
   $('ovSubmit').disabled = true;
   $('ovSubmit').textContent = '⏳ Submitting…';
   try {
-    await lbPost(li, player, stars, st);
+    await lbPost(li, player, stars, st, movesToString(pendingMoves));
     pendingLb = null;
     $('overlay').classList.add('hidden');
     await openLeaderboard(li);
@@ -1634,4 +1535,13 @@ $('introGo').addEventListener('click', endCutscene);
 /* ===================== Boot ===================== */
 
 setLevel(levelIdx);
+
+// Apply a shared solution from #sol= URL hash (set moves before first draw)
+if (_solHash && level) {
+  moves = _solHash;
+  _solHash = null;
+  recomputePlan();
+  toast('Shared solution loaded');
+}
+
 requestAnimationFrame(draw);

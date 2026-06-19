@@ -409,6 +409,8 @@ button:active:not(:disabled) { filter: brightness(1.25); }
 .lb-bronze td { background: rgba(200, 140, 60, 0.05); }
 
 #overlay .row button.lb { background: #152a1c; border-color: #2a5035; color: #5dde8e; }
+.lb-sol-btn { background: none; border: none; color: #4fc3f7; font-size: 13px; cursor: pointer; padding: 2px 6px; }
+.lb-sol-btn:hover { color: #fff; }
 
 #helpOverlay {
   position: fixed;

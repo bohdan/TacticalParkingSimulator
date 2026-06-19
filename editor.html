@@ -53,7 +53,10 @@ button.danger:hover{background:#6e2424}
 #curSel{background:#1d2330;border:1px solid #2a3040;color:#c8d0dc;border-radius:6px;padding:4px 8px;font-size:12px;max-width:240px}
 #curSel:focus{outline:none;border-color:#3d8fbf}
 button.nav{padding:4px 8px;font-weight:700}
+#solveStatus{font-size:11px;color:#7dc87d;display:none;align-self:center}
 </style>
+<script src="physics.js"></script>
+<script src="solver.js"></script>
 </head>
 <body>
 <div id="toolbar">
@@ -77,6 +80,8 @@ button.nav{padding:4px 8px;font-weight:700}
   <button id="btnImport">&#8595; Import</button>
   <button id="btnExport">Export ↗</button>
   <button id="btnTry">&#9654; Try</button>
+  <button id="btnSolve" title="Run beam-search solver and save solution to this level">&#9881; Solve</button>
+  <span id="solveStatus"></span>
   <div class="sep"></div>
   <button id="btnGH">&#9881; GitHub</button>
   <button id="btnSave" class="primary" title="Save all levels to GitHub">&#8593; Save all</button>
@@ -1259,6 +1264,36 @@ document.getElementById('saveOverlay').addEventListener('click',e=>{if(e.target=
 // persistent game level list).
 document.getElementById('btnTry').onclick=()=>{
   window.open('index.html#try='+levelToString(L), '_blank');
+};
+
+// ── Solver ────────────────────────────────────────────────────────────────────
+document.getElementById('btnSolve').onclick = async () => {
+  if (!L || isCutscene(L)) { alert('Select a regular level first.'); return; }
+  const btn = document.getElementById('btnSolve');
+  const status = document.getElementById('solveStatus');
+  btn.disabled = true;
+  status.style.display = 'inline';
+  status.textContent = '⚙ Starting…';
+  try {
+    const solution = await solveParkingLevel(L, { beam: 1200, maxDepth: 7 }, ev => {
+      if (ev.type === 'solution')
+        status.textContent = `⚙ Found ${ev.moves.length}-move solution…`;
+      else
+        status.textContent = `⚙ Depth ${ev.depth} (beam ${ev.beamSize})…`;
+    });
+    if (solution) {
+      L.solution = solution;
+      dirty = true;
+      status.textContent = `✓ ${solution.length} move${solution.length !== 1 ? 's' : ''} — save to persist`;
+      updateSidebar();
+    } else {
+      status.textContent = '✗ No solution found';
+    }
+  } catch (err) {
+    status.textContent = '✗ Error: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
 };
 
 // ── Level string encode / decode ──────────────────────────────────────────────
