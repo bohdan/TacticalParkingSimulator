@@ -76,7 +76,7 @@ const LEVELS = [
       { cx: 20.8, cy: 2.6, h: Math.PI },
     ],
     starThresh: [3, 5], starThreshQuick: [17, 26],
-    hint: "So mcuh space, you can do it!",
+    hint: "So much space, you can do it!",
     solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
   },
   {
