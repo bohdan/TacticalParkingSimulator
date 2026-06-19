@@ -1176,9 +1176,10 @@ document.getElementById('btnSaveClose').onclick=()=>document.getElementById('sav
 document.getElementById('saveOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('saveOverlay'))document.getElementById('saveOverlay').classList.remove('show');});
 
 // ── Try level ─────────────────────────────────────────────────────────────────
+// Pass the level via URL hash so it only affects the opened tab (never the
+// persistent game level list).
 document.getElementById('btnTry').onclick=()=>{
-  localStorage.setItem('parkplanner_testlevel', levelToString(L));
-  window.open('index.html', '_blank');
+  window.open('index.html#try='+levelToString(L), '_blank');
 };
 
 // ── Level string encode / decode ──────────────────────────────────────────────

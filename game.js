@@ -163,17 +163,23 @@ function obbPoly(cx, cy, w, h, ang) {
   return [pt(-w / 2, -h / 2), pt(w / 2, -h / 2), pt(w / 2, h / 2), pt(-w / 2, h / 2)];
 }
 
-// Editor test level: injected via localStorage by editor.html
+// Editor test level: passed via URL hash (#try=<base64url>) by editor.html.
+// Scoped to this tab/URL only, so it never reorders the real level list.
+let testLevelLoaded = false;
 (()=>{
-  const raw = localStorage.getItem('parkplanner_testlevel');
-  if (!raw) return;
+  // Clean up the old localStorage mechanism, which permanently reordered
+  // levels (the ★ test level got prepended on every load until cleared).
+  try { localStorage.removeItem('parkplanner_testlevel'); } catch (e) {}
+  const m = location.hash.match(/[#&]try=([A-Za-z0-9\-_]+)/);
+  if (!m) return;
   try {
-    let s = raw.replace(/-/g, '+').replace(/_/g, '/');
+    let s = m[1].replace(/-/g, '+').replace(/_/g, '/');
     while (s.length % 4) s += '=';
     const lv = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(s), c => c.charCodeAt(0))));
     lv.name = '★ ' + lv.name;
     lv._isTest = true;
     LEVELS.unshift(lv);
+    testLevelLoaded = true;
   } catch (e) { /* ignore malformed data */ }
 })();
 
@@ -255,7 +261,9 @@ function planTime(mvs) {
 const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 
-let levelIdx = clamp(parseInt(localStorage.getItem('parking.level') || '0', 10) || 0, 0, LEVELS.length - 1);
+let levelIdx = testLevelLoaded
+  ? 0  // start on the ★ test level when one was passed in
+  : clamp(parseInt(localStorage.getItem('parking.level') || '0', 10) || 0, 0, LEVELS.length - 1);
 let level = buildLevel(LEVELS[levelIdx]);
 
 let moves = [];        // [{steer (rad), dist (m)}]
@@ -839,7 +847,9 @@ function finishRun() {
 function setLevel(i) {
   const prevIdx = levelIdx;
   levelIdx = (i + LEVELS.length) % LEVELS.length;
-  localStorage.setItem('parking.level', String(levelIdx));
+  // Don't persist progress while previewing a test level — the shifted
+  // indices would corrupt the real game's saved position.
+  if (!testLevelLoaded) localStorage.setItem('parking.level', String(levelIdx));
   setVehicle(LEVELS[levelIdx].vehicle || 'default');
   steerEl.min = -CAR.maxSteer;
   steerEl.max = CAR.maxSteer;
