@@ -48,13 +48,13 @@ const LEVELS = [
   {
     name: "Open Bay", tier: "Easy", mode: "moves", w: 20, h: 13,
     start: { x: 16.5, y: 8.6, h: Math.PI },
-    goal: { cx: 9.4, cy: 2.85, w: 4.5, h: 4.8, heads: [90, -90], tol: 10 },
+    goal: { cx: 8.2, cy: 2.7, w: 3.9, h: 5, heads: [90, -90], tol: 10 },
     walls: [],
     cars: [
       { cx: 2.4, cy: 2.85, h: Math.PI / 2 },
       { cx: 4.7, cy: 2.85, h: Math.PI / 2 },
-      { cx: 14.1, cy: 2.85, h: Math.PI / 2 },
-      { cx: 16.4, cy: 2.85, h: Math.PI / 2 },
+      { cx: 11.5, cy: 2.8, h: Math.PI / 2 },
+      { cx: 13.7, cy: 2.9, h: Math.PI / 2 },
     ],
     starThresh: [3, 5], starThreshQuick: [18, 27],
     hint: "Plenty of room — back into the wide bay.",
@@ -66,7 +66,7 @@ const LEVELS = [
     goal: { cx: 16.2, cy: 9.3, w: 5.8, h: 2, ang: 0, heads: [0], tol: 12 },
     walls: [
       { x: 0, y: 10.5, w: 24, h: 2.5, kind: "curb" },
-      { x: 0, y: 0, w: 24, h: 1.6, kind: "curb" },
+      { x: 0, y: 0, w: 24, h: 1.4, kind: "curb" },
     ],
     cars: [
       { cx: 4.6, cy: 9.5, h: 0 },
@@ -74,6 +74,9 @@ const LEVELS = [
       { cx: 7, cy: 2.6, h: Math.PI },
       { cx: 15.9, cy: 2.7, h: Math.PI },
       { cx: 20.8, cy: 2.6, h: Math.PI },
+    ],
+    traffic: [
+      { x: 10, y: -1.5, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     starThresh: [3, 5], starThreshQuick: [17, 26],
     hint: "So much space, you can do it!",
@@ -85,12 +88,16 @@ const LEVELS = [
     goal: { cx: 13.9, cy: 3.3, w: 2.4, h: 5.1, ang: Math.PI / 4, heads: [-45], tol: 8 },
     walls: [
       { x: 0, y: 0, w: 24, h: 0.5, kind: "curb" },
+      { x: 0, y: 9.1, w: 24, h: 0.3, kind: "curb" },
     ],
     cars: [
       { cx: 6.5, cy: 3.2, h: -Math.PI / 4 },
       { cx: 10.2, cy: 3.2, h: -Math.PI / 4 },
       { cx: 17.6, cy: 3.2, h: -Math.PI / 4 },
       { cx: 21, cy: 3.2, h: -Math.PI / 4 },
+    ],
+    traffic: [
+      { x: 21.7, y: 10.7, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     starThresh: [3, 5], starThreshQuick: [11, 18],
     hint: "Angled bays: enter on the diagonal, dead straight.",
