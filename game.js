@@ -873,7 +873,7 @@ function finishRun() {
         : '');
     $('ovTip').textContent = stars === 3 ? 'Perfect run!' :
       `3★ ≤ ${(level.starThreshQuick || [999])[0]} s`;
-    $('ovNext').style.display = levelIdx < LEVELS.length - 1 ? '' : 'none';
+    $('ovNext').style.display = nextPlayable(levelIdx, +1) >= 0 ? '' : 'none';
     pendingLb = solutionUsed ? null : { levelIdx, stars, st: { ...st } };
     $('ovSubmitRow').style.display = (lbEnabled() && !solutionUsed) ? '' : 'none';
     $('ovSubmit').disabled = false;
@@ -885,6 +885,15 @@ function finishRun() {
 }
 
 /* ===================== Level switching ===================== */
+
+// Next/previous level index that isn't a cutscene, in the given direction.
+// Cutscenes are skipped during normal navigation (only "Replay intro" enters
+// one explicitly). Returns -1 when there's no playable level that way.
+function nextPlayable(from, dir) {
+  for (let i = from + dir; i >= 0 && i < LEVELS.length; i += dir)
+    if (!isCutscene(LEVELS[i])) return i;
+  return -1;
+}
 
 function setLevel(i) {
   levelIdx = (i + LEVELS.length) % LEVELS.length;
@@ -981,8 +990,8 @@ $('goBtn').addEventListener('click', () => {
   startRun();
 });
 
-$('prevLv').addEventListener('click', () => setLevel(levelIdx - 1));
-$('nextLv').addEventListener('click', () => setLevel(levelIdx + 1));
+$('prevLv').addEventListener('click', () => { const t = nextPlayable(levelIdx, -1); if (t >= 0) setLevel(t); });
+$('nextLv').addEventListener('click', () => { const t = nextPlayable(levelIdx, +1); if (t >= 0) setLevel(t); });
 
 $('menuBtn').addEventListener('click', () => $('menuOverlay').classList.remove('hidden'));
 $('menuClose').addEventListener('click', () => $('menuOverlay').classList.add('hidden'));
@@ -1043,7 +1052,8 @@ $('ovRetry').addEventListener('click', () => {
 });
 $('ovNext').addEventListener('click', () => {
   $('overlay').classList.add('hidden');
-  setLevel(levelIdx + 1);
+  const t = nextPlayable(levelIdx, +1);
+  if (t >= 0) setLevel(t);
 });
 
 function selectMove(i) {
@@ -1545,7 +1555,9 @@ function endCutscene() {
   cancelAnimationFrame(introAnimId);
   introAnimId = null;
   $('introGo').classList.add('hidden');
-  setLevel(levelIdx + 1);
+  let t = nextPlayable(levelIdx, +1);
+  if (t < 0) t = nextPlayable(levelIdx, -1);  // cutscene sits at the very end
+  setLevel(t >= 0 ? t : levelIdx);
 }
 $('introSkip').addEventListener('click', endCutscene);
 $('introGo').addEventListener('click', endCutscene);
