@@ -192,7 +192,7 @@ const LEVELS = [
       { x: 21.7, y: 10.7, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     hint: "You're not a maniac, you'll just need to leave in a hurry...",
-    solution: [{ steer: -15, dist: 6 }, { steer: 0, dist: 4 }, { steer: -35, dist: 1 }],
+    solution: [{ steer: 0, dist: 10 }, { steer: -2, dist: 7 }, { steer: -35, dist: -7 }, { steer: 35, dist: 1.2 }, { steer: -20, dist: -2 }],
   },
   {
     id: "y6o5vf",
@@ -206,7 +206,7 @@ const LEVELS = [
     ],
     cars: [],
     hint: "Turn around to face the way you came.",
-    solution: [{ steer: 12, dist: 3 }, { steer: -35, dist: 3 }, { steer: 35, dist: -3 }, { steer: -35, dist: 1.5 }, { steer: 0, dist: -1.5 }, { steer: -35, dist: 5 }],
+    solution: [{ steer: 35, dist: -3.5 }, { steer: -28, dist: 1.2 }, { steer: 35, dist: -2 }, { steer: -35, dist: 5 }],
   },
   {
     id: "mubpy4",
