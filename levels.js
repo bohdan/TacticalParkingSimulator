@@ -10,6 +10,26 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 9 }],
   },
   {
+    name: "OneWay", tier: "Hard", mode: "moves", w: 24, h: 13,
+    start: { x: 2.6, y: 7, h: 0 },
+    goal: { cx: 10.1, cy: 9.4, w: 5.1, h: 2, heads: [0], tol: 10 },
+    walls: [
+      { x: 0, y: 10.5, w: 24, h: 2.5, kind: "curb" },
+      { x: 0, y: 0, w: 24, h: 2.7, kind: "curb" },
+    ],
+    cars: [
+      { cx: 4.8, cy: 9.4, h: 0 },
+      { cx: 15.4, cy: 9.4, h: 0 },
+      { cx: 9.2, cy: 3.8, h: 0 },
+      { cx: 20.2, cy: 9.4, h: 0 },
+      { cx: 13.9, cy: 3.8, h: 0 },
+      { cx: 18.5, cy: 3.8, h: 0 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [17, 26],
+    hint: "Need to nail it",
+    solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
+  },
+  {
     name: "Lesson 2: Steer", tier: "Tutorial", mode: "moves", w: 14, h: 12,
     start: { x: 3, y: 9, h: 0 },
     goal: { cx: 6.9, cy: 3.8, w: 3.8, h: 5.8, heads: [-90], tol: 15 },
@@ -194,6 +214,20 @@ const LEVELS = [
     solution: [{ steer: -15, dist: 6 }, { steer: 0, dist: 4 }, { steer: -35, dist: 1 }],
   },
   {
+    name: "Dead End", tier: "Medium", mode: "dist", w: 22, h: 13,
+    start: { x: 12.8, y: 6.5, h: 0 },
+    goal: { cx: 4.8, cy: 6.4, w: 8, h: 6.6, heads: [180], tol: 12 },
+    walls: [
+      { x: 0, y: 0, w: 22, h: 3.3 },
+      { x: 0, y: 10.1, w: 22, h: 2.9 },
+      { x: 18.4, y: 0, w: 3.6, h: 13 },
+    ],
+    cars: [],
+    starThresh: [19, 27], starThreshQuick: [32, 49],
+    hint: "Turn around to face the way you came.",
+    solution: [{ steer: 12, dist: 3 }, { steer: -35, dist: 3 }, { steer: 35, dist: -3 }, { steer: -35, dist: 1.5 }, { steer: 0, dist: -1.5 }, { steer: -35, dist: 5 }],
+  },
+  {
     name: "Tight Bay", tier: "Medium", mode: "moves", w: 20, h: 13,
     start: { x: 16.5, y: 8.6, h: Math.PI },
     goal: { cx: 9.4, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
@@ -222,6 +256,20 @@ const LEVELS = [
     starThresh: [4, 6], starThreshQuick: [20, 31],
     hint: "Weave under, over, and home — all in forward gear.",
     solution: [{ steer: 0, dist: 4 }, { steer: -25, dist: 6 }, { steer: 25, dist: 10 }, { steer: -25, dist: 3 }],
+  },
+  {
+    name: "Narrow Dead End", tier: "Hard", mode: "dist", w: 22, h: 12,
+    start: { x: 12.2, y: 5.9, h: 0 },
+    goal: { cx: 4.6, cy: 6, w: 8, h: 5.8, heads: [180], tol: 12 },
+    walls: [
+      { x: 0, y: 0, w: 22, h: 3.1 },
+      { x: 0, y: 8.9, w: 22, h: 3.1 },
+      { x: 18.4, y: 0, w: 3.6, h: 12 },
+    ],
+    cars: [],
+    starThresh: [16, 22], starThreshQuick: [50, 78],
+    hint: "A 5.8 m corridor — the simple U-turn no longer fits.",
+    solution: [{ steer: 0, dist: 5 }, { steer: -35, dist: 1 }, { steer: 35, dist: -2.5 }, { steer: -35, dist: 0.5 }, { steer: 35, dist: -1 }, { steer: -35, dist: 1 }, { steer: 35, dist: -1 }, { steer: -35, dist: 1 }, { steer: 35, dist: -0.5 }, { steer: -35, dist: 3 }],
   },
   {
     name: "The Garage", tier: "Expert", mode: "moves", w: 24, h: 13,
@@ -388,20 +436,6 @@ const LEVELS = [
     solution: [{ steer: 0, dist: -0.8 }, { steer: -35, dist: 4.5 }, { steer: 35, dist: 4.5 }],
   },
   {
-    name: "Dead End", tier: "Medium", mode: "dist", w: 22, h: 13,
-    start: { x: 12.8, y: 6.5, h: 0 },
-    goal: { cx: 4.8, cy: 6.4, w: 8, h: 6.6, heads: [180], tol: 12 },
-    walls: [
-      { x: 0, y: 0, w: 22, h: 3.3 },
-      { x: 0, y: 10.1, w: 22, h: 2.9 },
-      { x: 18.4, y: 0, w: 3.6, h: 13 },
-    ],
-    cars: [],
-    starThresh: [19, 27], starThreshQuick: [32, 49],
-    hint: "Turn around to face the way you came.",
-    solution: [{ steer: 12, dist: 3 }, { steer: -35, dist: 3 }, { steer: 35, dist: -3 }, { steer: -35, dist: 1.5 }, { steer: 0, dist: -1.5 }, { steer: -35, dist: 5 }],
-  },
-  {
     name: "The Garage 2", tier: "Expert", mode: "moves", w: 24, h: 13,
     start: { x: 3, y: 10.6, h: 0 },
     goal: { cx: 19.4, cy: 2.7, w: 2.2, h: 4.8, heads: [90], tol: 10 },
@@ -419,22 +453,8 @@ const LEVELS = [
     solution: [{ steer: -35, dist: 3 }, { steer: 15, dist: 10 }, { steer: -35, dist: 6 }, { steer: 25, dist: -0.5 }],
   },
   {
-    name: "Narrow Dead End", tier: "Hard", mode: "dist", w: 22, h: 12,
-    start: { x: 12.2, y: 5.9, h: 0 },
-    goal: { cx: 4.6, cy: 6, w: 8, h: 5.8, heads: [180], tol: 12 },
-    walls: [
-      { x: 0, y: 0, w: 22, h: 3.1 },
-      { x: 0, y: 8.9, w: 22, h: 3.1 },
-      { x: 18.4, y: 0, w: 3.6, h: 12 },
-    ],
-    cars: [],
-    starThresh: [16, 22], starThreshQuick: [50, 78],
-    hint: "A 5.8 m corridor — the simple U-turn no longer fits.",
-    solution: [{ steer: 0, dist: 5 }, { steer: -35, dist: 1 }, { steer: 35, dist: -2.5 }, { steer: -35, dist: 0.5 }, { steer: 35, dist: -1 }, { steer: -35, dist: 1 }, { steer: 35, dist: -1 }, { steer: -35, dist: 1 }, { steer: 35, dist: -0.5 }, { steer: -35, dist: 3 }],
-  },
-  {
     name: "The Gauntlet", tier: "Expert", mode: "dist", w: 22, h: 11,
-    start: { x: 3.2, y: 5.5, h: 0 },
+    start: { x: 13.4, y: 5.4, h: 0 },
     goal: { cx: 4.6, cy: 5.5, w: 8, h: 5.5, heads: [180], tol: 12 },
     walls: [
       { x: 0, y: 0, w: 22, h: 2.75 },
