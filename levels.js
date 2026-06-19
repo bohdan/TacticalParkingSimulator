@@ -326,7 +326,7 @@ const LEVELS = [
   },
   {
     id: "m5zrvk",
-    name: "Aftermath", tier: "Medium", mode: "moves", w: 20, h: 13,
+    name: "Aftermath", tier: "Hard", mode: "moves", w: 20, h: 13,
     start: { x: 18.7, y: 2.9, h: 2.6451 },
     goal: { cx: 3.4, cy: 6.3, w: 6.8, h: 4.3, heads: [180], tol: 45 },
     walls: [
