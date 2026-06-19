@@ -414,7 +414,7 @@ const LEVELS = [
       { cx: 12, cy: 2.55, h: Math.PI },
     ],
     hint: "Nudge back first to gain the extra inch you need.",
-    solution: [{ steer: 0, dist: -0.8 }, { steer: -35, dist: 4.5 }, { steer: 35, dist: 4.5 }],
+    solution: [{ steer: 12, dist: -1.2 }, { steer: -35, dist: 2 }, { steer: 28, dist: 0.6 }, { steer: 12, dist: 7 }],
   },
   {
     id: "q0vz36",
@@ -431,7 +431,7 @@ const LEVELS = [
       { cx: 15.8, cy: 10.5, h: 270 * Math.PI / 180 },
     ],
     hint: "Not so straightforward",
-    solution: [{ steer: -35, dist: 3 }, { steer: 15, dist: 10 }, { steer: -35, dist: 6 }, { steer: 25, dist: -0.5 }],
+    solution: [{ steer: -35, dist: 2 }, { steer: 6, dist: 13 }, { steer: 35, dist: 3.5 }, { steer: -28, dist: -3.5 }, { steer: 0, dist: -3.5 }],
   },
   {
     id: "al9miy",
@@ -466,7 +466,7 @@ const LEVELS = [
       { x: 21.7, y: 11.3, h: Math.PI, speed: 4, loop: 28, offset: 16 },
     ],
     hint: "The Miata's tight turn radius makes this a 2-move park.",
-    solution: [{ steer: 0, dist: 8 }, { steer: -40, dist: 4 }],
+    solution: [{ steer: -2, dist: 1.2 }, { steer: -35, dist: 5 }],
   },
   {
     id: "yg12nu",
