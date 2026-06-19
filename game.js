@@ -319,8 +319,6 @@ function recomputeEdit() {
   // adjusts the steering angle. Collision is shown via yellow highlight instead.
   const fieldRange = Math.max(40, Math.ceil(Math.hypot(level.w, level.h)));
   distMax = fieldRange; distMin = -fieldRange;
-  distEl.min = distMin; distEl.max = distMax; distEl.value = editDist;
-  distEl.style.setProperty('--zero', '50%');
   if (Math.abs(editDist) > 0.01) {
     editSim    = simulateMove(startPose, s,  editDist, level.obstacles);
     editSimOpp = simulateMove(startPose, s, -editDist, level.obstacles);
@@ -946,8 +944,6 @@ function setLevel(i) {
   if (isCutscene(def)) { level = null; showCutscene(def); return; }
   $('intro').classList.add('hidden');  // leaving a cutscene
   setVehicle(def.vehicle || 'default');
-  steerEl.min = -CAR.maxSteer;
-  steerEl.max = CAR.maxSteer;
   level = buildLevel(def);
   moves = [];
   planSims = [];
@@ -961,21 +957,52 @@ function setLevel(i) {
 /* ===================== Input ===================== */
 
 const steerEl = $('steer'), distEl = $('dist');
-// Steer slider is always ±35° (symmetric), so the neutral tick is fixed at 50%.
 steerEl.style.setProperty('--zero', '50%');
+distEl.style.setProperty('--zero', '50%');
 
 function setEdit(steerDeg, dist) {
   editSteer = clamp(Math.abs(steerDeg) < 0.5 ? 0 : steerDeg, -CAR.maxSteer, CAR.maxSteer);
-  editDist = Math.abs(dist) < 0.15 ? 0 : dist; // clamped to drivable range in recomputeEdit
-  steerEl.value = editSteer;
+  editDist = Math.abs(dist) < 0.15 ? 0 : dist;
   $('steerVal').textContent = editSteer === 0 ? '0°'
-    : `${Math.abs(editSteer)}° ${editSteer < 0 ? 'left' : 'right'}`;
+    : `${Math.abs(editSteer).toFixed(1)}° ${editSteer < 0 ? 'left' : 'right'}`;
   recomputeEdit();
   updateHUD();
 }
 
-steerEl.addEventListener('input', () => setEdit(parseFloat(steerEl.value), editDist));
-distEl.addEventListener('input', () => setEdit(editSteer, parseFloat(distEl.value)));
+// Relative-drag sliders: dragging accumulates a delta from the value at
+// touch-start rather than jumping to the touch position. This means you can
+// always make tiny adjustments from any starting angle/distance.
+// sensitivity = value-units per pixel of horizontal drag.
+function makeRelativeSlider(el, range, sensitivity, getVal, applyVal) {
+  el.min = -range; el.max = range; el.step = 'any'; el.value = 0;
+  let startX = null, startVal = 0;
+  el.addEventListener('pointerdown', e => {
+    startX = e.clientX;
+    startVal = getVal();
+    el.setPointerCapture(e.pointerId);
+    el.value = startVal; // show current position before drag begins
+  });
+  el.addEventListener('pointermove', e => {
+    if (startX === null) return;
+    const newVal = startVal + (e.clientX - startX) * sensitivity;
+    applyVal(newVal);
+    el.value = clamp(newVal, -range, range); // thumb tracks value
+  });
+  const end = () => { startX = null; el.value = 0; };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('lostpointercapture', end);
+}
+
+// Steer: 0.25°/px → 140 px for full ±35° range; fine-tune with short drags.
+// CAR.maxSteer is read dynamically so it adapts when the vehicle changes.
+makeRelativeSlider(steerEl, 45, 0.25,
+  () => editSteer,
+  v  => setEdit(v, editDist));
+
+// Dist: 0.1 m/px → 250 px for ±25 m; re-drag for larger distances.
+makeRelativeSlider(distEl, 25, 0.1,
+  () => editDist,
+  v  => setEdit(editSteer, v));
 
 function commitMove() {
   if (!editSim || editSim.pts.length < 2 || anim) return false;
