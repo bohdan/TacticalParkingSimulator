@@ -694,19 +694,31 @@ function draw(now) {
   for (let y = 1; y < level.h; y++) { ctx.moveTo(0, y); ctx.lineTo(level.w, y); }
   ctx.stroke();
 
-  // goal zone
+  // goal zone — yellow normally, green once the car will come to rest parked
   const g = level.goal;
   const gPoly = goalPoly(g);
+  let restPose;
+  if (anim) {
+    const trav = Math.min(anim.total, (now - anim.t0) / 1000 * anim.speed);
+    restPose = anim.samples[sampleAt(anim, trav)].pose;
+  } else if (editSim && !editSim.hit) {
+    restPose = editSim.end;
+  } else {
+    restPose = planEnd();
+  }
+  const parked = inGoal(restPose, g);
+  const gStroke = parked ? '#3ddc84' : '#f2c84b';
   drawPoly(gPoly);
-  ctx.fillStyle = 'rgba(61,220,132,0.10)';
+  ctx.fillStyle = parked ? 'rgba(61,220,132,0.12)' : 'rgba(242,200,75,0.10)';
   ctx.fill();
-  ctx.lineWidth = 0.1;
-  ctx.strokeStyle = '#3ddc84';
-  ctx.setLineDash([0.45, 0.3]);
+  ctx.lineWidth = 0.05;
+  ctx.strokeStyle = gStroke;
+  ctx.setLineDash([0.4, 0.28]);
   ctx.stroke();
   ctx.setLineDash([]);
   for (const hd of g.heads) {
-    drawArrow(g.cx, g.cy, rad(hd), Math.min(g.w, g.h) * 0.45, 'rgba(61,220,132,0.7)');
+    drawArrow(g.cx, g.cy, rad(hd), Math.min(g.w, g.h) * 0.45,
+              parked ? 'rgba(61,220,132,0.7)' : 'rgba(242,200,75,0.75)');
   }
 
   // decorative traffic (non-collision, animated sedans outside parking zone)
@@ -953,7 +965,7 @@ const steerEl = $('steer'), distEl = $('dist');
 steerEl.style.setProperty('--zero', '50%');
 
 function setEdit(steerDeg, dist) {
-  editSteer = clamp(Math.abs(steerDeg) <= 2 ? 0 : steerDeg, -CAR.maxSteer, CAR.maxSteer);
+  editSteer = clamp(Math.abs(steerDeg) < 0.5 ? 0 : steerDeg, -CAR.maxSteer, CAR.maxSteer);
   editDist = Math.abs(dist) < 0.15 ? 0 : dist; // clamped to drivable range in recomputeEdit
   steerEl.value = editSteer;
   $('steerVal').textContent = editSteer === 0 ? '0°'

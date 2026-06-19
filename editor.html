@@ -451,16 +451,16 @@ function render(){
   ctx.save();
   ctx.translate(g.cx,g.cy); if(ga)ctx.rotate(ga);
   rrect(-g.w/2,-g.h/2,g.w,g.h,.15);
-  ctx.fillStyle='rgba(61,220,132,0.10)'; ctx.fill();
-  ctx.strokeStyle='#3ddc84'; ctx.lineWidth=0.1;
-  ctx.setLineDash([.45,.3]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle='rgba(242,200,75,0.10)'; ctx.fill();
+  ctx.strokeStyle='#f2c84b'; ctx.lineWidth=0.05;
+  ctx.setLineDash([.4,.28]); ctx.stroke(); ctx.setLineDash([]);
   ctx.restore();
   for(const hd of(g.heads||[0])){
     const a=rad(hd);
     ctx.save();
     ctx.translate(g.cx,g.cy); ctx.rotate(a);
     const al=Math.min(g.w,g.h)*0.45;
-    ctx.strokeStyle='rgba(61,220,132,0.7)'; ctx.lineWidth=0.12;
+    ctx.strokeStyle='rgba(242,200,75,0.75)'; ctx.lineWidth=0.12;
     ctx.beginPath(); ctx.moveTo(-al/2,0); ctx.lineTo(al/2,0);
     ctx.moveTo(al/2,0);ctx.lineTo(al/2-.45,-.28);ctx.moveTo(al/2,0);ctx.lineTo(al/2-.45,.28);
     ctx.stroke(); ctx.restore();
