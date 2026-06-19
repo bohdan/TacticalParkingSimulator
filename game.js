@@ -651,6 +651,20 @@ const LEVELS = [
   },
 ];
 
+// Editor test level: injected via localStorage by editor.html
+(()=>{
+  const raw = localStorage.getItem('parkplanner_testlevel');
+  if (!raw) return;
+  try {
+    let s = raw.replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    const lv = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(s), c => c.charCodeAt(0))));
+    lv.name = '★ ' + lv.name;
+    lv._isTest = true;
+    LEVELS.unshift(lv);
+  } catch (e) { /* ignore malformed data */ }
+})();
+
 function buildLevel(def) {
   const obstacles = [];
   const B = 0.45; // border wall thickness

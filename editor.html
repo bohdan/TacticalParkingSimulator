@@ -28,8 +28,8 @@ button.active:hover,button.primary:hover{background:#1f7d47}
 button.danger{background:#5c1e1e;border-color:#8b3030}
 button.danger:hover{background:#6e2424}
 .sel-hint{font-size:11px;color:#506080;font-style:italic;margin-top:6px}
-#overlay,#importOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99;justify-content:center;align-items:center}
-#overlay.show,#importOverlay.show{display:flex}
+#overlay,#importOverlay,#ghOverlay,#saveOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99;justify-content:center;align-items:center}
+#overlay.show,#importOverlay.show,#ghOverlay.show,#saveOverlay.show{display:flex}
 #exportBox{background:#13161e;border:1px solid #2a3040;border-radius:10px;padding:16px;width:660px;max-height:82vh;display:flex;flex-direction:column;gap:10px}
 #exportBox h3{font-size:14px;color:#e7ecf3}
 #exportText{flex:1;background:#080a0e;color:#7dc87d;font:12px/1.65 Menlo,Consolas,monospace;border:1px solid #2a3040;border-radius:6px;padding:10px;resize:none;min-height:280px;overflow:auto;white-space:pre;tab-size:2}
@@ -38,6 +38,15 @@ button.danger:hover{background:#6e2424}
 #importBox{background:#13161e;border:1px solid #2a3040;border-radius:10px;padding:16px;width:560px;display:flex;flex-direction:column;gap:10px}
 #importBox h3{font-size:14px;color:#e7ecf3}
 #importText{background:#080a0e;color:#80d0ff;font:11px/1.5 Menlo,Consolas,monospace;border:1px solid #2a3040;border-radius:6px;padding:10px;resize:vertical;height:90px;width:100%}
+#ghBox,#saveBox{background:#13161e;border:1px solid #2a3040;border-radius:10px;padding:16px;width:400px;display:flex;flex-direction:column;gap:10px}
+#ghBox h3,#saveBox h3{font-size:14px;color:#e7ecf3}
+.save-choice{display:flex;flex-direction:column;gap:6px;font-size:12px}
+.save-choice label{display:flex;align-items:center;gap:6px;cursor:pointer}
+#saveStatus{font-size:12px;padding:7px 10px;border-radius:6px;background:#0e1520;border:1px solid #2a3040}
+#saveStatus.ok{border-color:#27a35e;color:#4dd884}
+#saveStatus.err{border-color:#8b3030;color:#e06060}
+#btnSave{background:#1d4f6b;border-color:#2d7396}
+#btnSave.ready{background:#1a4e7a;border-color:#2a78b0;color:#80c8ff}
 #loadSel{max-width:180px}
 </style>
 </head>
@@ -56,6 +65,11 @@ button.danger:hover{background:#6e2424}
   <div class="sep"></div>
   <button id="btnImport">&#8595; Import string</button>
   <button class="primary" id="btnExport">Export ↗</button>
+  <div class="sep"></div>
+  <button id="btnTry">&#9654; Try level</button>
+  <div class="sep"></div>
+  <button id="btnGH">&#9881; GitHub</button>
+  <button id="btnSave" title="Save level to game.js on GitHub">&#8593; Save</button>
 </div>
 
 <div id="main">
@@ -125,6 +139,38 @@ button.danger:hover{background:#6e2424}
     <div style="display:flex;gap:8px">
       <button id="btnImportLoad" class="primary">Load</button>
       <button id="btnCloseImport">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="ghOverlay">
+  <div id="ghBox">
+    <h3>&#9881; GitHub Settings</h3>
+    <div class="row"><label>Owner</label><input id="ghOwner" type="text" placeholder="username" autocomplete="off"></div>
+    <div class="row"><label>Repo</label><input id="ghRepo" type="text" placeholder="repo-name" autocomplete="off"></div>
+    <div class="row"><label>Branch</label><input id="ghBranch" type="text" placeholder="main" autocomplete="off"></div>
+    <div class="row"><label>Token</label><input id="ghPat" type="password" placeholder="ghp_…" autocomplete="off"></div>
+    <div style="font-size:11px;color:#5a6a80">PAT stored in browser localStorage. Needs <b>Contents: Read &amp; Write</b> permission on the repo.</div>
+    <div style="display:flex;gap:8px;margin-top:2px">
+      <button id="btnGHSave" class="primary">Save</button>
+      <button id="btnGHClose">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="saveOverlay">
+  <div id="saveBox">
+    <h3>&#8593; Save to GitHub</h3>
+    <div class="save-choice" id="saveChoice">
+      <label><input type="radio" name="saveMode" value="replace" id="saveModeReplace" checked>
+        Replace <span id="saveReplaceLabel">level N</span> in game.js</label>
+      <label><input type="radio" name="saveMode" value="append" id="saveModeAppend">
+        Append as a new level</label>
+    </div>
+    <div id="saveStatus" style="display:none"></div>
+    <div style="display:flex;gap:8px" id="saveBtnRow">
+      <button id="btnSaveGo" class="primary">Save</button>
+      <button id="btnSaveClose">Cancel</button>
     </div>
   </div>
 </div>
@@ -817,7 +863,8 @@ document.getElementById('btnLoad').onclick=async()=>{
     sel2.style.display='';
     sel2.onchange=()=>{
       if(sel2.value==='') return;
-      applyLevel(levels[+sel2.value]);
+      loadedLevelIdx=+sel2.value;
+      applyLevel(levels[loadedLevelIdx]);
     };
   } catch(err){
     alert('Could not load game.js: '+err.message);
@@ -871,8 +918,8 @@ function fmtRad(r){
 }
 function fn(n,d=2){ const s=n.toFixed(d); return parseFloat(s)+''; }
 
-function buildExport(){
-  const l=L, g=l.goal;
+function buildExport(lv=L){
+  const l=lv, g=l.goal;
   const lines=[];
   lines.push(`  {`);
   lines.push(`    name: ${JSON.stringify(l.name)}, tier: ${JSON.stringify(l.tier)}, mode: ${JSON.stringify(l.mode)}, w: ${l.w}, h: ${l.h},`);
@@ -928,6 +975,147 @@ function buildExport(){
   lines.push(`  },`);
   return lines.join('\n');
 }
+
+// ── GitHub save ───────────────────────────────────────────────────────────────
+const GHS = {
+  get pat()   { return localStorage.getItem('gh_pat')||''; },
+  get owner() { return localStorage.getItem('gh_owner')||''; },
+  get repo()  { return localStorage.getItem('gh_repo')||''; },
+  get branch(){ return localStorage.getItem('gh_branch')||'main'; },
+  set pat(v)  { localStorage.setItem('gh_pat',v); },
+  set owner(v){ localStorage.setItem('gh_owner',v); },
+  set repo(v) { localStorage.setItem('gh_repo',v); },
+  set branch(v){ localStorage.setItem('gh_branch',v); },
+};
+
+let loadedLevelIdx = null; // which LEVELS[] index is currently loaded
+
+function ghReady(){ return !!(GHS.pat && GHS.owner && GHS.repo); }
+function updateSaveBtn(){
+  const b=document.getElementById('btnSave');
+  b.classList.toggle('ready', ghReady());
+  b.title = ghReady()
+    ? `Save to ${GHS.owner}/${GHS.repo} (${GHS.branch})`
+    : 'Configure GitHub settings first (⚙ GitHub)';
+}
+
+function strToBase64(str){
+  const bytes=new TextEncoder().encode(str);
+  const bin=Array.from(bytes,b=>String.fromCharCode(b)).join('');
+  return btoa(bin);
+}
+
+async function ghGet(path){
+  const url=`https://api.github.com/repos/${GHS.owner}/${GHS.repo}${path}`;
+  const r=await fetch(url,{headers:{Authorization:`Bearer ${GHS.pat}`,Accept:'application/vnd.github+json'}});
+  if(!r.ok) throw new Error(`GitHub ${r.status} on GET ${path}: ${await r.text()}`);
+  return r.json();
+}
+async function ghPut(path,body){
+  const url=`https://api.github.com/repos/${GHS.owner}/${GHS.repo}${path}`;
+  const r=await fetch(url,{method:'PUT',headers:{Authorization:`Bearer ${GHS.pat}`,'Content-Type':'application/json',Accept:'application/vnd.github+json'},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(`GitHub ${r.status} on PUT ${path}: ${await r.text()}`);
+  return r.json();
+}
+
+function b64decode(b64str){
+  const bin=atob(b64str.replace(/\n/g,''));
+  return new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)));
+}
+
+function setSaveStatus(msg, cls=''){
+  const el=document.getElementById('saveStatus');
+  el.textContent=msg; el.style.display=''; el.className=cls;
+}
+
+async function saveToGitHub(replaceIdx){
+  setSaveStatus('Fetching game.js…');
+  const fd=await ghGet(`/contents/game.js?ref=${GHS.branch}`);
+  const currentText=b64decode(fd.content);
+  const m=currentText.match(/const LEVELS\s*=\s*(\[[\s\S]*?\n\];)/);
+  if(!m) throw new Error('LEVELS array not found in game.js');
+  const levels=new Function('Math','return '+m[1])(Math);
+
+  if(replaceIdx!=null) levels[replaceIdx]=JSON.parse(JSON.stringify(L));
+  else levels.push(JSON.parse(JSON.stringify(L)));
+
+  const newArr='const LEVELS = [\n'+levels.map(lv=>buildExport(lv)).join('\n')+'\n];';
+  const newText=currentText.slice(0,m.index)+newArr+currentText.slice(m.index+m[0].length);
+
+  setSaveStatus('Committing game.js…');
+  const msg=replaceIdx!=null?`Update level ${replaceIdx+1}: ${L.name}`:`Add level: ${L.name}`;
+  const putData=await ghPut(`/contents/game.js`,{message:msg,content:strToBase64(newText),sha:fd.sha,branch:GHS.branch});
+  const newSha=putData.commit.sha.slice(0,7);
+
+  // Bump cache-bust in index.html
+  try{
+    setSaveStatus(`Bumping cache to ${newSha}…`);
+    const ifd=await ghGet(`/contents/index.html?ref=${GHS.branch}`);
+    const iText=b64decode(ifd.content).replace(/(\?v=)[a-f0-9]{7,8}/g,`$1${newSha}`);
+    await ghPut(`/contents/index.html`,{message:`Bump cache-bust to ${newSha}`,content:strToBase64(iText),sha:ifd.sha,branch:GHS.branch});
+  }catch(e){ /* non-fatal */ }
+
+  if(replaceIdx==null) loadedLevelIdx=levels.length-1;
+  setSaveStatus(`✓ Saved — commit ${newSha}`, 'ok');
+  document.getElementById('saveBtnRow').style.display='none';
+  setTimeout(()=>{ document.getElementById('saveOverlay').classList.remove('show'); document.getElementById('saveBtnRow').style.display=''; }, 2000);
+}
+
+// GitHub settings overlay
+document.getElementById('btnGH').onclick=()=>{
+  document.getElementById('ghOwner').value=GHS.owner;
+  document.getElementById('ghRepo').value=GHS.repo;
+  document.getElementById('ghBranch').value=GHS.branch;
+  document.getElementById('ghPat').value=GHS.pat;
+  document.getElementById('ghOverlay').classList.add('show');
+};
+document.getElementById('btnGHSave').onclick=()=>{
+  GHS.owner=document.getElementById('ghOwner').value.trim();
+  GHS.repo=document.getElementById('ghRepo').value.trim();
+  GHS.branch=document.getElementById('ghBranch').value.trim()||'main';
+  GHS.pat=document.getElementById('ghPat').value.trim();
+  document.getElementById('ghOverlay').classList.remove('show');
+  updateSaveBtn();
+};
+document.getElementById('btnGHClose').onclick=()=>document.getElementById('ghOverlay').classList.remove('show');
+document.getElementById('ghOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('ghOverlay'))document.getElementById('ghOverlay').classList.remove('show');});
+
+// Save overlay
+document.getElementById('btnSave').onclick=()=>{
+  if(!ghReady()){ document.getElementById('btnGH').click(); return; }
+  const replEl=document.getElementById('saveModeReplace');
+  const replLabel=document.getElementById('saveReplaceLabel');
+  const hasLoaded=loadedLevelIdx!=null;
+  replEl.disabled=!hasLoaded;
+  replLabel.textContent=hasLoaded?`level ${loadedLevelIdx+1} (${L.name})`:'(no level loaded from game.js)';
+  if(!hasLoaded) document.getElementById('saveModeAppend').checked=true;
+  else replEl.checked=true;
+  document.getElementById('saveStatus').style.display='none';
+  document.getElementById('saveBtnRow').style.display='';
+  document.getElementById('saveOverlay').classList.add('show');
+};
+document.getElementById('btnSaveGo').onclick=async()=>{
+  const mode=document.querySelector('input[name=saveMode]:checked').value;
+  const replIdx=mode==='replace'?loadedLevelIdx:null;
+  document.getElementById('btnSaveGo').disabled=true;
+  document.getElementById('btnSaveClose').disabled=true;
+  try{
+    await saveToGitHub(replIdx);
+  }catch(err){
+    setSaveStatus('Error: '+err.message,'err');
+  }finally{
+    document.getElementById('btnSaveGo').disabled=false;
+    document.getElementById('btnSaveClose').disabled=false;
+  }
+};
+document.getElementById('btnSaveClose').onclick=()=>document.getElementById('saveOverlay').classList.remove('show');
+document.getElementById('saveOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('saveOverlay'))document.getElementById('saveOverlay').classList.remove('show');});
+
+// ── Try level ─────────────────────────────────────────────────────────────────
+document.getElementById('btnTry').onclick=()=>{
+  localStorage.setItem('parkplanner_testlevel', levelToString(L));
+  window.open('index.html', '_blank');
+};
 
 // ── Level string encode / decode ──────────────────────────────────────────────
 function levelToString(lv){
@@ -1004,6 +1192,7 @@ document.getElementById('btnImportLoad').onclick=()=>{
   const m=location.hash.match(/[#&]lvl=([A-Za-z0-9\-_]+)/);
   if(m){ try{ applyLevel(levelFromString(m[1])); }catch(e){/* ignore bad hash */} }
 })();
+updateSaveBtn();
 updateSidebar();
 resize();
 </script>
