@@ -11,17 +11,6 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 9 }],
   },
   {
-    id: "z4oahc",
-    name: "Lesson 1: Drive", tier: "Tutorial", mode: "moves", w: 18, h: 10,
-    start: { x: 3, y: 5, h: 0 },
-    goal: { cx: 13.5, cy: 5, w: 6.5, h: 3, heads: [0], tol: 45 },
-    walls: [],
-    cars: [],
-    starThresh: [1, 2], starThreshQuick: [6, 9],
-    hint: "Just drive into the green zone.",
-    solution: [{ steer: 0, dist: 10 }],
-  },
-  {
     id: "dkhmyv",
     name: "Lesson 2: Steer", tier: "Tutorial", mode: "moves", w: 14, h: 12,
     start: { x: 3, y: 9, h: 0 },

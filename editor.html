@@ -1604,8 +1604,9 @@ document.getElementById('btnExport').onclick=()=>{
   const str=levelToString(L);
   document.getElementById('exportText').value=js;
   document.getElementById('exportString').value=str;
-  // Update URL hash silently so this view is shareable
-  history.replaceState(null,'','#lvl='+str);
+  // NOTE: do NOT write the string into the URL hash here. The editor
+  // auto-imports any #lvl= on load, so a hash + reload would duplicate the
+  // level on every refresh. The copyable string above is the share path.
   document.getElementById('overlay').classList.add('show');
 };
 document.getElementById('btnCloseExport').onclick=()=>{
@@ -1656,9 +1657,11 @@ document.getElementById('sidebar').addEventListener('input', markDirty);
 updateSaveBtn();
 (async ()=>{
   await loadAllLevels();
-  // Auto-import a level from the URL hash (#lvl=...) as a new entry
+  // Auto-import a level shared via the URL hash (#lvl=...) as a new entry,
+  // then immediately clear the hash so a refresh can't re-import a duplicate.
   const m=location.hash.match(/[#&]lvl=([A-Za-z0-9\-_]+)/);
   if(m){
+    history.replaceState(null,'',location.pathname+location.search);
     try{
       const lv=normalizeLevel(levelFromString(m[1]));
       levels.splice(curIdx+1,0,lv);
