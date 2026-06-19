@@ -345,7 +345,7 @@ function rrect(x,y,w,h,r){
 // looks like the real game. (cx,cy) = body CENTER, h = heading. Internally
 // converts to the rear-axle frame the game draws from.
 function drawCar(cx,cy,h,sp,opts){
-  const {fill,stroke,alpha=1,detail=true,wheels=true,steer=0}=opts;
+  const {fill,stroke,alpha=1,detail=true,wheels=true,steer=0,vehicle='default'}=opts;
   const rx=cx-(sp.len/2-sp.rOver)*Math.cos(h);
   const ry=cy-(sp.len/2-sp.rOver)*Math.sin(h);
   ctx.save();
@@ -355,23 +355,66 @@ function drawCar(cx,cy,h,sp,opts){
   const wy=w/2-0.16, wl=Math.min(0.9,len*0.075), wt=Math.min(0.18,w*0.10);
   if(wheels){
     ctx.fillStyle='#10131a';
-    for(const [wx,wya,a] of [[0,-wy,0],[0,wy,0],[sp.wb,-wy,steer],[sp.wb,wy,steer]]){
+    const axles=vehicle==='bus'
+      ? [[sp.wb*0.06,0],[sp.wb*0.92,steer],[sp.wb,steer]]
+      : [[0,0],[sp.wb,steer]];
+    for(const [wx,a] of axles) for(const wya of [-wy,wy]){
       ctx.save(); ctx.translate(wx,wya); ctx.rotate(a); ctx.fillRect(-wl/2,-wt,wl,wt*2); ctx.restore();
     }
   }
-  rrect(x0,-w/2,len,w,Math.min(0.3,w*0.17));
-  ctx.fillStyle=fill; ctx.fill();
-  if(stroke){ ctx.lineWidth=0.07; ctx.strokeStyle=stroke; ctx.stroke(); }
+  const bodyFill=vehicle==='miata'?'#d23b3b':fill;
+  const corner=vehicle==='bus'?Math.min(0.18,w*0.08):Math.min(0.3,w*0.17);
+  rrect(x0,-w/2,len,w,corner);
+  ctx.fillStyle=bodyFill; ctx.fill();
+  if(stroke){ ctx.lineWidth=0.07; ctx.strokeStyle=vehicle==='miata'?'#7d1f1f':stroke; ctx.stroke(); }
   if(detail){
-    const wsX=x0+len*0.30, rwX=x0+len*0.09, glH=w-0.44;
-    ctx.fillStyle='rgba(8,12,18,0.45)';
-    rrect(wsX,-w/2+0.22,Math.min(0.85,len*0.20),glH,0.15); ctx.fill();
-    rrect(rwX,-w/2+0.25,Math.min(0.6,len*0.13),glH,0.15); ctx.fill();
-    ctx.fillStyle='#ffe9a8';
-    ctx.fillRect(x0+len-0.18,-w/2+0.15,0.12,Math.min(0.3,w*0.17));
-    ctx.fillRect(x0+len-0.18, w/2-0.45,0.12,Math.min(0.3,w*0.17));
+    if(vehicle==='bus') drawBusDetailEd(x0,len,w);
+    else if(vehicle==='miata') drawConvDetailEd(x0,len,w);
+    else drawSedanDetailEd(x0,len,w);
   }
   ctx.restore();
+}
+function drawSedanDetailEd(x0,len,w){
+  const wsX=x0+len*0.30, rwX=x0+len*0.09, glH=w-0.44;
+  ctx.fillStyle='rgba(8,12,18,0.45)';
+  rrect(wsX,-w/2+0.22,Math.min(0.85,len*0.20),glH,0.15); ctx.fill();
+  rrect(rwX,-w/2+0.25,Math.min(0.6,len*0.13),glH,0.15); ctx.fill();
+  ctx.fillStyle='#ffe9a8';
+  ctx.fillRect(x0+len-0.18,-w/2+0.15,0.12,Math.min(0.3,w*0.17));
+  ctx.fillRect(x0+len-0.18, w/2-0.45,0.12,Math.min(0.3,w*0.17));
+}
+function drawConvDetailEd(x0,len,w){
+  const cX=x0+len*0.16, cL=len*0.46;
+  ctx.fillStyle='#2a1010'; rrect(cX,-w/2+0.20,cL,w-0.40,0.12); ctx.fill();
+  ctx.fillStyle='#3a2424';
+  const sW=cL*0.42, sH=(w-0.40)/2-0.12;
+  rrect(cX+cL*0.12,-w/2+0.30,sW,sH,0.08); ctx.fill();
+  rrect(cX+cL*0.12, 0.06,       sW,sH,0.08); ctx.fill();
+  ctx.fillStyle='rgba(150,200,230,0.55)';
+  rrect(cX+cL-0.04,-w/2+0.24,0.14,w-0.48,0.06); ctx.fill();
+  ctx.fillStyle='#1a1414'; ctx.fillRect(cX-0.02,-w/2+0.30,0.12,w-0.60);
+  ctx.fillStyle='#ffe9a8';
+  ctx.fillRect(x0+len-0.16,-w/2+0.14,0.10,0.26);
+  ctx.fillRect(x0+len-0.16, w/2-0.40,0.10,0.26);
+}
+function drawBusDetailEd(x0,len,w){
+  const front=x0+len;
+  ctx.fillStyle='rgba(120,170,210,0.55)';
+  rrect(front-0.5,-w/2+0.18,0.34,w-0.36,0.1); ctx.fill();
+  const winX=x0+len*0.12, winLen=len*0.66, strip=0.26;
+  ctx.fillStyle='rgba(120,170,210,0.45)';
+  rrect(winX,-w/2+0.14,winLen,strip,0.08); ctx.fill();
+  rrect(winX, w/2-0.14-strip,winLen,strip,0.08); ctx.fill();
+  ctx.strokeStyle='rgba(20,30,40,0.5)'; ctx.lineWidth=0.04;
+  for(let i=1;i<6;i++){ const mx=winX+winLen*i/6;
+    ctx.beginPath(); ctx.moveTo(mx,-w/2+0.14); ctx.lineTo(mx,-w/2+0.14+strip); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx, w/2-0.14-strip); ctx.lineTo(mx,w/2-0.14); ctx.stroke();
+  }
+  ctx.fillStyle='rgba(30,40,52,0.7)';
+  rrect(front-1.2,w/2-0.16-strip-0.02,0.5,strip+0.04,0.05); ctx.fill();
+  ctx.fillStyle='#ffe9a8';
+  ctx.fillRect(front-0.12,-w/2+0.16,0.10,0.3);
+  ctx.fillRect(front-0.12, w/2-0.46,0.10,0.3);
 }
 
 function drawSelBox(cx,cy,w,h,a){
@@ -525,7 +568,7 @@ function render(){
   for(let i=0;i<L.cars.length;i++){
     const c=L.cars[i], sp=carSpec(c);
     const isSel=sel&&sel.kind==='car'&&sel.idx===i;
-    drawCar(c.cx,c.cy,c.h,sp,{fill:isSel?'#8a94a3':'#737d8c',stroke:'#525a66',detail:true,wheels:true});
+    drawCar(c.cx,c.cy,c.h,sp,{fill:isSel?'#8a94a3':'#737d8c',stroke:'#525a66',detail:true,wheels:true,vehicle:c.type||'default'});
     if(isSel){
       drawSelBox(c.cx,c.cy,sp.len,sp.wid,c.h);
       handle(c.cx+(sp.len/2+0.5)*Math.cos(c.h),c.cy+(sp.len/2+0.5)*Math.sin(c.h),6,'#80e0ff');
@@ -539,7 +582,7 @@ function render(){
   {
     const sp=playerSpec(), sc=startCenter();
     const isSel=sel&&sel.kind==='start';
-    drawCar(sc.x,sc.y,L.start.h,sp,{fill:isSel?'#2f9b56':'#2e7d46',stroke:'#3ddc84',detail:true,wheels:true});
+    drawCar(sc.x,sc.y,L.start.h,sp,{fill:isSel?'#2f9b56':'#2e7d46',stroke:'#3ddc84',detail:true,wheels:true,vehicle:L.vehicle||'default'});
     // rear axle dot
     ctx.save();ctx.fillStyle='#ffe040';
     ctx.beginPath();ctx.arc(L.start.x,L.start.y,4*p,0,2*π);ctx.fill();ctx.restore();

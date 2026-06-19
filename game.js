@@ -319,6 +319,7 @@ function roundRect(x, y, w, h, r) {
 
 function drawCarBody(pose, opts, spec) {
   spec = spec || CAR;
+  const vtype = opts.vehicle || 'default';
   ctx.save();
   ctx.translate(pose.x, pose.y);
   ctx.rotate(pose.h);
@@ -330,43 +331,101 @@ function drawCarBody(pose, opts, spec) {
 
   if (opts.wheels) {
     ctx.fillStyle = '#10131a';
-    for (const [wx, wya, a] of [
-      [0, -wy, 0], [0, wy, 0],
-      [spec.wb, -wy, opts.steer || 0], [spec.wb, wy, opts.steer || 0],
-    ]) {
-      ctx.save();
-      ctx.translate(wx, wya);
-      ctx.rotate(a);
-      ctx.fillRect(-wl / 2, -wt, wl, wt * 2);
-      ctx.restore();
-    }
+    // Bus rides on a dual rear axle; others have a single rear pair.
+    const axles = vtype === 'bus'
+      ? [[spec.wb * 0.06, 0], [spec.wb * 0.92, opts.steer || 0], [spec.wb, opts.steer || 0]]
+      : [[0, 0], [spec.wb, opts.steer || 0]];
+    for (const [wx, a] of axles)
+      for (const wya of [-wy, wy]) {
+        ctx.save();
+        ctx.translate(wx, wya);
+        ctx.rotate(a);
+        ctx.fillRect(-wl / 2, -wt, wl, wt * 2);
+        ctx.restore();
+      }
   }
 
-  roundRect(x0, -w / 2, len, w, Math.min(0.3, w * 0.17));
-  ctx.fillStyle = opts.fill;
+  // Body — Miata is always red; bus has squarer corners.
+  const fill = vtype === 'miata' ? '#d23b3b' : opts.fill;
+  const corner = vtype === 'bus' ? Math.min(0.18, w * 0.08) : Math.min(0.3, w * 0.17);
+  roundRect(x0, -w / 2, len, w, corner);
+  ctx.fillStyle = fill;
   ctx.fill();
   if (opts.stroke) {
     ctx.lineWidth = 0.07;
-    ctx.strokeStyle = opts.stroke;
+    ctx.strokeStyle = vtype === 'miata' ? '#7d1f1f' : opts.stroke;
     ctx.stroke();
   }
 
   if (opts.detail) {
-    // windshield and rear window, scaled to vehicle length
-    const wsX = x0 + len * 0.30;  // windshield x
-    const rwX = x0 + len * 0.09;  // rear window x
-    const glH = w - 0.44;
-    ctx.fillStyle = 'rgba(8,12,18,0.45)';
-    roundRect(wsX, -w / 2 + 0.22, Math.min(0.85, len * 0.20), glH, 0.15);
-    ctx.fill();
-    roundRect(rwX, -w / 2 + 0.25, Math.min(0.6, len * 0.13), glH, 0.15);
-    ctx.fill();
-    // headlights
-    ctx.fillStyle = '#ffe9a8';
-    ctx.fillRect(x0 + len - 0.18, -w / 2 + 0.15, 0.12, Math.min(0.3, w * 0.17));
-    ctx.fillRect(x0 + len - 0.18,  w / 2 - 0.45, 0.12, Math.min(0.3, w * 0.17));
+    if (vtype === 'bus')      drawBusDetail(x0, len, w);
+    else if (vtype === 'miata') drawConvertibleDetail(x0, len, w);
+    else                      drawSedanDetail(x0, len, w);
   }
   ctx.restore();
+}
+
+function drawSedanDetail(x0, len, w) {
+  const wsX = x0 + len * 0.30, rwX = x0 + len * 0.09, glH = w - 0.44;
+  ctx.fillStyle = 'rgba(8,12,18,0.45)';
+  roundRect(wsX, -w / 2 + 0.22, Math.min(0.85, len * 0.20), glH, 0.15); ctx.fill();
+  roundRect(rwX, -w / 2 + 0.25, Math.min(0.6, len * 0.13), glH, 0.15); ctx.fill();
+  ctx.fillStyle = '#ffe9a8';
+  ctx.fillRect(x0 + len - 0.18, -w / 2 + 0.15, 0.12, Math.min(0.3, w * 0.17));
+  ctx.fillRect(x0 + len - 0.18,  w / 2 - 0.45, 0.12, Math.min(0.3, w * 0.17));
+}
+
+// Top-down convertible: open cockpit (no roof), small raked windshield,
+// two seats and a roll hoop behind them.
+function drawConvertibleDetail(x0, len, w) {
+  const cockpitX = x0 + len * 0.16, cockpitLen = len * 0.46;
+  // open interior tub
+  ctx.fillStyle = '#2a1010';
+  roundRect(cockpitX, -w / 2 + 0.20, cockpitLen, w - 0.40, 0.12); ctx.fill();
+  // two seats
+  ctx.fillStyle = '#3a2424';
+  const seatW = cockpitLen * 0.42, seatH = (w - 0.40) / 2 - 0.12;
+  roundRect(cockpitX + cockpitLen * 0.12, -w / 2 + 0.30, seatW, seatH, 0.08); ctx.fill();
+  roundRect(cockpitX + cockpitLen * 0.12,  0.06,          seatW, seatH, 0.08); ctx.fill();
+  // raked windshield at the front of the cockpit
+  ctx.fillStyle = 'rgba(150,200,230,0.55)';
+  roundRect(cockpitX + cockpitLen - 0.04, -w / 2 + 0.24, 0.14, w - 0.48, 0.06); ctx.fill();
+  // roll hoop behind the seats
+  ctx.fillStyle = '#1a1414';
+  ctx.fillRect(cockpitX - 0.02, -w / 2 + 0.30, 0.12, w - 0.60);
+  // headlights
+  ctx.fillStyle = '#ffe9a8';
+  ctx.fillRect(x0 + len - 0.16, -w / 2 + 0.14, 0.10, 0.26);
+  ctx.fillRect(x0 + len - 0.16,  w / 2 - 0.40, 0.10, 0.26);
+}
+
+// Bus: full-width front windscreen, a long row of side windows on each
+// flank, and a door line near the front.
+function drawBusDetail(x0, len, w) {
+  const front = x0 + len;
+  // wraparound windscreen
+  ctx.fillStyle = 'rgba(120,170,210,0.55)';
+  roundRect(front - 0.5, -w / 2 + 0.18, 0.34, w - 0.36, 0.1); ctx.fill();
+  // side window strips
+  const winX = x0 + len * 0.12, winLen = len * 0.66, strip = 0.26;
+  ctx.fillStyle = 'rgba(120,170,210,0.45)';
+  roundRect(winX, -w / 2 + 0.14, winLen, strip, 0.08); ctx.fill();
+  roundRect(winX,  w / 2 - 0.14 - strip, winLen, strip, 0.08); ctx.fill();
+  // window mullions
+  ctx.strokeStyle = 'rgba(20,30,40,0.5)'; ctx.lineWidth = 0.04;
+  const n = 6;
+  for (let i = 1; i < n; i++) {
+    const mx = winX + winLen * i / n;
+    ctx.beginPath(); ctx.moveTo(mx, -w / 2 + 0.14); ctx.lineTo(mx, -w / 2 + 0.14 + strip); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx,  w / 2 - 0.14 - strip); ctx.lineTo(mx, w / 2 - 0.14); ctx.stroke();
+  }
+  // front door
+  ctx.fillStyle = 'rgba(30,40,52,0.7)';
+  roundRect(front - 1.2, w / 2 - 0.16 - strip - 0.02, 0.5, strip + 0.04, 0.05); ctx.fill();
+  // headlights
+  ctx.fillStyle = '#ffe9a8';
+  ctx.fillRect(front - 0.12, -w / 2 + 0.16, 0.10, 0.3);
+  ctx.fillRect(front - 0.12,  w / 2 - 0.46, 0.10, 0.3);
 }
 
 function drawGhost(pose, color, steer = 0) {
@@ -616,7 +675,8 @@ function draw(now) {
       drawCarBody({ x: o.pose.cx - Math.cos(o.pose.h) * (sp.len / 2 - sp.rOver),
                     y: o.pose.cy - Math.sin(o.pose.h) * (sp.len / 2 - sp.rOver),
                     h: o.pose.h },
-                  { fill: '#737d8c', stroke: '#525a66', detail: true, wheels: true }, sp);
+                  { fill: '#737d8c', stroke: '#525a66', detail: true, wheels: true,
+                    vehicle: o.pose.type || 'default' }, sp);
     } else {
       drawPoly(o.poly);
       ctx.fillStyle = o.kind === 'curb' ? '#3a4148' : '#39404e';
@@ -709,7 +769,7 @@ function draw(now) {
     if (trav >= anim.total) finishRun();
   }
   drawCarBody(carPose, { fill: '#4fc3f7', stroke: '#1c5f80', detail: true,
-                         wheels: true, steer: carSteer });
+                         wheels: true, steer: carSteer, vehicle: level.vehicle || 'default' });
 
   // move numbers (screen space so text stays crisp)
   screenTransform();
