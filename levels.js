@@ -206,6 +206,26 @@ const LEVELS = [
     solution: [{ steer: 0, dist: -0.4 }, { steer: -35, dist: 3 }, { steer: 35, dist: 3 }],
   },
   {
+    name: "Aftermath", tier: "Medium", mode: "moves", w: 20, h: 13,
+    start: { x: 18.7, y: 2.9, h: 2.6451 },
+    goal: { cx: 3.4, cy: 6.3, w: 6.8, h: 4.3, heads: [180], tol: 15 },
+    walls: [
+      { x: 0, y: 0, w: 20, h: 1.5, kind: "curb" },
+      { x: 0, y: 11, w: 20, h: 2, kind: "curb" },
+    ],
+    cars: [
+      { cx: 12.3, cy: 3.9, h: -Math.PI / 2 },
+      { cx: 11.4, cy: 7.2, h: Math.PI / 12 },
+      { cx: 3.9, cy: 10.7, h: -Math.PI / 6 },
+      { cx: 9.1, cy: 1.6, h: 0 },
+      { cx: 4.3, cy: 1.6, h: 3.1335 },
+      { cx: 15.7, cy: 1.1, h: 0 },
+    ],
+    starThresh: [2, 3], starThreshQuick: [13, 20],
+    hint: "You were clearly in a rush.. you don't remember why.",
+    solution: [{ steer: 0, dist: -4.4 }, { steer: -35, dist: 6 }],
+  },
+  {
     name: "Street Squeeze", tier: "Medium", mode: "moves", w: 22, h: 13,
     start: { x: 10.1, y: 9.4, h: 0 },
     goal: { cx: 19.5, cy: 5.3, w: 4.9, h: 5.9, heads: [0], tol: 18 },
@@ -338,26 +358,6 @@ const LEVELS = [
     starThresh: [3, 5], starThreshQuick: [14, 22],
     hint: "Only a Miata fits — use its 40° steering lock to squeeze in.",
     solution: [{ steer: 0, dist: 10 }, { steer: 40, dist: -2.5 }, { steer: -40, dist: -2.5 }],
-  },
-  {
-    name: "Bay Escape", tier: "Medium", mode: "moves", w: 20, h: 13,
-    start: { x: 18.7, y: 2.9, h: 2.6451 },
-    goal: { cx: 3.4, cy: 6.3, w: 6.8, h: 4.3, heads: [180], tol: 15 },
-    walls: [
-      { x: 0, y: 0, w: 20, h: 1.5, kind: "curb" },
-      { x: 0, y: 11, w: 20, h: 2, kind: "curb" },
-    ],
-    cars: [
-      { cx: 12.3, cy: 3.9, h: -Math.PI / 2 },
-      { cx: 11.4, cy: 7.2, h: Math.PI / 12 },
-      { cx: 3.5, cy: 10.8, h: -Math.PI / 6 },
-      { cx: 9.1, cy: 1.6, h: 0 },
-      { cx: 4.3, cy: 1.6, h: 3.1335 },
-      { cx: 15.7, cy: 1.1, h: 0 },
-    ],
-    starThresh: [2, 3], starThreshQuick: [13, 20],
-    hint: "Reverse straight out of the bay, then sweep left into the lane.",
-    solution: [{ steer: 0, dist: -4.4 }, { steer: -35, dist: 6 }],
   },
   {
     name: "Bus Depot", tier: "Hard", mode: "moves", w: 36, h: 21,
