@@ -341,6 +341,7 @@ const LEVELS = [
       { cx: 4.3, cy: 1.6, h: 3.1335 },
       { cx: 15.7, cy: 1.1, h: 0 },
     ],
+    par: 25,
     hint: "You were clearly in a rush.. you don't remember why.",
     solution: [{ steer: 0, dist: -4.4 }, { steer: -35, dist: 6 }],
   },
