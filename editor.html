@@ -848,22 +848,31 @@ bind('gAng',   e=>{ L.goal.ang=rad(+e.target.value)||0; render(); });
 bind('gHeads', e=>{ L.goal.heads=e.target.value.split(',').map(s=>+s.trim()).filter(n=>!isNaN(n)); render(); });
 bind('gTol',   e=>{ L.goal.tol=+e.target.value; render(); });
 
-// ── Load from game.js ─────────────────────────────────────────────────────────
+// ── Load levels (levels.js via GitHub API or local fallback) ──────────────────
 let gameLevels=[];
-async function fetchLevels(){
-  const text=await fetch('game.js').then(r=>{ if(!r.ok)throw new Error('fetch failed'); return r.text(); });
-  // Extract just the array literal (from const LEVELS = [ to the closing ];)
+function parseLevelsText(text){
   const m=text.match(/const LEVELS\s*=\s*(\[[\s\S]*?\n\];)/);
-  if(!m) throw new Error('LEVELS array not found in game.js');
-  // Evaluate with Math in scope
-  return new Function('Math','return '+m[1])(Math);
+  if(!m) throw new Error('LEVELS array not found');
+  const rad=d=>d*Math.PI/180;
+  return new Function('Math','rad','return '+m[1])(Math,rad);
 }
-async function populateLoadDropdown(){
+async function fetchLevels(){
+  if(ghReady()){
+    const fd=await ghGet(`/contents/levels.js?ref=${GHS.branch}`);
+    return parseLevelsText(b64decode(fd.content));
+  }
+  // fallback: fetch locally
+  const text=await fetch('levels.js').then(r=>{ if(!r.ok)throw new Error('fetch failed'); return r.text(); });
+  return parseLevelsText(text);
+}
+async function populateLoadDropdown(selectIdx=null){
   const selEl=document.getElementById('loadSel');
+  selEl.innerHTML=`<option value="">Loading…</option>`;
   try {
     gameLevels=await fetchLevels();
     selEl.innerHTML=`<option value="">Load level…</option>`+
       gameLevels.map((lv,i)=>`<option value="${i}">${i+1}. ${lv.name}</option>`).join('');
+    if(selectIdx!=null){ selEl.value=String(selectIdx); }
   } catch(err){
     selEl.innerHTML=`<option value="">Load failed</option>`;
   }
@@ -1032,22 +1041,18 @@ function setSaveStatus(msg, cls=''){
 }
 
 async function saveToGitHub(replaceIdx){
-  setSaveStatus('Fetching game.js…');
-  const fd=await ghGet(`/contents/game.js?ref=${GHS.branch}`);
-  const currentText=b64decode(fd.content);
-  const m=currentText.match(/const LEVELS\s*=\s*(\[[\s\S]*?\n\];)/);
-  if(!m) throw new Error('LEVELS array not found in game.js');
-  const levels=new Function('Math','return '+m[1])(Math);
+  setSaveStatus('Fetching levels.js…');
+  const fd=await ghGet(`/contents/levels.js?ref=${GHS.branch}`);
+  const levels=parseLevelsText(b64decode(fd.content));
 
   if(replaceIdx!=null) levels[replaceIdx]=JSON.parse(JSON.stringify(L));
   else levels.push(JSON.parse(JSON.stringify(L)));
 
-  const newArr='const LEVELS = [\n'+levels.map(lv=>buildExport(lv)).join('\n')+'\n];';
-  const newText=currentText.slice(0,m.index)+newArr+currentText.slice(m.index+m[0].length);
+  const newContent='const LEVELS = [\n'+levels.map(lv=>buildExport(lv)).join('\n')+'\n];\n';
 
-  setSaveStatus('Committing game.js…');
+  setSaveStatus('Committing levels.js…');
   const msg=replaceIdx!=null?`Update level ${replaceIdx+1}: ${L.name}`:`Add level: ${L.name}`;
-  const putData=await ghPut(`/contents/game.js`,{message:msg,content:strToBase64(newText),sha:fd.sha,branch:GHS.branch});
+  const putData=await ghPut(`/contents/levels.js`,{message:msg,content:strToBase64(newContent),sha:fd.sha,branch:GHS.branch});
   const newSha=putData.commit.sha.slice(0,7);
 
   // Bump cache-bust in index.html
@@ -1058,9 +1063,12 @@ async function saveToGitHub(replaceIdx){
     await ghPut(`/contents/index.html`,{message:`Bump cache-bust to ${newSha}`,content:strToBase64(iText),sha:ifd.sha,branch:GHS.branch});
   }catch(e){ /* non-fatal */ }
 
-  if(replaceIdx==null) loadedLevelIdx=levels.length-1;
+  const savedIdx = replaceIdx!=null ? replaceIdx : levels.length-1;
+  loadedLevelIdx = savedIdx;
   setSaveStatus(`✓ Saved — commit ${newSha}`, 'ok');
   document.getElementById('saveBtnRow').style.display='none';
+  // Refresh dropdown to reflect new state, keep selection on the saved level
+  populateLoadDropdown(savedIdx);
   setTimeout(()=>{ document.getElementById('saveOverlay').classList.remove('show'); document.getElementById('saveBtnRow').style.display=''; }, 2000);
 }
 
@@ -1079,6 +1087,7 @@ document.getElementById('btnGHSave').onclick=()=>{
   GHS.pat=document.getElementById('ghPat').value.trim();
   document.getElementById('ghOverlay').classList.remove('show');
   updateSaveBtn();
+  populateLoadDropdown(); // re-fetch with new credentials
 };
 document.getElementById('btnGHClose').onclick=()=>document.getElementById('ghOverlay').classList.remove('show');
 document.getElementById('ghOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('ghOverlay'))document.getElementById('ghOverlay').classList.remove('show');});
