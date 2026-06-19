@@ -290,9 +290,8 @@ function fitLevel(){
 new ResizeObserver(resize).observe(document.getElementById('cvWrap'));
 
 // ── Math helpers ─────────────────────────────────────────────────────────────
+// rad() and deg() come from physics.js (loaded first); don't redeclare them.
 const π   = Math.PI;
-const rad = d => d*π/180;
-const deg = r => r*180/π;
 const snap = (v,s=0.05) => Math.round(v/s)*s;
 function norm(a){ while(a>π)a-=2*π; while(a<-π)a+=2*π; return a; }
 function fmt(n,d=2){ return +n.toFixed(d); }
@@ -966,11 +965,131 @@ bind('gHeads', e=>{ L.goal.heads=e.target.value.split(',').map(s=>+s.trim()).fil
 bind('gTol',   e=>{ L.goal.tol=+e.target.value; render(); });
 
 // ── Level set: load / navigate / structural edits ─────────────────────────────
+// Safe parser for the LEVELS array literal — NEVER uses eval / new Function, so
+// even though this only ever reads our own levels.js (via GitHub API or a
+// same-origin fetch), no fetched or pasted text can execute code. Handles the
+// JS-literal features levels.js uses: unquoted keys, trailing commas, // and
+// /* */ comments, single/double-quoted strings, and arithmetic over numbers
+// and Math.PI (e.g. -Math.PI / 2). String contents are read verbatim, so
+// colons or commas inside names never affect structure parsing.
+class LiteralParser{
+  constructor(s,pos=0){ this.s=s; this.i=pos; }
+  err(m){ throw new Error('Level parse error at '+this.i+': '+m); }
+  ws(){
+    for(;;){
+      const c=this.s[this.i];
+      if(c===' '||c==='\t'||c==='\n'||c==='\r'){ this.i++; continue; }
+      if(c==='/'&&this.s[this.i+1]==='/'){ while(this.i<this.s.length&&this.s[this.i]!=='\n') this.i++; continue; }
+      if(c==='/'&&this.s[this.i+1]==='*'){ this.i+=2; while(this.i<this.s.length&&!(this.s[this.i]==='*'&&this.s[this.i+1]==='/')) this.i++; this.i+=2; continue; }
+      break;
+    }
+  }
+  value(){
+    this.ws();
+    const c=this.s[this.i];
+    if(c==='{') return this.object();
+    if(c==='[') return this.array();
+    if(c==='"'||c==="'") return this.string();
+    if(c==='t'||c==='f') return this.bool();
+    if(c==='n'){ this.expect('null'); return null; }
+    return this.addExpr();
+  }
+  object(){
+    this.i++; const o={};
+    for(;;){
+      this.ws();
+      if(this.s[this.i]==='}'){ this.i++; break; }
+      const k=this.key(); this.ws();
+      if(this.s[this.i]!==':') this.err('expected :');
+      this.i++; o[k]=this.value(); this.ws();
+      if(this.s[this.i]===','){ this.i++; continue; }
+      if(this.s[this.i]==='}'){ this.i++; break; }
+      this.err('expected , or }');
+    }
+    return o;
+  }
+  array(){
+    this.i++; const a=[];
+    for(;;){
+      this.ws();
+      if(this.s[this.i]===']'){ this.i++; break; }
+      a.push(this.value()); this.ws();
+      if(this.s[this.i]===','){ this.i++; continue; }
+      if(this.s[this.i]===']'){ this.i++; break; }
+      this.err('expected , or ]');
+    }
+    return a;
+  }
+  key(){
+    this.ws();
+    const c=this.s[this.i];
+    if(c==='"'||c==="'") return this.string();
+    let j=this.i;
+    while(j<this.s.length&&/[A-Za-z0-9_$]/.test(this.s[j])) j++;
+    if(j===this.i) this.err('expected key');
+    const k=this.s.slice(this.i,j); this.i=j; return k;
+  }
+  string(){
+    const q=this.s[this.i++]; let out='';
+    while(this.i<this.s.length){
+      const c=this.s[this.i++];
+      if(c===q) return out;
+      if(c==='\\'){
+        const e=this.s[this.i++];
+        if(e==='n') out+='\n'; else if(e==='t') out+='\t'; else if(e==='r') out+='\r';
+        else if(e==='u'){ out+=String.fromCharCode(parseInt(this.s.substr(this.i,4),16)); this.i+=4; }
+        else out+=e;
+      } else out+=c;
+    }
+    this.err('unterminated string');
+  }
+  bool(){
+    if(this.s.startsWith('true',this.i)){ this.i+=4; return true; }
+    if(this.s.startsWith('false',this.i)){ this.i+=5; return false; }
+    this.err('bad literal');
+  }
+  expect(w){ if(!this.s.startsWith(w,this.i)) this.err('expected '+w); this.i+=w.length; }
+  addExpr(){
+    let v=this.mulExpr();
+    for(;;){ this.ws(); const c=this.s[this.i];
+      if(c==='+'){ this.i++; v+=this.mulExpr(); }
+      else if(c==='-'){ this.i++; v-=this.mulExpr(); }
+      else break;
+    }
+    return v;
+  }
+  mulExpr(){
+    let v=this.unary();
+    for(;;){ this.ws(); const c=this.s[this.i];
+      if(c==='*'){ this.i++; v*=this.unary(); }
+      else if(c==='/'){ this.i++; v/=this.unary(); }
+      else break;
+    }
+    return v;
+  }
+  unary(){
+    this.ws();
+    if(this.s[this.i]==='-'){ this.i++; return -this.unary(); }
+    if(this.s[this.i]==='+'){ this.i++; return this.unary(); }
+    return this.primary();
+  }
+  primary(){
+    this.ws();
+    if(this.s[this.i]==='('){ this.i++; const v=this.addExpr(); this.ws(); if(this.s[this.i]!==')') this.err('expected )'); this.i++; return v; }
+    if(this.s.startsWith('Math.PI',this.i)){ this.i+=7; return Math.PI; }
+    const m=/^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(this.s.slice(this.i));
+    if(!m) this.err('expected number');
+    this.i+=m[0].length; return parseFloat(m[0]);
+  }
+}
 function parseLevelsText(text){
-  const m=text.match(/const LEVELS\s*=\s*(\[[\s\S]*?\n\];)/);
-  if(!m) throw new Error('LEVELS array not found');
-  const rad=d=>d*Math.PI/180;
-  return new Function('Math','rad','return '+m[1])(Math,rad);
+  const idx=text.indexOf('const LEVELS');
+  if(idx<0) throw new Error('LEVELS array not found');
+  const eq=text.indexOf('=',idx);
+  if(eq<0) throw new Error('LEVELS array not found');
+  const out=new LiteralParser(text,eq+1).value();
+  if(!Array.isArray(out)) throw new Error('LEVELS is not an array');
+  return out;
 }
 async function fetchLevels(){
   if(ghReady()){
