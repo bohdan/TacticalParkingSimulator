@@ -6,7 +6,6 @@ const LEVELS = [
     walls: [],
     cars: [],
     starThresh: [1, 2], starThreshQuick: [6, 9],
-    tut: "Drag forward on the road — the ghost car follows your finger. Then press Run.",
     hint: "Just drive into the green zone.",
     solution: [{ steer: 0, dist: 9 }],
   },
@@ -17,7 +16,6 @@ const LEVELS = [
     walls: [],
     cars: [],
     starThresh: [1, 2], starThreshQuick: [5, 8],
-    tut: "Steer with the top slider (or drag sideways) — the car drives in an arc.",
     hint: "One smooth arc gets you in.",
     solution: [{ steer: -35, dist: 6.06 }],
   },
@@ -28,7 +26,6 @@ const LEVELS = [
     walls: [],
     cars: [],
     starThresh: [1, 2], starThreshQuick: [5, 8],
-    tut: "Drag backwards to reverse. Fewer moves = more stars (see ? for scoring).",
     hint: "The zone is behind you.",
     solution: [{ steer: 0, dist: -8 }],
   },
@@ -62,7 +59,7 @@ const LEVELS = [
   {
     name: "First Parallel", tier: "Easy", mode: "moves", w: 24, h: 13,
     start: { x: 2.6, y: 7, h: 0 },
-    goal: { cx: 10.7, cy: 9.4, w: 8, h: 2.2, heads: [0], tol: 12 },
+    goal: { cx: 11.5, cy: 9.4, w: 8, h: 2.2, heads: [0], tol: 12 },
     walls: [
       { x: 0, y: 10.5, w: 24, h: 2.5, kind: "curb" },
       { x: 0, y: 0, w: 24, h: 1.6, kind: "curb" },
@@ -265,123 +262,98 @@ const LEVELS = [
     hint: "Only 5.5 m of corridor — a true shuffle marathon.",
     solution: [{ steer: -35, dist: 1.5 }, { steer: 20, dist: 6 }, { steer: -35, dist: -2 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 3 }],
   },
-
-  // ── Curved-road parallel parking ──────────────────────────────────────────
-
   {
-    // Outer-bend parallel: spots angled +15° following the outside of the curve.
-    // Drive past, then reverse in — same as a straight park but the gap is rotated.
-    // Verified solution: fwd 12 m, steer +35 rev 3 m, steer -35 rev 4 m → 14.9°.
     name: "Outer Bend Park", tier: "Hard", mode: "moves", w: 22, h: 13,
-    vehicle: 'default',
     start: { x: 2.5, y: 7, h: 0 },
-    goal: { cx: 9.5, cy: 9.3, w: 9, h: 2.8, ang: rad(15), heads: [15], tol: 15 },
+    goal: { cx: 9.5, cy: 9.3, w: 9, h: 2.8, ang: Math.PI / 12, heads: [15], tol: 15 },
     walls: [
-      { x: 0, y: 0,    w: 22, h: 1.6, kind: 'curb' },
-      { x: 0, y: 11.5, w: 22, h: 1.5, kind: 'curb' },
+      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
+      { x: 0, y: 11.5, w: 22, h: 1.5, kind: "curb" },
     ],
     cars: [
-      { cx: 3.5, cy: 8.8, h: rad(15) },
-      { cx: 15.5, cy: 9.9, h: rad(15) },
+      { cx: 3.5, cy: 8.8, h: Math.PI / 12 },
+      { cx: 15.5, cy: 9.9, h: Math.PI / 12 },
     ],
     traffic: [
-      { x: -5, y: 3.2, h: 0,       speed: 5.5, loop: 32, offset: 0 },
-      { x: -5, y: 5.5, h: 0,       speed: 4,   loop: 28, offset: 14 },
-      { x: 27, y: 4.5, h: Math.PI, speed: 5,   loop: 32, offset: 8 },
+      { x: -5, y: 3.2, h: 0, speed: 5.5, loop: 32, offset: 0 },
+      { x: -5, y: 5.5, h: 0, speed: 4, loop: 28, offset: 14 },
+      { x: 27, y: 4.5, h: Math.PI, speed: 5, loop: 32, offset: 8 },
     ],
     starThresh: [3, 5], starThreshQuick: [17, 26],
     hint: "Spots are angled — reverse in as normal but match the 15° tilt.",
     solution: [{ steer: 0, dist: 12 }, { steer: 35, dist: -3 }, { steer: -35, dist: -4 }],
   },
-
   {
-    // Inner-bend parallel: spots angled -15° on inside of the curve.
-    // The tail swings toward the road when reversing — tighter margins.
-    // Verified: fwd 12 m, steer -35 rev 3 m, steer +35 rev 4 m → -14.9°.
     name: "Inner Bend Park", tier: "Expert", mode: "moves", w: 22, h: 10,
-    vehicle: 'default',
     start: { x: 2.5, y: 6, h: 0 },
-    goal: { cx: 9.5, cy: 3.6, w: 8, h: 2.8, ang: rad(-15), heads: [-15], tol: 15 },
+    goal: { cx: 9.5, cy: 3.6, w: 8, h: 2.8, ang: -Math.PI / 12, heads: [-15], tol: 15 },
     walls: [
-      { x: 0, y: 0,   w: 22, h: 1.5, kind: 'curb' },
-      { x: 0, y: 8.5, w: 22, h: 1.5, kind: 'curb' },
+      { x: 0, y: 0, w: 22, h: 1.5, kind: "curb" },
+      { x: 0, y: 8.5, w: 22, h: 1.5, kind: "curb" },
     ],
     cars: [
-      { cx: 3.5, cy: 5.2, h: rad(-15) },
-      { cx: 15.5, cy: 4.2, h: rad(-15) },
+      { cx: 3.5, cy: 5.2, h: -Math.PI / 12 },
+      { cx: 15.5, cy: 4.2, h: -Math.PI / 12 },
     ],
     traffic: [
-      { x: -5, y: 7.2, h: 0,       speed: 5,   loop: 32, offset: 0  },
-      { x: 27, y: 6,   h: Math.PI, speed: 4.5, loop: 28, offset: 10 },
-      { x: 27, y: 7.8, h: Math.PI, speed: 6,   loop: 32, offset: 22 },
+      { x: -5, y: 7.2, h: 0, speed: 5, loop: 32, offset: 0 },
+      { x: 27, y: 6, h: Math.PI, speed: 4.5, loop: 28, offset: 10 },
+      { x: 27, y: 7.8, h: Math.PI, speed: 6, loop: 32, offset: 22 },
     ],
     starThresh: [3, 5], starThreshQuick: [17, 26],
     hint: "Inner bend — tail swings wide when reversing; angle in carefully.",
     solution: [{ steer: 0, dist: 12 }, { steer: -35, dist: -3 }, { steer: 35, dist: -4 }],
   },
-
-  // ── Mazda Miata (sports car) ───────────────────────────────────────────────
-
   {
-    // Miata turns on a dime: 40° max steer vs 35° for the sedan.
-    // Verified 2-move solution: fwd 8 m, then swing left with -40° for 4 m.
     name: "Miata Alley", tier: "Medium", mode: "moves", w: 22, h: 10,
-    vehicle: 'miata',
+    vehicle: "miata",
     start: { x: 2.5, y: 7, h: 0 },
     goal: { cx: 13.3, cy: 3.3, w: 4.5, h: 4.5, heads: [-90, 90], tol: 12 },
     walls: [
-      { x: 0, y: 0, w: 22, h: 0.5, kind: 'curb' },
+      { x: 0, y: 0, w: 22, h: 0.5, kind: "curb" },
     ],
     cars: [
-      { cx: 8.5,  cy: 3.3, h: -Math.PI / 2 },
+      { cx: 8.5, cy: 3.3, h: -Math.PI / 2 },
       { cx: 18.5, cy: 3.3, h: -Math.PI / 2 },
     ],
     traffic: [
-      { x: -5, y: 7.8, h: 0,       speed: 5, loop: 32, offset: 0  },
+      { x: -5, y: 7.8, h: 0, speed: 5, loop: 32, offset: 0 },
       { x: 27, y: 6.5, h: Math.PI, speed: 4, loop: 28, offset: 16 },
     ],
     starThresh: [2, 3], starThreshQuick: [10, 15],
     hint: "The Miata's tight turn radius makes this a 2-move park.",
     solution: [{ steer: 0, dist: 8 }, { steer: -40, dist: 4 }],
   },
-
   {
-    // Tight parallel gap only 1.7 m wider than the Miata's length — sedan can't fit.
-    // Verified: fwd 10 m, steer +40 rev 2.5 m, steer -40 rev 2.5 m → heading 0°.
     name: "Miata Squeeze", tier: "Hard", mode: "moves", w: 22, h: 12,
-    vehicle: 'miata',
+    vehicle: "miata",
     start: { x: 2.5, y: 7, h: 0 },
     goal: { cx: 9.4, cy: 9.15, w: 5.5, h: 2.1, heads: [0], tol: 12 },
     walls: [
-      { x: 0, y: 10.5, w: 22, h: 1.5, kind: 'curb' },
-      { x: 0, y: 0,    w: 22, h: 1.6, kind: 'curb' },
+      { x: 0, y: 10.5, w: 22, h: 1.5, kind: "curb" },
+      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
     ],
     cars: [
-      { cx: 4.8,  cy: 9.2, h: 0 },
+      { cx: 4.8, cy: 9.2, h: 0 },
       { cx: 14.8, cy: 9.2, h: 0 },
-      { cx: 12,   cy: 2.5, h: Math.PI },
+      { cx: 12, cy: 2.5, h: Math.PI },
     ],
     starThresh: [3, 5], starThreshQuick: [14, 22],
     hint: "Only a Miata fits — use its 40° steering lock to squeeze in.",
     solution: [{ steer: 0, dist: 10 }, { steer: 40, dist: -2.5 }, { steer: -40, dist: -2.5 }],
   },
-
-  // ── Bus ────────────────────────────────────────────────────────────────────
-
   {
-    // 12 m city bus reverses into a depot bay. The swept rear overhang is massive.
-    // Verified 2-move solution: fwd 28 m, steer -45 rev 10 m → heading 88°.
     name: "Easy Exit", tier: "Easy", mode: "moves", w: 22, h: 13,
     start: { x: 9.65, y: 8.5, h: 0 },
     goal: { cx: 17, cy: 3.8, w: 10, h: 3, heads: [0], tol: 20 },
     walls: [
-      { x: 0, y: 10.5, w: 22, h: 2.5, kind: 'curb' },
-      { x: 0, y: 0,    w: 22, h: 1.6, kind: 'curb' },
+      { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
+      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
     ],
     cars: [
-      { cx: 4.6,  cy: 9.4, h: 0 },
-      { cx: 17.0, cy: 9.4, h: 0 },
-      { cx: 9.5,  cy: 2.55, h: Math.PI },
+      { cx: 4.6, cy: 9.4, h: 0 },
+      { cx: 17, cy: 9.4, h: 0 },
+      { cx: 9.5, cy: 2.55, h: Math.PI },
     ],
     starThresh: [2, 3], starThreshQuick: [12, 18],
     hint: "Swing the nose out toward the lane, then counter-steer and glide away.",
@@ -392,13 +364,13 @@ const LEVELS = [
     start: { x: 9.65, y: 8.5, h: 0 },
     goal: { cx: 17, cy: 3.8, w: 10, h: 3, heads: [0], tol: 18 },
     walls: [
-      { x: 0, y: 10.5, w: 22, h: 2.5, kind: 'curb' },
-      { x: 0, y: 0,    w: 22, h: 1.6, kind: 'curb' },
+      { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
+      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
     ],
     cars: [
-      { cx: 5.6,  cy: 9.4, h: 0 },
-      { cx: 16.0, cy: 9.4, h: 0 },
-      { cx: 12.0, cy: 2.55, h: Math.PI },
+      { cx: 5.6, cy: 9.4, h: 0 },
+      { cx: 16, cy: 9.4, h: 0 },
+      { cx: 12, cy: 2.55, h: Math.PI },
     ],
     starThresh: [3, 4], starThreshQuick: [14, 21],
     hint: "Nudge back first to gain the extra inch you need.",
@@ -409,13 +381,13 @@ const LEVELS = [
     start: { x: 9.65, y: 8.5, h: 0 },
     goal: { cx: 16, cy: 6.3, w: 10, h: 3, heads: [0], tol: 15 },
     walls: [
-      { x: 0, y: 10.5, w: 22, h: 2.5, kind: 'curb' },
-      { x: 0, y: 0,    w: 22, h: 1.6, kind: 'curb' },
+      { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
+      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
     ],
     cars: [
-      { cx: 5.9,  cy: 9.4, h: 0 },
+      { cx: 5.9, cy: 9.4, h: 0 },
       { cx: 15.9, cy: 9.4, h: 0 },
-      { cx: 9.5,  cy: 2.55, h: Math.PI },
+      { cx: 9.5, cy: 2.55, h: Math.PI },
     ],
     starThresh: [3, 4], starThreshQuick: [15, 22],
     hint: "Centimetre gaps — a tiny nudge back opens just enough room.",
@@ -423,15 +395,15 @@ const LEVELS = [
   },
   {
     name: "Bay Escape", tier: "Medium", mode: "moves", w: 20, h: 13,
-    start: { x: 10, y: 5.5, h: -90 },
+    start: { x: 10, y: 5.5, h: -90.0000 },
     goal: { cx: 6, cy: 6, w: 8, h: 3, heads: [180], tol: 15 },
     walls: [
-      { x: 0, y: 0,  w: 20, h: 1.5, kind: 'curb' },
-      { x: 0, y: 11, w: 20, h: 2,   kind: 'curb' },
+      { x: 0, y: 0, w: 20, h: 1.5, kind: "curb" },
+      { x: 0, y: 11, w: 20, h: 2, kind: "curb" },
     ],
     cars: [
       { cx: 12.7, cy: 5.3, h: -Math.PI / 2 },
-      { cx: 15.0, cy: 9.5, h: 0 },
+      { cx: 15, cy: 9.5, h: 0 },
     ],
     starThresh: [2, 3], starThreshQuick: [13, 20],
     hint: "Reverse straight out of the bay, then sweep left into the lane.",
@@ -439,45 +411,41 @@ const LEVELS = [
   },
   {
     name: "Bus Depot", tier: "Hard", mode: "moves", w: 36, h: 21,
-    vehicle: 'bus',
+    vehicle: "bus",
     start: { x: 3, y: 16, h: 0 },
     goal: { cx: 24.6, cy: 13.2, w: 5, h: 14, heads: [90, -90], tol: 10 },
     walls: [
-      { x: 0, y: 20.5, w: 36, h: 0.5, kind: 'curb' },
+      { x: 0, y: 20.5, w: 36, h: 0.5, kind: "curb" },
     ],
     cars: [
-      { cx: 12, cy: 6, h: Math.PI / 2, type: 'bus' },
-      { cx: 8,  cy: 19, h: 0 },
+      { cx: 12, cy: 6, h: Math.PI / 2, type: "bus" },
+      { cx: 8, cy: 19, h: 0 },
       { cx: 18, cy: 19, h: 0 },
     ],
     traffic: [
-      { x: -6, y: 15, h: 0,       speed: 4, loop: 46, offset: 0  },
+      { x: -6, y: 15, h: 0, speed: 4, loop: 46, offset: 0 },
       { x: 42, y: 17, h: Math.PI, speed: 5, loop: 46, offset: 23 },
     ],
     starThresh: [2, 3], starThreshQuick: [22, 34],
     hint: "12 m of bus — watch the enormous rear swing as you steer in.",
     solution: [{ steer: 0, dist: 28 }, { steer: -45, dist: -10 }],
   },
-
   {
-    // Tighter bus stand: wall pillars frame the bay, leaving only 6 m clearance.
-    // Must drive past the pillars before reversing in.
-    // Verified: fwd 25 m, steer -45 rev 10 m → heading 88° into the stand.
     name: "Bus Terminal", tier: "Expert", mode: "moves", w: 36, h: 21,
-    vehicle: 'bus',
+    vehicle: "bus",
     start: { x: 3, y: 16, h: 0 },
     goal: { cx: 21.6, cy: 13.2, w: 5, h: 14, heads: [90, -90], tol: 10 },
     walls: [
-      { x: 0,  y: 20.5, w: 36, h: 0.5, kind: 'curb' },
-      { x: 18, y: 0,    w: 0.8, h: 6.5 },
-      { x: 25, y: 0,    w: 0.8, h: 6.5 },
+      { x: 0, y: 20.5, w: 36, h: 0.5, kind: "curb" },
+      { x: 18, y: 0, w: 0.8, h: 6.5 },
+      { x: 25, y: 0, w: 0.8, h: 6.5 },
     ],
     cars: [
-      { cx: 10, cy: 6, h: Math.PI / 2, type: 'bus' },
+      { cx: 10, cy: 6, h: Math.PI / 2, type: "bus" },
       { cx: 30, cy: 19, h: 0 },
     ],
     traffic: [
-      { x: -6, y: 14.5, h: 0,       speed: 3.5, loop: 46, offset: 0  },
+      { x: -6, y: 14.5, h: 0, speed: 3.5, loop: 46, offset: 0 },
       { x: 42, y: 17.5, h: Math.PI, speed: 4.5, loop: 46, offset: 20 },
     ],
     starThresh: [2, 3], starThreshQuick: [20, 31],
