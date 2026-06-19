@@ -597,7 +597,7 @@ function drawArcGuides(pose, steerRad) {
 // rear axle and both front wheels to that centre. Each front wheel rolls
 // perpendicular to its own radius line (classic Ackermann); the rear-axle →
 // centre segment is the turn radius R = wheelbase / tan(steer).
-function drawSteerGeometry(pose, steerRad) {
+function drawSteerGeometry(pose, steerRad, preview) {
   if (Math.abs(steerRad) < rad(0.5)) return;   // ~straight: centre at infinity
   const R = CAR.wb / Math.tan(steerRad);
   const c = Math.cos(pose.h), s = Math.sin(pose.h);
@@ -605,24 +605,53 @@ function drawSteerGeometry(pose, steerRad) {
   const O = { x: pose.x + R * ux, y: pose.y + R * uy };
   const sgn = Math.sign(R);
   const at = t => ({ x: pose.x + t * ux, y: pose.y + t * uy });
+  const half = CAR.wid / 2 - 0.16;             // matches drawn wheel inset
 
   // rear-axle axis — thin, extends just past the centre and the opposite side
   drawPath([at(-sgn * 1.0), at(R + sgn * 1.0)], 'rgba(255,255,255,0.28)', false, 0.035);
 
-  // radius lines from each front wheel to the turn centre
-  const half = CAR.wid / 2 - 0.16;             // matches drawn wheel inset
-  const fw = ly => ({ x: pose.x + CAR.wb * c - ly * s, y: pose.y + CAR.wb * s + ly * c });
-  drawPath([fw(half),  O], 'rgba(255,255,255,0.28)', false, 0.03);
-  drawPath([fw(-half), O], 'rgba(255,255,255,0.28)', false, 0.03);
-
   // the turn radius itself: rear-axle centre → turn centre
   drawPath([{ x: pose.x, y: pose.y }, O], 'rgba(120,220,255,0.8)', false, 0.045);
+
+  // Front wheels turned to the pending steer at the *current* (move-start)
+  // pose, so the steering angle is visible here too — not only on the preview.
+  drawSteerWheels(pose, steerRad);
+
+  // Radius lines (perpendicular to each front wheel) drawn from the *preview*
+  // pose's front wheels to the shared turn centre. The whole arc orbits the
+  // same O, so these line up with where the car is heading.
+  const fp = preview || pose;
+  const fc = Math.cos(fp.h), fs = Math.sin(fp.h);
+  const fw = ly => ({ x: fp.x + CAR.wb * fc - ly * fs, y: fp.y + CAR.wb * fs + ly * fc });
+  drawPath([fw(half),  O], 'rgba(255,255,255,0.28)', false, 0.03);
+  drawPath([fw(-half), O], 'rgba(255,255,255,0.28)', false, 0.03);
 
   // turn-centre marker
   ctx.beginPath();
   ctx.arc(O.x, O.y, 0.12, 0, 2 * Math.PI);
   ctx.fillStyle = 'rgba(120,220,255,0.9)';
   ctx.fill();
+}
+
+// Draw just the two front wheels at `pose`, rotated to `steerRad`, with a
+// cyan outline so they read as part of the steering overlay.
+function drawSteerWheels(pose, steerRad) {
+  const c = Math.cos(pose.h), s = Math.sin(pose.h);
+  const wy = CAR.wid / 2 - 0.16;
+  const wl = Math.min(0.9, CAR.len * 0.075), wt = Math.min(0.18, CAR.wid * 0.10);
+  for (const ly of [wy, -wy]) {
+    const wx = pose.x + CAR.wb * c - ly * s;
+    const wyp = pose.y + CAR.wb * s + ly * c;
+    ctx.save();
+    ctx.translate(wx, wyp);
+    ctx.rotate(pose.h + steerRad);
+    ctx.fillStyle = '#10131a';
+    ctx.fillRect(-wl / 2, -wt, wl, wt * 2);
+    ctx.lineWidth = 0.03;
+    ctx.strokeStyle = 'rgba(120,220,255,0.9)';
+    ctx.strokeRect(-wl / 2, -wt, wl, wt * 2);
+    ctx.restore();
+  }
 }
 
 function drawArrow(x, y, ang, len, color) {
@@ -724,7 +753,8 @@ function draw(now) {
   // arc guides (all 4 corners + all 4 wheels) — drawn first so they sit behind everything
   if (!anim) {
     drawArcGuides(editStartPose(), rad(editSteer));
-    drawSteerGeometry(editStartPose(), rad(editSteer));
+    const previewPose = editSim ? (editSim.hit ? editSim.hit.pose : editSim.end) : null;
+    drawSteerGeometry(editStartPose(), rad(editSteer), previewPose);
   }
 
   // committed plan: paths + ghosts
