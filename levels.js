@@ -1,9 +1,5 @@
 const LEVELS = [
   {
-    type: "cutscene", name: "Briefing",
-    message: ["> MSG INCOMING", "", "  AGENT 7", "  VALET", "", "  PKG BY 0300.", "  NO SCRATCHES.", "", "> MISSION: GO."],
-  },
-  {
     name: "Lesson 1: Drive", tier: "Tutorial", mode: "moves", w: 18, h: 10,
     start: { x: 3, y: 5, h: 0 },
     goal: { cx: 13.5, cy: 5, w: 6.5, h: 3, heads: [0], tol: 15 },
@@ -32,6 +28,10 @@ const LEVELS = [
     starThresh: [1, 2], starThreshQuick: [5, 8],
     hint: "The zone is behind you.",
     solution: [{ steer: 0, dist: -8 }],
+  },
+  {
+    type: "cutscene", name: "Briefing",
+    message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "DUE TO TREASURY BUDGET CONSTRAINTS,", "YOUR LICENSE TO KILL REMAINS ACTIVE", "BUT YOUR LICENSE TO PARK ILLEGALLY", "IS ***REVOKED***. ", "", "FUTURE FINES WILL BE DEDUCTED FROM YOUR", "MARTINI ALLOWANCE."],
   },
   {
     name: "First Steps", tier: "Easy", mode: "moves", w: 18, h: 12,
