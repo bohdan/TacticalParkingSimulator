@@ -1,5 +1,10 @@
 const LEVELS = [
   {
+    id: "gvhx9l",
+    type: "cutscene", name: "Briefing",
+    message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "LICENSE TO KILL: **ACTIVE**", "LICENSE TO PARK ILLEGALLY: **REVOKED**", "", "DUE TO TREASURY BUDGET CONSTRAINTS,", "FUTURE FINES WILL BE DEDUCTED FROM YOUR", "MARTINI ALLOWANCE."],
+  },
+  {
     id: "jo7stz",
     name: "Lesson 1: Drive", tier: "Tutorial", mode: "moves", w: 18, h: 10,
     start: { x: 3, y: 5, h: 0 },
@@ -28,11 +33,6 @@ const LEVELS = [
     cars: [],
     hint: "The zone is behind you.",
     solution: [{ steer: 0, dist: -10 }],
-  },
-  {
-    id: "gvhx9l",
-    type: "cutscene", name: "Briefing",
-    message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "LICENSE TO KILL: **ACTIVE**", "LICENSE TO PARK ILLEGALLY: **REVOKED**", "", "DUE TO TREASURY BUDGET CONSTRAINTS,", "FUTURE FINES WILL BE DEDUCTED FROM YOUR", "MARTINI ALLOWANCE."],
   },
   {
     id: "p3qylc",
@@ -270,6 +270,29 @@ const LEVELS = [
     solution: [{ steer: -35, dist: 3 }, { steer: 15, dist: 10 }, { steer: -35, dist: 6 }, { steer: 25, dist: -0.5 }],
   },
   {
+    type: "cutscene", name: "Bus",
+    message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "COVERT SEDAN STATUS: **TOWED**", "REPLACEMENT VEHICLE: MUNICIPAL BUS", "", "Q-BRANCH REFUSED TO PAY THE IMPOUND FEE.", "YOU ARE NOW UNDERCOVER ON ROUTE 14.", "DO NOT USE THE EJECTOR SEAT."],
+  },
+  {
+    id: "x62bx2",
+    name: "Bus Depot", tier: "Hard", mode: "moves", w: 36, h: 21,
+    vehicle: "bus",
+    start: { x: 3.1, y: 15.8, h: 0 },
+    goal: { cx: 17.6, cy: 6.7, w: 5.3, h: 13.2, heads: [90, -90], tol: 45 },
+    walls: [
+      { x: 0, y: 20.5, w: 36, h: 0.5, kind: "curb" },
+    ],
+    cars: [
+      { cx: 12, cy: 6, h: Math.PI / 2, type: "bus" },
+      { cx: 8, cy: 19, h: 0 },
+      { cx: 18, cy: 19, h: 0 },
+      { cx: 29.8, cy: 6.1, h: Math.PI / 2, type: "bus" },
+      { cx: 29.9, cy: 19.1, h: 0 },
+    ],
+    hint: "12 m of bus — watch the enormous rear swing as you steer in.",
+    solution: [{ steer: -12, dist: 16 }, { steer: 28, dist: -5 }, { steer: -28, dist: 5 }],
+  },
+  {
     id: "s23h6e",
     name: "Bus Terminal", tier: "Expert", mode: "moves", w: 36, h: 21,
     vehicle: "bus",
@@ -286,6 +309,10 @@ const LEVELS = [
     ],
     hint: "Thread between the pillars before easing the 12 m bus in.",
     solution: [{ steer: 0, dist: 25 }, { steer: -45, dist: -10 }],
+  },
+  {
+    type: "cutscene", name: "Cutscene Fineland",
+    message: ["> MSG INCOMING", "", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "​NEW ASSIGNMENT: FINELAND", "", "​PARKING IS MONITORED BY", "SATELLITE."],
   },
   {
     id: "hzl4ot",
@@ -452,6 +479,10 @@ const LEVELS = [
     solution: [{ steer: 35, dist: -3.7 }, { steer: -35, dist: 0.7 }, { steer: 35, dist: -0.8 }, { steer: -35, dist: 0.8 }, { steer: 35, dist: -0.9 }, { steer: -35, dist: 0.9 }, { steer: 35, dist: -0.7 }, { steer: -35, dist: 3.8 }],
   },
   {
+    type: "cutscene", name: "Cutscene Miata",
+    message: ["> MSG INCOMING", "", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "EXEMPLARY FIELD SERVICE: REWARDED", "", "CONGRATULATIONS ON YOUR CLEAN RECORD.", "YOUR NEW RED CONVERTIBLE HAS BEEN DELIVERED.", "THE POP-UP HEADLIGHTS DO NOT FIRE LASERS."],
+  },
+  {
     id: "iyp8hx",
     name: "Miata Alley", tier: "Medium", mode: "moves", w: 22, h: 10,
     vehicle: "miata",
@@ -489,24 +520,5 @@ const LEVELS = [
     ],
     hint: "Only a Miata fits — use its 40° steering lock to squeeze in.",
     solution: [{ steer: 0, dist: 10 }, { steer: 40, dist: -2.5 }, { steer: -40, dist: -2.5 }],
-  },
-  {
-    id: "x62bx2",
-    name: "Bus Depot", tier: "Hard", mode: "moves", w: 36, h: 21,
-    vehicle: "bus",
-    start: { x: 3.1, y: 15.8, h: 0 },
-    goal: { cx: 17.6, cy: 6.7, w: 5.3, h: 13.2, heads: [90, -90], tol: 45 },
-    walls: [
-      { x: 0, y: 20.5, w: 36, h: 0.5, kind: "curb" },
-    ],
-    cars: [
-      { cx: 12, cy: 6, h: Math.PI / 2, type: "bus" },
-      { cx: 8, cy: 19, h: 0 },
-      { cx: 18, cy: 19, h: 0 },
-      { cx: 29.8, cy: 6.1, h: Math.PI / 2, type: "bus" },
-      { cx: 29.9, cy: 19.1, h: 0 },
-    ],
-    hint: "12 m of bus — watch the enormous rear swing as you steer in.",
-    solution: [{ steer: -12, dist: 16 }, { steer: 28, dist: -5 }, { steer: -28, dist: 5 }],
   },
 ];
