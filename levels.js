@@ -80,6 +80,23 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
   },
   {
+    name: "Diagonal Slot", tier: "Hard", mode: "moves", w: 24, h: 12,
+    start: { x: 1.2, y: 7.3, h: 0 },
+    goal: { cx: 13.9, cy: 3.3, w: 2.4, h: 5.1, ang: Math.PI / 4, heads: [-45], tol: 8 },
+    walls: [
+      { x: 0, y: 0, w: 24, h: 0.5, kind: "curb" },
+    ],
+    cars: [
+      { cx: 6.5, cy: 3.2, h: -Math.PI / 4 },
+      { cx: 10.2, cy: 3.2, h: -Math.PI / 4 },
+      { cx: 17.6, cy: 3.2, h: -Math.PI / 4 },
+      { cx: 21, cy: 3.2, h: -Math.PI / 4 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [11, 18],
+    hint: "Angled bays: enter on the diagonal, dead straight.",
+    solution: [{ steer: -15, dist: 6 }, { steer: 0, dist: 4 }, { steer: -35, dist: 1 }],
+  },
+  {
     name: "Easy Exit", tier: "Easy", mode: "moves", w: 22, h: 13,
     start: { x: 8.2, y: 9.4, h: 0 },
     goal: { cx: 19, cy: 6.1, w: 5.5, h: 4.3, heads: [0], tol: 20 },
@@ -114,6 +131,32 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
   },
   {
+    name: "Outer Bend Park", tier: "Hard", mode: "moves", w: 22, h: 13,
+    start: { x: 1.2, y: 3, h: 0 },
+    goal: { cx: 12.6, cy: 8.4, w: 5.7, h: 2.4, ang: Math.PI / 6, heads: [30], tol: 15 },
+    walls: [
+      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
+      { x: 0, y: 7.3, w: 5.4, h: 5.7, kind: "curb" },
+      { x: 5.4, y: 7.9, w: 3.9, h: 5.1, kind: "curb" },
+      { x: 9.3, y: 9.6, w: 1.8, h: 3.4, kind: "curb" },
+      { x: 11.2, y: 11.2, w: 3.2, h: 1.8, kind: "curb" },
+      { x: 14.4, y: 12.2, w: 0.6, h: 0.8, kind: "curb" },
+    ],
+    cars: [
+      { cx: 2.4, cy: 6.1, h: 0 },
+      { cx: 7.5, cy: 6.5, h: Math.PI / 12 },
+      { cx: 16.5, cy: 12.5, h: Math.PI / 3 },
+    ],
+    traffic: [
+      { x: -5, y: 3.2, h: 0, speed: 5.5, loop: 32, offset: 0 },
+      { x: -5, y: 5.5, h: 0, speed: 4, loop: 28, offset: 14 },
+      { x: 27, y: 4.5, h: Math.PI, speed: 5, loop: 32, offset: 8 },
+    ],
+    starThresh: [3, 5], starThreshQuick: [17, 26],
+    hint: "Spots are angled — reverse in as normal but match the 15° tilt.",
+    solution: [{ steer: 0, dist: 12 }, { steer: 35, dist: -3 }, { steer: -35, dist: -4 }],
+  },
+  {
     name: "Tight Bay", tier: "Medium", mode: "moves", w: 20, h: 13,
     start: { x: 16.5, y: 8.6, h: Math.PI },
     goal: { cx: 9.4, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
@@ -133,7 +176,7 @@ const LEVELS = [
   {
     name: "Slalom", tier: "Medium", mode: "moves", w: 28, h: 12,
     start: { x: 2.8, y: 9.3, h: 0 },
-    goal: { cx: 23.4, cy: 7.4, w: 7, h: 4.6, heads: [0], tol: 15 },
+    goal: { cx: 23.6, cy: 7, w: 7.1, h: 2.9, heads: [0], tol: 15 },
     walls: [
       { x: 7.5, y: 0, w: 2.4, h: 7 },
       { x: 16.5, y: 5.4, w: 2.4, h: 6.6 },
@@ -142,6 +185,23 @@ const LEVELS = [
     starThresh: [4, 6], starThreshQuick: [20, 31],
     hint: "Weave under, over, and home — all in forward gear.",
     solution: [{ steer: 0, dist: 4 }, { steer: -25, dist: 6 }, { steer: 25, dist: 10 }, { steer: -25, dist: 3 }],
+  },
+  {
+    name: "Boxed In", tier: "Hard", mode: "moves", w: 22, h: 13,
+    start: { x: 9.5, y: 9.4, h: 0 },
+    goal: { cx: 17.9, cy: 5.9, w: 7.7, h: 4.5, heads: [0], tol: 15 },
+    walls: [
+      { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
+      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
+    ],
+    cars: [
+      { cx: 5.9, cy: 9.4, h: 0 },
+      { cx: 15.9, cy: 9.4, h: 0 },
+      { cx: 9.5, cy: 2.55, h: Math.PI },
+    ],
+    starThresh: [3, 4], starThreshQuick: [15, 22],
+    hint: "Centimetre gaps — a tiny nudge back opens just enough room.",
+    solution: [{ steer: 0, dist: -0.4 }, { steer: -35, dist: 3 }, { steer: 35, dist: 3 }],
   },
   {
     name: "Street Squeeze", tier: "Medium", mode: "moves", w: 22, h: 13,
@@ -177,39 +237,22 @@ const LEVELS = [
   {
     name: "Battle Park", tier: "Hard", mode: "moves", w: 24, h: 13,
     start: { x: 2.6, y: 7, h: 0 },
-    goal: { cx: 10.2, cy: 9.4, w: 5, h: 2, heads: [0], tol: 10 },
+    goal: { cx: 10.1, cy: 9.4, w: 5.1, h: 2, heads: [0], tol: 10 },
     walls: [
       { x: 0, y: 10.5, w: 24, h: 2.5, kind: "curb" },
-      { x: 0, y: 0, w: 24, h: 1.6, kind: "curb" },
+      { x: 0, y: 0, w: 24, h: 2.7, kind: "curb" },
     ],
     cars: [
       { cx: 4.8, cy: 9.4, h: 0 },
-      { cx: 15.7, cy: 9.4, h: 0 },
-      { cx: 9.5, cy: 2.55, h: Math.PI },
-      { cx: 21, cy: 9.4, h: 0 },
-      { cx: 14.4, cy: 2.6, h: Math.PI },
-      { cx: 19.1, cy: 2.6, h: Math.PI },
+      { cx: 15.4, cy: 9.4, h: 0 },
+      { cx: 9.2, cy: 3.8, h: Math.PI },
+      { cx: 20.2, cy: 9.4, h: 0 },
+      { cx: 13.9, cy: 3.8, h: Math.PI },
+      { cx: 18.5, cy: 3.8, h: Math.PI },
     ],
     starThresh: [3, 5], starThreshQuick: [17, 26],
     hint: "Barely 9 cm from Car A — pure parallel precision.",
     solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
-  },
-  {
-    name: "Diagonal Slot", tier: "Hard", mode: "moves", w: 24, h: 12,
-    start: { x: 1.2, y: 7.3, h: 0 },
-    goal: { cx: 13.9, cy: 3.3, w: 2.4, h: 5.1, ang: Math.PI / 4, heads: [-45], tol: 8 },
-    walls: [
-      { x: 0, y: 0, w: 24, h: 0.5, kind: "curb" },
-    ],
-    cars: [
-      { cx: 6.5, cy: 3.2, h: -Math.PI / 4 },
-      { cx: 10.2, cy: 3.2, h: -Math.PI / 4 },
-      { cx: 17.6, cy: 3.2, h: -Math.PI / 4 },
-      { cx: 21, cy: 3.2, h: -Math.PI / 4 },
-    ],
-    starThresh: [3, 5], starThreshQuick: [11, 18],
-    hint: "Angled bays: enter on the diagonal, dead straight.",
-    solution: [{ steer: -15, dist: 6 }, { steer: 0, dist: 4 }, { steer: -35, dist: 1 }],
   },
   {
     name: "Narrow Dead End", tier: "Hard", mode: "dist", w: 22, h: 12,
@@ -257,32 +300,6 @@ const LEVELS = [
     solution: [{ steer: -35, dist: 1.5 }, { steer: 20, dist: 6 }, { steer: -35, dist: -2 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 3 }],
   },
   {
-    name: "Outer Bend Park", tier: "Hard", mode: "moves", w: 22, h: 13,
-    start: { x: 1.2, y: 3, h: 0 },
-    goal: { cx: 12.6, cy: 8.4, w: 5.7, h: 2.4, ang: Math.PI / 6, heads: [30], tol: 15 },
-    walls: [
-      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
-      { x: 0, y: 7.3, w: 5.4, h: 5.7, kind: "curb" },
-      { x: 5.4, y: 7.9, w: 3.9, h: 5.1, kind: "curb" },
-      { x: 9.3, y: 9.6, w: 1.8, h: 3.4, kind: "curb" },
-      { x: 11.2, y: 11.2, w: 3.2, h: 1.8, kind: "curb" },
-      { x: 14.4, y: 12.2, w: 0.6, h: 0.8, kind: "curb" },
-    ],
-    cars: [
-      { cx: 2.4, cy: 6.1, h: 0 },
-      { cx: 7.5, cy: 6.5, h: Math.PI / 12 },
-      { cx: 16.5, cy: 12.5, h: Math.PI / 3 },
-    ],
-    traffic: [
-      { x: -5, y: 3.2, h: 0, speed: 5.5, loop: 32, offset: 0 },
-      { x: -5, y: 5.5, h: 0, speed: 4, loop: 28, offset: 14 },
-      { x: 27, y: 4.5, h: Math.PI, speed: 5, loop: 32, offset: 8 },
-    ],
-    starThresh: [3, 5], starThreshQuick: [17, 26],
-    hint: "Spots are angled — reverse in as normal but match the 15° tilt.",
-    solution: [{ steer: 0, dist: 12 }, { steer: 35, dist: -3 }, { steer: -35, dist: -4 }],
-  },
-  {
     name: "Miata Alley", tier: "Medium", mode: "moves", w: 22, h: 10,
     vehicle: "miata",
     start: { x: 2.6, y: 7.7, h: 0 },
@@ -319,23 +336,6 @@ const LEVELS = [
     starThresh: [3, 5], starThreshQuick: [14, 22],
     hint: "Only a Miata fits — use its 40° steering lock to squeeze in.",
     solution: [{ steer: 0, dist: 10 }, { steer: 40, dist: -2.5 }, { steer: -40, dist: -2.5 }],
-  },
-  {
-    name: "Boxed In", tier: "Hard", mode: "moves", w: 22, h: 13,
-    start: { x: 9.5, y: 9.3, h: 0 },
-    goal: { cx: 20, cy: 5.9, w: 3.6, h: 4.6, heads: [0], tol: 15 },
-    walls: [
-      { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
-      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
-    ],
-    cars: [
-      { cx: 5.9, cy: 9.4, h: 0 },
-      { cx: 15.9, cy: 9.4, h: 0 },
-      { cx: 9.5, cy: 2.55, h: Math.PI },
-    ],
-    starThresh: [3, 4], starThreshQuick: [15, 22],
-    hint: "Centimetre gaps — a tiny nudge back opens just enough room.",
-    solution: [{ steer: 0, dist: -0.4 }, { steer: -35, dist: 3 }, { steer: 35, dist: 3 }],
   },
   {
     name: "Bay Escape", tier: "Medium", mode: "moves", w: 20, h: 13,
