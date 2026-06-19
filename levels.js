@@ -447,8 +447,9 @@ const LEVELS = [
       { x: 18.4, y: 0, w: 3.6, h: 11 },
     ],
     cars: [],
+    par: 8,
     hint: "Only 5.5 m of corridor — a true shuffle marathon.",
-    solution: [{ steer: -35, dist: 1.5 }, { steer: 20, dist: 6 }, { steer: -35, dist: -2 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 3 }],
+    solution: [{ steer: 35, dist: -3.7 }, { steer: -35, dist: 0.7 }, { steer: 35, dist: -0.8 }, { steer: -35, dist: 0.8 }, { steer: 35, dist: -0.9 }, { steer: -35, dist: 0.9 }, { steer: 35, dist: -0.7 }, { steer: -35, dist: 3.8 }],
   },
   {
     id: "iyp8hx",
