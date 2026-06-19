@@ -324,14 +324,15 @@ const LEVELS = [
   {
     name: "Miata Alley", tier: "Medium", mode: "moves", w: 22, h: 10,
     vehicle: "miata",
-    start: { x: 2.6, y: 7.7, h: 0 },
-    goal: { cx: 13.3, cy: 3.3, w: 4.5, h: 4.5, heads: [-90, 90], tol: 12 },
+    start: { x: 0.9, y: 7.5, h: 0 },
+    goal: { cx: 5.3, cy: 3.1, w: 2.2, h: 4.5, heads: [-90, 90], tol: 12 },
     walls: [
       { x: 0, y: 0, w: 22, h: 0.5, kind: "curb" },
+      { x: 9.7, y: 0.5, w: 0.7, h: 9.5 },
     ],
     cars: [
-      { cx: 8.5, cy: 3.3, h: -Math.PI / 2 },
-      { cx: 18.5, cy: 3.3, h: -Math.PI / 2 },
+      { cx: 8.5, cy: 3.1, h: -Math.PI / 2 },
+      { cx: 3, cy: 3.1, h: -Math.PI / 2 },
     ],
     traffic: [
       { x: 2.4, y: -1.3, h: 0, speed: 5, loop: 32, offset: 0 },
@@ -345,7 +346,7 @@ const LEVELS = [
     name: "Miata Squeeze", tier: "Hard", mode: "moves", w: 22, h: 12,
     vehicle: "miata",
     start: { x: 2.5, y: 7, h: 0 },
-    goal: { cx: 9.8, cy: 9.1, w: 4.7, h: 2, heads: [0], tol: 12 },
+    goal: { cx: 9.9, cy: 9.2, w: 4.7, h: 2, heads: [0], tol: 12 },
     walls: [
       { x: 0, y: 10.5, w: 22, h: 1.5, kind: "curb" },
       { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
@@ -372,10 +373,6 @@ const LEVELS = [
       { cx: 8, cy: 19, h: 0 },
       { cx: 18, cy: 19, h: 0 },
     ],
-    traffic: [
-      { x: -6, y: 15, h: 0, speed: 4, loop: 46, offset: 0 },
-      { x: 42, y: 17, h: Math.PI, speed: 5, loop: 46, offset: 23 },
-    ],
     starThresh: [2, 3], starThreshQuick: [22, 34],
     hint: "12 m of bus — watch the enormous rear swing as you steer in.",
     solution: [{ steer: 0, dist: 28 }, { steer: -45, dist: -10 }],
@@ -393,10 +390,6 @@ const LEVELS = [
     cars: [
       { cx: 10, cy: 6, h: Math.PI / 2, type: "bus" },
       { cx: 30, cy: 19, h: 0 },
-    ],
-    traffic: [
-      { x: -6, y: 14.5, h: 0, speed: 3.5, loop: 46, offset: 0 },
-      { x: 42, y: 17.5, h: Math.PI, speed: 4.5, loop: 46, offset: 20 },
     ],
     starThresh: [2, 3], starThreshQuick: [20, 31],
     hint: "Thread between the pillars before easing the 12 m bus in.",
