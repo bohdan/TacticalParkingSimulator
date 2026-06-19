@@ -10,6 +10,16 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 9 }],
   },
   {
+    name: "Lesson 1: Drive", tier: "Tutorial", mode: "moves", w: 18, h: 10,
+    start: { x: 3, y: 5, h: 0 },
+    goal: { cx: 13.5, cy: 5, w: 6.5, h: 3, heads: [0], tol: 15 },
+    walls: [],
+    cars: [],
+    starThresh: [1, 2], starThreshQuick: [6, 9],
+    hint: "Just drive into the green zone.",
+    solution: [{ steer: 0, dist: 10 }],
+  },
+  {
     name: "Lesson 2: Steer", tier: "Tutorial", mode: "moves", w: 14, h: 12,
     start: { x: 3, y: 9, h: 0 },
     goal: { cx: 6.9, cy: 3.8, w: 3.8, h: 5.8, heads: [-90], tol: 15 },
@@ -17,7 +27,7 @@ const LEVELS = [
     cars: [],
     starThresh: [1, 2], starThreshQuick: [5, 8],
     hint: "One smooth arc gets you in.",
-    solution: [{ steer: -35, dist: 6.06 }],
+    solution: [{ steer: -35, dist: 3.5 }, { steer: -35, dist: 2 }],
   },
   {
     name: "Lesson 3: Reverse", tier: "Tutorial", mode: "moves", w: 18, h: 10,
@@ -27,7 +37,7 @@ const LEVELS = [
     cars: [],
     starThresh: [1, 2], starThreshQuick: [5, 8],
     hint: "The zone is behind you.",
-    solution: [{ steer: 0, dist: -8 }],
+    solution: [{ steer: 0, dist: -10 }],
   },
   {
     type: "cutscene", name: "Briefing",
@@ -43,7 +53,7 @@ const LEVELS = [
     cars: [],
     starThresh: [2, 4], starThreshQuick: [11, 16],
     hint: "Get around the block into the green zone.",
-    solution: [{ steer: 22, dist: 10.5 }, { steer: 0, dist: 3 }],
+    solution: [{ steer: 20, dist: 13 }, { steer: -20, dist: 1.2 }],
   },
   {
     name: "Open Bay", tier: "Easy", mode: "moves", w: 20, h: 13,
@@ -58,7 +68,7 @@ const LEVELS = [
     ],
     starThresh: [3, 5], starThreshQuick: [18, 27],
     hint: "Plenty of room",
-    solution: [{ steer: 0, dist: 10.6 }, { steer: 35, dist: -6.3 }, { steer: 0, dist: -2.9 }],
+    solution: [{ steer: 12, dist: 7 }, { steer: 35, dist: 3.5 }],
   },
   {
     name: "First Parallel", tier: "Easy", mode: "moves", w: 24, h: 13,
@@ -80,7 +90,7 @@ const LEVELS = [
     ],
     starThresh: [3, 5], starThreshQuick: [17, 26],
     hint: "So much space... you can do it!",
-    solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
+    solution: [{ steer: 12, dist: 2 }, { steer: 2, dist: 7 }, { steer: -6, dist: 3.5 }, { steer: -28, dist: 0.6 }],
   },
   {
     name: "Diagonal Slot", tier: "Easy", mode: "moves", w: 24, h: 12,
