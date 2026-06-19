@@ -57,13 +57,13 @@ const LEVELS = [
       { cx: 13.7, cy: 2.9, h: Math.PI / 2 },
     ],
     starThresh: [3, 5], starThreshQuick: [18, 27],
-    hint: "Plenty of room — back into the wide bay.",
+    hint: "Plenty of room",
     solution: [{ steer: 0, dist: 10.6 }, { steer: 35, dist: -6.3 }, { steer: 0, dist: -2.9 }],
   },
   {
     name: "First Parallel", tier: "Easy", mode: "moves", w: 24, h: 13,
     start: { x: 2.6, y: 7, h: 0 },
-    goal: { cx: 16.2, cy: 9.3, w: 5.8, h: 2, ang: 0, heads: [0], tol: 12 },
+    goal: { cx: 16.2, cy: 9.3, w: 5.8, h: 2, heads: [0], tol: 12 },
     walls: [
       { x: 0, y: 10.5, w: 24, h: 2.5, kind: "curb" },
       { x: 0, y: 0, w: 24, h: 1.4, kind: "curb" },
@@ -79,7 +79,7 @@ const LEVELS = [
       { x: 10, y: -1.5, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     starThresh: [3, 5], starThreshQuick: [17, 26],
-    hint: "So much space, you can do it!",
+    hint: "So much space... you can do it!",
     solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
   },
   {
@@ -224,6 +224,23 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 4 }, { steer: -25, dist: 6 }, { steer: 25, dist: 10 }, { steer: -25, dist: 3 }],
   },
   {
+    name: "The Garage", tier: "Expert", mode: "moves", w: 24, h: 13,
+    start: { x: 3, y: 10.6, h: 0 },
+    goal: { cx: 19.4, cy: 2.7, w: 2.2, h: 4.8, heads: [-90], tol: 10 },
+    walls: [
+      { x: 13, y: 0, w: 0.6, h: 4.9 },
+      { x: 13, y: 8.1, w: 0.6, h: 4.9 },
+    ],
+    cars: [
+      { cx: 16, cy: 2.7, h: Math.PI / 2 },
+      { cx: 22.4, cy: 2.8, h: Math.PI / 2 },
+      { cx: 15.8, cy: 10.5, h: 270 * Math.PI / 180 },
+    ],
+    starThresh: [4, 6], starThreshQuick: [21, 33],
+    hint: "Get in quick",
+    solution: [{ steer: -35, dist: 3 }, { steer: 15, dist: 10 }, { steer: -35, dist: 6 }, { steer: 25, dist: -0.5 }],
+  },
+  {
     name: "Boxed In", tier: "Hard", mode: "moves", w: 22, h: 13,
     start: { x: 9.5, y: 9.4, h: 0 },
     goal: { cx: 17.9, cy: 5.9, w: 7.7, h: 4.5, heads: [0], tol: 15 },
@@ -327,6 +344,23 @@ const LEVELS = [
     solution: [{ steer: 12, dist: 3 }, { steer: -35, dist: 3 }, { steer: 35, dist: -3 }, { steer: -35, dist: 1.5 }, { steer: 0, dist: -1.5 }, { steer: -35, dist: 5 }],
   },
   {
+    name: "The Garage 2", tier: "Expert", mode: "moves", w: 24, h: 13,
+    start: { x: 3, y: 10.6, h: 0 },
+    goal: { cx: 19.4, cy: 2.7, w: 2.2, h: 4.8, heads: [90], tol: 10 },
+    walls: [
+      { x: 13, y: 0, w: 0.6, h: 4.9 },
+      { x: 13, y: 8.1, w: 0.6, h: 4.9 },
+    ],
+    cars: [
+      { cx: 16, cy: 2.7, h: Math.PI / 2 },
+      { cx: 22.4, cy: 2.8, h: Math.PI / 2 },
+      { cx: 15.8, cy: 10.5, h: 270 * Math.PI / 180 },
+    ],
+    starThresh: [4, 6], starThreshQuick: [21, 33],
+    hint: "Not so straightforward",
+    solution: [{ steer: -35, dist: 3 }, { steer: 15, dist: 10 }, { steer: -35, dist: 6 }, { steer: 25, dist: -0.5 }],
+  },
+  {
     name: "Battle Park", tier: "Hard", mode: "moves", w: 24, h: 13,
     start: { x: 2.6, y: 7, h: 0 },
     goal: { cx: 10.1, cy: 9.4, w: 5.1, h: 2, heads: [0], tol: 10 },
@@ -359,23 +393,6 @@ const LEVELS = [
     starThresh: [16, 22], starThreshQuick: [50, 78],
     hint: "A 5.8 m corridor — the simple U-turn no longer fits.",
     solution: [{ steer: 0, dist: 5 }, { steer: -35, dist: 1 }, { steer: 35, dist: -2.5 }, { steer: -35, dist: 0.5 }, { steer: 35, dist: -1 }, { steer: -35, dist: 1 }, { steer: 35, dist: -1 }, { steer: -35, dist: 1 }, { steer: 35, dist: -0.5 }, { steer: -35, dist: 3 }],
-  },
-  {
-    name: "The Garage", tier: "Expert", mode: "moves", w: 24, h: 13,
-    start: { x: 3, y: 10.6, h: 0 },
-    goal: { cx: 19.4, cy: 2.6, w: 2.2, h: 4.4, heads: [-90], tol: 10 },
-    walls: [
-      { x: 13, y: 0, w: 0.6, h: 4.9 },
-      { x: 13, y: 8.1, w: 0.6, h: 4.9 },
-    ],
-    cars: [
-      { cx: 16, cy: 2.7, h: Math.PI / 2 },
-      { cx: 22.4, cy: 2.8, h: Math.PI / 2 },
-      { cx: 15.8, cy: 10.5, h: 270 * Math.PI / 180 },
-    ],
-    starThresh: [4, 6], starThreshQuick: [21, 33],
-    hint: "Thread the door, dodge the junk, face the back wall.",
-    solution: [{ steer: -35, dist: 3 }, { steer: 15, dist: 10 }, { steer: -35, dist: 6 }, { steer: 25, dist: -0.5 }],
   },
   {
     name: "The Gauntlet", tier: "Expert", mode: "dist", w: 22, h: 11,
