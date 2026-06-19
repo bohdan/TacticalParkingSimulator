@@ -200,9 +200,20 @@ function planStats() {
   return { moves: moves.length, dist, time: planTime(moves) };
 }
 
+// Par = target move count. Defaults to the recorded solution's length
+// (the solver's optimal), or an explicit level.par override.
+function levelPar() {
+  if (typeof level.par === 'number') return level.par;
+  if (level.solution && level.solution.length) return level.solution.length;
+  return 4; // fallback for levels without a recorded solution
+}
+
+// Golf-style scoring: Par → 3★, Bogey (Par+1) → 2★, worse → 1★.
 function computeStars(st) {
-  const thresh = level.starThreshQuick || [999, 9999];
-  return st.time <= thresh[0] ? 3 : st.time <= thresh[1] ? 2 : 1;
+  const par = levelPar();
+  if (st.moves <= par) return 3;
+  if (st.moves <= par + 1) return 2;
+  return 1;
 }
 
 /* ===================== HUD ===================== */
@@ -215,13 +226,13 @@ function starStr(n, total = 3) {
 
 function updateHUD() {
   $('lvName').textContent = `${levelIdx + 1}/${LEVELS.length} · ${level.name}`;
-  $('objective').textContent = `${level.tier} · Quick time`;
+  $('objective').textContent = `${level.tier} · Par ${levelPar()}`;
   const planning = moves.length > 0 || Math.abs(editDist) > 0.01;
   const best = loadBest();
   if (planning) {
     const st = planStats();
     $('stats').innerHTML =
-      `Moves <b>${st.moves}</b> · ${st.dist.toFixed(1)} m · ~${st.time.toFixed(1)}s` +
+      `Moves <b>${st.moves}</b> / Par ${levelPar()} · ~${st.time.toFixed(1)}s` +
       (best ? ` · Best <span class="star">${starStr(best.stars)}</span>` : '');
   } else {
     $('stats').innerHTML = escHtml(level.tut || level.hint) +
@@ -240,8 +251,11 @@ function loadBest() {
 
 function saveBest(st, stars) {
   const prev = loadBest();
-  const prevTime = prev ? (prev.time || 999) : Infinity;
-  if (!prev || stars > prev.stars || (stars === prev.stars && st.time < prevTime)) {
+  const prevMoves = prev ? (prev.moves ?? 999) : Infinity;
+  // Better = more stars, or same stars with fewer moves (time as tiebreaker).
+  if (!prev || stars > prev.stars ||
+      (stars === prev.stars && st.moves < prevMoves) ||
+      (stars === prev.stars && st.moves === prevMoves && st.time < (prev.time || 999))) {
     localStorage.setItem(`parking.best.${levelIdx}`,
       JSON.stringify({ moves: st.moves, dist: st.dist, time: st.time, stars }));
   }
@@ -761,19 +775,17 @@ function finishRun() {
     $('ovStars').innerHTML =
       starStr(stars).replace(/☆/g, '<span class="dim">★</span>');
     const best = loadBest();
-    const prec = parkingClearance(end);
-    const precCm = Math.round(prec * 100);
-    // Thresholds calibrated to real geometry: a 2.2 m zone with a 1.8 m car
-    // gives ~20 cm max clearance per side when perfectly centred.
-    const precLabel = prec >= 0.15 ? 'Perfect' : prec >= 0.07 ? 'Good' : prec >= 0.02 ? 'Tight' : 'Squeezed';
+    const par = levelPar();
+    const overPar = st.moves - par;
+    const parLabel = overPar <= 0 ? 'Par' : overPar === 1 ? 'Bogey' : `+${overPar}`;
     $('ovStats').innerHTML =
+      `<div class="sc-row"><span class="sc-label">Moves</span><span class="sc-val">${st.moves} <span class="sc-note">/ Par ${par} · ${parLabel}</span></span></div>` +
       `<div class="sc-row"><span class="sc-label">Time</span><span class="sc-val">${st.time.toFixed(1)} s</span></div>` +
-      `<div class="sc-row"><span class="sc-label">Clearance</span><span class="sc-val">${precCm} cm <span class="sc-note">${precLabel}</span></span></div>` +
-      (best && best.time < st.time - 0.05
-        ? `<div class="sub" style="margin-top:6px">Best: ${best.time.toFixed(1)} s &nbsp;·&nbsp; ${starStr(best.stars)}</div>`
+      (best && best.moves < st.moves
+        ? `<div class="sub" style="margin-top:6px">Best: ${best.moves} moves &nbsp;·&nbsp; ${starStr(best.stars)}</div>`
         : '');
-    $('ovTip').textContent = stars === 3 ? 'Perfect run!' :
-      `3★ ≤ ${(level.starThreshQuick || [999])[0]} s`;
+    $('ovTip').textContent = stars === 3 ? (overPar < 0 ? 'Under par!' : 'On par!') :
+      `★★★ at Par ${par} move${par !== 1 ? 's' : ''}`;
     $('ovNext').style.display = nextPlayable(levelIdx, +1) >= 0 ? '' : 'none';
     pendingLb = solutionUsed ? null : { levelIdx, stars, st: { ...st }, moves: [...moves] };
     $('ovSubmitRow').style.display = (lbEnabled() && !solutionUsed) ? '' : 'none';
@@ -1043,7 +1055,7 @@ async function lbGet(levelIdx) {
   const p = new URLSearchParams({
     select: 'player,stars,moves,dist,time_s,solution',
     level_name: `eq.${LEVELS[levelIdx].name}`, mode: 'eq.quick',
-    order: 'stars.desc,time_s.asc', limit: '50',
+    order: 'stars.desc,moves.asc,time_s.asc', limit: '50',
   });
   const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
     headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
@@ -1053,7 +1065,8 @@ async function lbGet(levelIdx) {
 }
 
 async function openLeaderboard(idx) {
-  $('lbTitle').textContent = `${LEVELS[idx].name} · Best Time`;
+  const par = LEVELS[idx].par ?? (LEVELS[idx].solution ? LEVELS[idx].solution.length : null);
+  $('lbTitle').textContent = `${LEVELS[idx].name}${par != null ? ` · Par ${par}` : ''}`;
   $('lbTable').innerHTML = '<tr><td colspan="5" class="lb-empty">Loading…</td></tr>';
   $('lbOverlay').classList.remove('hidden');
   try {
@@ -1068,7 +1081,7 @@ async function openLeaderboard(idx) {
     }
     $('lbTable').innerHTML = top.map((r, i) => {
       const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
-      const metric = `${r.time_s.toFixed(1)}s`;
+      const metric = `${r.moves}<span class="sc-note"> mv</span>`;
       const stars = '★'.repeat(r.stars) + `<span class="lb-dim">★</span>`.repeat(3 - r.stars);
       const playBtn = r.solution
         ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button></td>`

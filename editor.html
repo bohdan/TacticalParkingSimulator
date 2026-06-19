@@ -54,6 +54,12 @@ button.danger:hover{background:#6e2424}
 #curSel:focus{outline:none;border-color:#3d8fbf}
 button.nav{padding:4px 8px;font-weight:700}
 #solveStatus{font-size:11px;color:#7dc87d;display:none;align-self:center}
+.sol-row{gap:3px}
+.sol-row.sol-hot{background:rgba(255,224,64,.08);border-radius:5px}
+.sol-n{flex:0 0 16px;font-size:11px;color:#7080a0;text-align:right}
+.sol-row input{flex:1;min-width:0}
+.sol-u{flex:0 0 auto;font-size:10px;color:#5a6a80}
+.sol-del{flex:0 0 auto;padding:2px 6px;background:#3a2030;border-color:#6e2424;color:#e09090}
 </style>
 <script src="physics.js"></script>
 <script src="solver.js"></script>
@@ -113,9 +119,8 @@ button.nav{padding:4px 8px;font-weight:700}
       <input id="sW" type="number" step="1" min="5" style="flex:.5"> ×
       <input id="sH" type="number" step="1" min="5" style="flex:.5">
     </div>
-    <div class="row"><label>Stars</label>
-      <input id="sStar3" type="number" step="1" placeholder="★★★" style="flex:.5">
-      <input id="sStar2" type="number" step="1" placeholder="★★" style="flex:.5">
+    <div class="row"><label>Par</label>
+      <input id="sPar" type="number" step="1" min="1" placeholder="auto = solution length">
     </div>
     <div class="row"><label>Hint</label><input id="sHint" type="text" placeholder="player hint"></div>
 
@@ -135,6 +140,9 @@ button.nav{padding:4px 8px;font-weight:700}
 
     <h2>Selected</h2>
     <div id="selPanel"><p class="sel-hint">Click an object on the canvas.<br>Delete key removes it.</p></div>
+
+    <h2>Solution <span style="font-size:10px;color:#3d8fbf">(⚙ Solve to fill)</span></h2>
+    <div id="solPanel"></div>
    </div>
   </div>
 </div>
@@ -225,7 +233,6 @@ function newLevel(){
       { x:0, y:0,    w:22, h:1.6, kind:'curb' },
     ],
     cars:[], traffic:[],
-    starThresh:[3,5], starThreshQuick:[17,26],
     hint:'', solution:[],
   };
 }
@@ -248,8 +255,7 @@ function normalizeLevel(lv){
     walls:(lv.walls||[]).map(w=>({...w})),
     cars:(lv.cars||[]).map(c=>({...c})),
     traffic:(lv.traffic||[]).map(t=>({...t})),
-    starThresh:[...(lv.starThresh||[3,5])],
-    starThreshQuick:[...(lv.starThreshQuick||[17,26])],
+    ...(lv.par != null ? { par: lv.par } : {}),
     hint:lv.hint||'',
     solution:[...(lv.solution||[])],
   };
@@ -264,6 +270,7 @@ let sel  = null;   // {kind:'start'|'goal'|'wall'|'car'|'traffic', idx?}
 let drag = null;   // {handle:'body'|'corner0-3'|'rotate', startW, orig}
 let drawRect = null; // for wall/curb drawing mode
 let panning = false, panOrigin = null;
+let solSel = null;   // highlighted solution-move index
 
 // ── Canvas ───────────────────────────────────────────────────────────────────
 const cv  = document.getElementById('cv');
@@ -525,6 +532,9 @@ function render(){
     }
   }
 
+  // Schematic solution path (under the player car)
+  drawSolutionPath();
+
   // Start car (player — green, drawn last so it reads on top)
   {
     const sp=playerSpec(), sc=startCenter();
@@ -545,6 +555,45 @@ function render(){
     const x=Math.min(ax,bx),y=Math.min(ay,by),w=Math.abs(bx-ax),h=Math.abs(by-ay);
     ctx.strokeStyle='#ffe040';ctx.lineWidth=2*p;ctx.setLineDash([.3,.2]);
     ctx.strokeRect(x,y,w,h);ctx.setLineDash([]);
+  }
+}
+
+// Trace the solution as a schematic curve: forward arcs cyan (solid),
+// reverse arcs orange (dashed), white dots at each move boundary, and a
+// numbered label per move. Uses the shared physics engine (advance()).
+function drawSolutionPath(){
+  if(!L || isCutscene(L) || !L.solution || !L.solution.length) return;
+  const saved=Object.assign({},CAR);
+  setVehicle(L.vehicle||'default');
+  let pose={x:L.start.x,y:L.start.y,h:L.start.h};
+  const segs=[];
+  for(const m of L.solution){
+    const steer=rad(m.steer);
+    const n=Math.max(2,Math.ceil(Math.abs(m.dist)/0.12));
+    const pts=[pose];
+    for(let i=1;i<=n;i++) pts.push(advance(pose,steer,m.dist*i/n));
+    segs.push({pts, rev:m.dist<0, end:pts[pts.length-1]});
+    pose=pts[pts.length-1];
+  }
+  Object.assign(CAR,saved); CAR.fOver=CAR.len-CAR.wb-CAR.rOver;
+
+  for(let si=0;si<segs.length;si++){
+    const seg=segs[si], hot=(solSel===si);
+    ctx.beginPath();
+    ctx.moveTo(seg.pts[0].x,seg.pts[0].y);
+    for(const pt of seg.pts) ctx.lineTo(pt.x,pt.y);
+    ctx.strokeStyle=hot?'#ffe040':(seg.rev?'rgba(255,159,67,0.95)':'rgba(69,196,255,0.95)');
+    ctx.lineWidth=hot?0.14:0.09;
+    if(seg.rev) ctx.setLineDash([0.3,0.22]);
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  // boundary dots + move numbers
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(L.start.x,L.start.y,0.13,0,2*π); ctx.fill();
+  for(let si=0;si<segs.length;si++){
+    const e=segs[si].end;
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(e.x,e.y,0.13,0,2*π); ctx.fill();
   }
 }
 
@@ -860,7 +909,7 @@ function updateSidebar(){
   val('sName',L.name); val('sTier',L.tier); val('sMode',L.mode);
   val('sVehicle',L.vehicle||'default');
   val('sW',L.w); val('sH',L.h);
-  val('sStar3',L.starThresh[0]); val('sStar2',L.starThresh[1]);
+  val('sPar', L.par != null ? L.par : '');
   val('sHint',L.hint||'');
   val('stX',fmt(L.start.x)); val('stY',fmt(L.start.y)); val('stH',fmt(deg(L.start.h),1));
   val('gCx',fmt(L.goal.cx)); val('gCy',fmt(L.goal.cy));
@@ -868,6 +917,57 @@ function updateSidebar(){
   val('gAng',fmt(deg(L.goal.ang||0),1));
   val('gHeads',(L.goal.heads||[0]).join(', ')); val('gTol',L.goal.tol);
   updateSelPanel();
+  updateSolutionPanel();
+}
+
+// Editable list of solution moves. The ⚙ Solve button populates L.solution;
+// edits here update the schematic curve live and re-derive Par.
+function updateSolutionPanel(){
+  const el=document.getElementById('solPanel');
+  if(!el) return;
+  const sol=L.solution||[];
+  if(!sol.length){
+    el.innerHTML=`<p class="sel-hint">No solution yet. Click <b>⚙ Solve</b> in the toolbar, or add moves manually.</p>`
+      +`<button id="solAdd" style="margin-top:6px">+ Add move</button>`;
+  } else {
+    el.innerHTML=sol.map((m,i)=>
+      `<div class="row sol-row${solSel===i?' sol-hot':''}" data-i="${i}">`
+      +`<span class="sol-n">${i+1}</span>`
+      +`<input class="sol-steer" type="number" step="1" value="${+(+m.steer).toFixed(1)}" title="steer °">`
+      +`<span class="sol-u">°</span>`
+      +`<input class="sol-dist" type="number" step="0.1" value="${+(+m.dist).toFixed(2)}" title="distance m">`
+      +`<span class="sol-u">m</span>`
+      +`<button class="sol-del" title="Delete move">✕</button>`
+      +`</div>`).join('')
+      +`<div style="display:flex;gap:5px;margin-top:6px">`
+      +`<button id="solAdd">+ Add move</button>`
+      +`<button id="solClear" class="danger">Clear</button>`
+      +`</div>`;
+  }
+  // wire row inputs
+  el.querySelectorAll('.sol-row').forEach(rowEl=>{
+    const i=+rowEl.dataset.i;
+    rowEl.addEventListener('mouseenter',()=>{ solSel=i; render(); });
+    rowEl.addEventListener('mouseleave',()=>{ solSel=null; render(); });
+    rowEl.querySelector('.sol-steer').addEventListener('input',e=>{
+      L.solution[i].steer=+e.target.value||0; markDirty(); render();
+    });
+    rowEl.querySelector('.sol-dist').addEventListener('input',e=>{
+      L.solution[i].dist=+e.target.value||0; markDirty(); render();
+    });
+    rowEl.querySelector('.sol-del').addEventListener('click',()=>{
+      L.solution.splice(i,1); solSel=null; markDirty(); updateSolutionPanel(); render();
+    });
+  });
+  const addBtn=document.getElementById('solAdd');
+  if(addBtn) addBtn.addEventListener('click',()=>{
+    if(!L.solution) L.solution=[];
+    L.solution.push({steer:0,dist:2}); markDirty(); updateSolutionPanel(); render();
+  });
+  const clearBtn=document.getElementById('solClear');
+  if(clearBtn) clearBtn.addEventListener('click',()=>{
+    L.solution=[]; solSel=null; markDirty(); updateSolutionPanel(); render();
+  });
 }
 
 function row(label,input){ return `<div class="row"><label>${label}</label>${input}</div>`; }
@@ -950,8 +1050,7 @@ bind('sMode',  e=>{ L.mode=e.target.value; });
 bind('sVehicle',e=>{ L.vehicle=e.target.value; render(); });
 bind('sW',     e=>{ L.w=+e.target.value||L.w; render(); });
 bind('sH',     e=>{ L.h=+e.target.value||L.h; render(); });
-bind('sStar3', e=>{ L.starThresh[0]=+e.target.value; });
-bind('sStar2', e=>{ L.starThresh[1]=+e.target.value; });
+bind('sPar', e=>{ const v=e.target.value.trim(); if(v==='') delete L.par; else L.par=+v; });
 bind('sHint',  e=>{ L.hint=e.target.value; });
 bind('stX',    e=>{ L.start.x=+e.target.value; render(); });
 bind('stY',    e=>{ L.start.y=+e.target.value; render(); });
@@ -1246,7 +1345,7 @@ function buildExport(lv=L){
     }
     lines.push(`    ],`);
   }
-  lines.push(`    starThresh: [${l.starThresh.join(', ')}], starThreshQuick: [${(l.starThreshQuick||[17,26]).join(', ')}],`);
+  if(l.par != null) lines.push(`    par: ${l.par},`);
   lines.push(`    hint: ${JSON.stringify(l.hint||'')},`);
   if(l.solution&&l.solution.length){
     const sol=l.solution.map(m=>`{ steer: ${m.steer}, dist: ${m.dist} }`).join(', ');
@@ -1405,6 +1504,7 @@ document.getElementById('btnSolve').onclick = async () => {
       dirty = true;
       status.textContent = `✓ ${solution.length} move${solution.length !== 1 ? 's' : ''} — save to persist`;
       updateSidebar();
+      render();
     } else {
       status.textContent = '✗ No solution found';
     }
