@@ -10,26 +10,6 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 9 }],
   },
   {
-    name: "OneWay", tier: "Hard", mode: "moves", w: 24, h: 13,
-    start: { x: 2.6, y: 7, h: 0 },
-    goal: { cx: 10.1, cy: 9.4, w: 5.1, h: 2, heads: [0], tol: 10 },
-    walls: [
-      { x: 0, y: 10.5, w: 24, h: 2.5, kind: "curb" },
-      { x: 0, y: 0, w: 24, h: 2.7, kind: "curb" },
-    ],
-    cars: [
-      { cx: 4.8, cy: 9.4, h: 0 },
-      { cx: 15.4, cy: 9.4, h: 0 },
-      { cx: 9.2, cy: 3.8, h: 0 },
-      { cx: 20.2, cy: 9.4, h: 0 },
-      { cx: 13.9, cy: 3.8, h: 0 },
-      { cx: 18.5, cy: 3.8, h: 0 },
-    ],
-    starThresh: [3, 5], starThreshQuick: [17, 26],
-    hint: "Need to nail it",
-    solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
-  },
-  {
     name: "Lesson 2: Steer", tier: "Tutorial", mode: "moves", w: 14, h: 12,
     start: { x: 3, y: 9, h: 0 },
     goal: { cx: 6.9, cy: 3.8, w: 3.8, h: 5.8, heads: [-90], tol: 15 },
@@ -125,7 +105,7 @@ const LEVELS = [
   },
   {
     name: "Easy Exit", tier: "Easy", mode: "moves", w: 22, h: 13,
-    start: { x: 8.2, y: 9.4, h: 0 },
+    start: { x: 8, y: 9.5, h: 0 },
     goal: { cx: 19, cy: 6.1, w: 5.5, h: 4.3, heads: [0], tol: 20 },
     walls: [
       { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
@@ -307,7 +287,7 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 25 }, { steer: -45, dist: -10 }],
   },
   {
-    name: "OneWay", tier: "Hard", mode: "moves", w: 24, h: 13,
+    name: "One Way", tier: "Hard", mode: "moves", w: 24, h: 13,
     start: { x: 2.6, y: 7, h: 0 },
     goal: { cx: 10.1, cy: 9.4, w: 5.1, h: 2, heads: [0], tol: 10 },
     walls: [
@@ -399,7 +379,7 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 12 }, { steer: 35, dist: -3 }, { steer: -35, dist: -4 }],
   },
   {
-    name: "OneWay 2", tier: "Hard", mode: "moves", w: 24, h: 13,
+    name: "One Way 2", tier: "Hard", mode: "moves", w: 24, h: 13,
     start: { x: 2.6, y: 7, h: 0 },
     goal: { cx: 10.1, cy: 9.4, w: 5.1, h: 2, heads: [0], tol: 10 },
     walls: [
