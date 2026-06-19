@@ -7,7 +7,17 @@ const LEVELS = [
     walls: [],
     cars: [],
     hint: "Just drive into the green zone.",
-    solution: [{ steer: 0, dist: 10 }],
+    solution: [{ steer: 0, dist: 9 }],
+  },
+  {
+    id: "de2bkk",
+    name: "Lesson 1: Drive", tier: "Tutorial", mode: "moves", w: 18, h: 10,
+    start: { x: 3, y: 5, h: 0 },
+    goal: { cx: 13.5, cy: 5, w: 6.5, h: 3, heads: [0], tol: 15 },
+    walls: [],
+    cars: [],
+    hint: "Just drive into the green zone.",
+    solution: [{ steer: 0, dist: 9 }],
   },
   {
     id: "dkhmyv",
@@ -17,7 +27,7 @@ const LEVELS = [
     walls: [],
     cars: [],
     hint: "One smooth arc gets you in.",
-    solution: [{ steer: -35, dist: 3.5 }, { steer: -35, dist: 2 }],
+    solution: [{ steer: -35, dist: 6 }],
   },
   {
     id: "oppn1y",
@@ -119,7 +129,7 @@ const LEVELS = [
       { cx: 9.5, cy: 2.55, h: Math.PI },
     ],
     hint: "Swing the nose out toward the lane, then counter-steer and glide away.",
-    solution: [{ steer: -20, dist: 5 }, { steer: 20, dist: 5 }],
+    solution: [{ steer: -35, dist: 4.5 }, { steer: 35, dist: 4.5 }],
   },
   {
     id: "x5xy7q",
@@ -171,7 +181,7 @@ const LEVELS = [
       { cx: 16.9, cy: 11.6, h: 0.9308 },
     ],
     hint: "Partk on a curve",
-    solution: [{ steer: 6, dist: 16 }, { steer: -35, dist: 2 }, { steer: 0, dist: -5 }, { steer: -35, dist: -2 }],
+    solution: [{ steer: 0, dist: 12 }, { steer: 35, dist: -3 }, { steer: -35, dist: -4 }],
   },
   {
     id: "z30oy8",
