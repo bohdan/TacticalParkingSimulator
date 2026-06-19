@@ -406,9 +406,13 @@ function renderCutscene(){
   ctx.strokeStyle='rgba(126,224,168,0.2)'; ctx.beginPath();
   ctx.moveTo(cx+14,cy+38); ctx.lineTo(cx+cw-14,cy+38); ctx.stroke();
   const msg=L.message||[];
-  const fs=Math.max(12,Math.min(18,Math.floor((ch-70)/Math.max(msg.length,1)/1.5)));
+  const pad=18, top=54, bot=30;
+  const longest=msg.reduce((m,l)=>Math.max(m,(l||'').length),1);
+  const fsH=(ch-top-bot)/(Math.max(msg.length,1)*1.5);
+  const fsW=(cw-2*pad)/(longest*0.6);              // monospace ≈ 0.6em/glyph
+  const fs=Math.max(7,Math.min(18,Math.floor(Math.min(fsH,fsW))));
   ctx.font=`${fs}px Menlo,Consolas,monospace`; ctx.fillStyle='#8affc0';
-  let y=cy+54;
+  let y=cy+top;
   for(const line of msg){ ctx.fillText(line||'',cx+18,y); y+=fs*1.5; }
   ctx.fillStyle='#56708a'; ctx.font='12px system-ui,sans-serif';
   ctx.fillText('Edit the briefing text in the sidebar →',cx+18,cy+ch-26);

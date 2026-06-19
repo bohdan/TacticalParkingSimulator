@@ -1272,10 +1272,15 @@ function playIntroDash() {
   const SC_R = 8;
 
   const MSG = cutsceneMessage;
-  // Font fits all lines with top padding
-  const FS    = Math.max(11, Math.min(18, Math.floor((SC_H - 10) / (MSG.length * 1.65))));
-  const LH    = Math.ceil(FS * 1.65);
   const SC_PAD = Math.max(8, SC_W * 0.05);
+  // Auto-fit font so the message fits the CRT screen on BOTH axes.
+  const LINE_SP = 1.5;                                   // line-height multiplier
+  const longest = MSG.reduce((m, l) => Math.max(m, l.length), 1);
+  const fsByHeight = (SC_H - 2 * SC_PAD) / (MSG.length * LINE_SP);
+  // Courier New advance width ≈ 0.6em per glyph.
+  const fsByWidth  = (SC_W - 2 * SC_PAD) / (longest * 0.6);
+  const FS = Math.max(7, Math.min(18, Math.floor(Math.min(fsByHeight, fsByWidth))));
+  const LH = Math.ceil(FS * LINE_SP);
 
   // Side clusters only in landscape
   const showSide = !portrait;
