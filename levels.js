@@ -241,6 +241,24 @@ const LEVELS = [
     solution: [{ steer: -35, dist: 3 }, { steer: 15, dist: 10 }, { steer: -35, dist: 6 }, { steer: 25, dist: -0.5 }],
   },
   {
+    name: "Bus Terminal", tier: "Expert", mode: "moves", w: 36, h: 21,
+    vehicle: "bus",
+    start: { x: 3, y: 16, h: 0 },
+    goal: { cx: 22, cy: 7.2, w: 5, h: 14, heads: [90, -90], tol: 10 },
+    walls: [
+      { x: 0, y: 20.5, w: 36, h: 0.5, kind: "curb" },
+      { x: 18, y: 0, w: 0.8, h: 6.5 },
+      { x: 25, y: 0, w: 0.8, h: 6.5 },
+    ],
+    cars: [
+      { cx: 10, cy: 6, h: Math.PI / 2, type: "bus" },
+      { cx: 30, cy: 19, h: 0 },
+    ],
+    starThresh: [2, 3], starThreshQuick: [20, 31],
+    hint: "Thread between the pillars before easing the 12 m bus in.",
+    solution: [{ steer: 0, dist: 25 }, { steer: -45, dist: -10 }],
+  },
+  {
     name: "OneWay", tier: "Hard", mode: "moves", w: 24, h: 13,
     start: { x: 2.6, y: 7, h: 0 },
     goal: { cx: 10.1, cy: 9.4, w: 5.1, h: 2, heads: [0], tol: 10 },
@@ -470,8 +488,8 @@ const LEVELS = [
   {
     name: "Bus Depot", tier: "Hard", mode: "moves", w: 36, h: 21,
     vehicle: "bus",
-    start: { x: 3, y: 16, h: 0 },
-    goal: { cx: 17.4, cy: 6, w: 4.8, h: 11.8, heads: [90, -90], tol: 10 },
+    start: { x: 3.1, y: 15.8, h: 0 },
+    goal: { cx: 17.6, cy: 6.7, w: 5.3, h: 13.2, heads: [90, -90], tol: 10 },
     walls: [
       { x: 0, y: 20.5, w: 36, h: 0.5, kind: "curb" },
     ],
@@ -479,27 +497,11 @@ const LEVELS = [
       { cx: 12, cy: 6, h: Math.PI / 2, type: "bus" },
       { cx: 8, cy: 19, h: 0 },
       { cx: 18, cy: 19, h: 0 },
+      { cx: 29.8, cy: 6.1, h: Math.PI / 2, type: "bus" },
+      { cx: 29.9, cy: 19.1, h: 0 },
     ],
     starThresh: [2, 3], starThreshQuick: [22, 34],
     hint: "12 m of bus — watch the enormous rear swing as you steer in.",
     solution: [{ steer: 0, dist: 28 }, { steer: -45, dist: -10 }],
-  },
-  {
-    name: "Bus Terminal", tier: "Expert", mode: "moves", w: 36, h: 21,
-    vehicle: "bus",
-    start: { x: 3, y: 16, h: 0 },
-    goal: { cx: 22, cy: 7.2, w: 5, h: 14, heads: [90, -90], tol: 10 },
-    walls: [
-      { x: 0, y: 20.5, w: 36, h: 0.5, kind: "curb" },
-      { x: 18, y: 0, w: 0.8, h: 6.5 },
-      { x: 25, y: 0, w: 0.8, h: 6.5 },
-    ],
-    cars: [
-      { cx: 10, cy: 6, h: Math.PI / 2, type: "bus" },
-      { cx: 30, cy: 19, h: 0 },
-    ],
-    starThresh: [2, 3], starThreshQuick: [20, 31],
-    hint: "Thread between the pillars before easing the 12 m bus in.",
-    solution: [{ steer: 0, dist: 25 }, { steer: -45, dist: -10 }],
   },
 ];
