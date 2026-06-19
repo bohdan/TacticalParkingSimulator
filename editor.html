@@ -47,15 +47,15 @@ button.danger:hover{background:#6e2424}
 #saveStatus.err{border-color:#8b3030;color:#e06060}
 #btnSave{background:#1d4f6b;border-color:#2d7396}
 #btnSave.ready{background:#1a4e7a;border-color:#2a78b0;color:#80c8ff}
-#loadSel{max-width:180px}
+#loadSel{background:#1d2330;border:1px solid #2a3040;color:#c8d0dc;border-radius:6px;padding:4px 8px;font-size:12px;max-width:200px}
+#loadSel:focus{outline:none;border-color:#3d8fbf}
 </style>
 </head>
 <body>
 <div id="toolbar">
   <h1>Level Editor</h1>
   <div class="sep"></div>
-  <button id="btnLoad">Load level ▾</button>
-  <select id="loadSel" style="display:none"></select>
+  <select id="loadSel"><option value="">Load level…</option></select>
   <div class="sep"></div>
   <button id="toolSelect" class="active" title="Select / move objects  [V]">Select</button>
   <button id="toolWall"   title="Draw wall  [W]">+ Wall</button>
@@ -849,26 +849,29 @@ bind('gHeads', e=>{ L.goal.heads=e.target.value.split(',').map(s=>+s.trim()).fil
 bind('gTol',   e=>{ L.goal.tol=+e.target.value; render(); });
 
 // ── Load from game.js ─────────────────────────────────────────────────────────
-document.getElementById('btnLoad').onclick=async()=>{
+let gameLevels=[];
+async function fetchLevels(){
+  const text=await fetch('game.js').then(r=>{ if(!r.ok)throw new Error('fetch failed'); return r.text(); });
+  // Extract just the array literal (from const LEVELS = [ to the closing ];)
+  const m=text.match(/const LEVELS\s*=\s*(\[[\s\S]*?\n\];)/);
+  if(!m) throw new Error('LEVELS array not found in game.js');
+  // Evaluate with Math in scope
+  return new Function('Math','return '+m[1])(Math);
+}
+async function populateLoadDropdown(){
+  const selEl=document.getElementById('loadSel');
   try {
-    const text=await fetch('game.js').then(r=>{ if(!r.ok)throw new Error('fetch failed'); return r.text(); });
-    // Extract just the array literal (from const LEVELS = [ to the closing ];)
-    const m=text.match(/const LEVELS\s*=\s*(\[[\s\S]*?\n\];)/);
-    if(!m) throw new Error('LEVELS array not found in game.js');
-    // Evaluate with Math in scope
-    const levels=new Function('Math','return '+m[1])(Math);
-    const sel2=document.getElementById('loadSel');
-    sel2.innerHTML=`<option value="">— pick a level —</option>`+
-      levels.map((lv,i)=>`<option value="${i}">${i+1}. ${lv.name}</option>`).join('');
-    sel2.style.display='';
-    sel2.onchange=()=>{
-      if(sel2.value==='') return;
-      loadedLevelIdx=+sel2.value;
-      applyLevel(levels[loadedLevelIdx]);
-    };
+    gameLevels=await fetchLevels();
+    selEl.innerHTML=`<option value="">Load level…</option>`+
+      gameLevels.map((lv,i)=>`<option value="${i}">${i+1}. ${lv.name}</option>`).join('');
   } catch(err){
-    alert('Could not load game.js: '+err.message);
+    selEl.innerHTML=`<option value="">Load failed</option>`;
   }
+}
+document.getElementById('loadSel').onchange=e=>{
+  if(e.target.value==='') return;
+  loadedLevelIdx=+e.target.value;
+  applyLevel(gameLevels[loadedLevelIdx]);
 };
 
 function applyLevel(lv){
@@ -1195,6 +1198,7 @@ document.getElementById('btnImportLoad').onclick=()=>{
 updateSaveBtn();
 updateSidebar();
 resize();
+populateLoadDropdown();
 </script>
 </body>
 </html>
