@@ -142,6 +142,7 @@ let editIdx = null;    // index of the move being tweaked (null = composing next
 let anim = null;       // {samples, cum, total, t0, speed}
 let pendingLb = null;  // {levelIdx, stars, st} — awaiting leaderboard submit
 let solutionUsed = false; // viewing the solution locks leaderboard until Reset
+let introReturnIdx = null; // where to resume after the daily boot intro
 let view = { scale: 1, ox: 0, oy: 0 };
 
 function planEnd() {
@@ -870,10 +871,10 @@ function nextPlayable(from, dir) {
 
 function setLevel(i) {
   levelIdx = (i + LEVELS.length) % LEVELS.length;
-  // Don't persist progress while previewing a test level — the shifted
-  // indices would corrupt the real game's saved position.
-  if (!testLevelLoaded) localStorage.setItem('parking.level', String(levelIdx));
   const def = LEVELS[levelIdx];
+  // Don't persist progress while previewing a test level (shifted indices) or
+  // while on a cutscene (so the daily intro never overwrites real progress).
+  if (!testLevelLoaded && !isCutscene(def)) localStorage.setItem('parking.level', String(levelIdx));
   if (isCutscene(def)) { level = null; showCutscene(def); return; }
   $('intro').classList.add('hidden');  // leaving a cutscene
   setVehicle(def.vehicle || 'default');
@@ -1598,6 +1599,13 @@ function endCutscene() {
   cancelAnimationFrame(introAnimId);
   introAnimId = null;
   $('introGo').classList.add('hidden');
+  // After the daily boot intro, resume where the player left off.
+  if (introReturnIdx != null) {
+    const t = introReturnIdx;
+    introReturnIdx = null;
+    setLevel(t);
+    return;
+  }
   let t = nextPlayable(levelIdx, +1);
   if (t < 0) t = nextPlayable(levelIdx, -1);  // cutscene sits at the very end
   setLevel(t >= 0 ? t : levelIdx);
@@ -1607,7 +1615,33 @@ $('introGo').addEventListener('click', endCutscene);
 
 /* ===================== Boot ===================== */
 
-setLevel(levelIdx);
+// Play the intro (first cutscene) at most once per calendar day. On the first
+// visit of the day it runs, then resumes the saved level; afterwards it's
+// skipped. A shared (#sol=) or test (#try=) link always skips the intro.
+const INTRO_DAY_KEY = 'parking.introDay';
+function introShownToday() {
+  try { return localStorage.getItem(INTRO_DAY_KEY) === new Date().toDateString(); }
+  catch (e) { return false; }
+}
+function markIntroShownToday() {
+  try { localStorage.setItem(INTRO_DAY_KEY, new Date().toDateString()); } catch (e) {}
+}
+
+// Resume index: the saved level, never a cutscene.
+let resumeIdx = levelIdx;
+if (!testLevelLoaded && isCutscene(LEVELS[resumeIdx])) {
+  const np = nextPlayable(resumeIdx, +1);
+  resumeIdx = np >= 0 ? np : 0;
+}
+
+const introIdx = LEVELS.findIndex(isCutscene);
+if (!testLevelLoaded && !_solHash && introIdx >= 0 && !introShownToday()) {
+  markIntroShownToday();
+  introReturnIdx = resumeIdx;     // after the briefing, resume here
+  setLevel(introIdx);
+} else {
+  setLevel(resumeIdx);
+}
 
 // Apply a shared solution from #sol= URL hash (set moves before first draw)
 if (_solHash && level) {
