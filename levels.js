@@ -102,7 +102,7 @@ const LEVELS = [
       { x: 21.7, y: 10.7, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     hint: "Angled bays: enter on the diagonal, dead straight.",
-    solution: [{ steer: -15, dist: 6 }, { steer: 0, dist: 4 }, { steer: -35, dist: 1 }],
+    solution: [{ steer: 20, dist: 1.2 }, { steer: -12, dist: 10 }, { steer: -20, dist: 1.2 }],
   },
   {
     id: "uxebvt",
@@ -119,7 +119,7 @@ const LEVELS = [
       { cx: 9.5, cy: 2.55, h: Math.PI },
     ],
     hint: "Swing the nose out toward the lane, then counter-steer and glide away.",
-    solution: [{ steer: -35, dist: 4.5 }, { steer: 35, dist: 4.5 }],
+    solution: [{ steer: -20, dist: 5 }, { steer: 20, dist: 5 }],
   },
   {
     id: "x5xy7q",
@@ -171,7 +171,7 @@ const LEVELS = [
       { cx: 16.9, cy: 11.6, h: 0.9308 },
     ],
     hint: "Partk on a curve",
-    solution: [{ steer: 0, dist: 12 }, { steer: 35, dist: -3 }, { steer: -35, dist: -4 }],
+    solution: [{ steer: 6, dist: 16 }, { steer: -35, dist: 2 }, { steer: 0, dist: -5 }, { steer: -35, dist: -2 }],
   },
   {
     id: "z30oy8",
