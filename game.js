@@ -74,10 +74,12 @@ let _solHash = null;
 // Schema setup — run once in the Supabase SQL editor:
 //
 //   create table leaderboard (
-//     id bigserial primary key, player text not null,
-//     level int not null, level_id text, level_name text not null,
-//     stars int not null, moves int, dist real, time_s real,
-//     mode text not null, solution text,
+//     id bigserial primary key,          -- row id (auto), unrelated to levels
+//     player text not null,
+//     level int, level_id text,          -- level_id = stable per-level key
+//     level_name text,
+//     moves int, dist real, time_s real, -- score; stars derived from moves/par
+//     solution text,                     -- encoded moves for replay
 //     submitted_at timestamptz default now()
 //   );
 //   alter table leaderboard enable row level security;
@@ -85,9 +87,11 @@ let _solHash = null;
 //   create policy "public insert" on leaderboard for insert
 //     with check (char_length(player) between 1 and 20);
 //
-// If upgrading an existing table, add the newer columns:
+// If upgrading an existing table:
 //   alter table leaderboard add column if not exists solution text;
 //   alter table leaderboard add column if not exists level_id text;
+//   alter table leaderboard alter column stars drop not null; -- no longer sent
+//   alter table leaderboard alter column mode  drop not null; -- deprecated
 //
 const LB_URL = 'https://qvjorkpzlwvswsptkwyn.supabase.co';
 const LB_KEY = 'sb_publishable_geHaaCkSfPilYWV3fYQHQA_KZdYNrpC';
@@ -211,11 +215,13 @@ function levelPar() {
 }
 
 // Golf-style scoring: Par → 3★, Bogey (Par+1) → 2★, worse → 1★.
-function computeStars(st) {
-  const par = levelPar();
-  if (st.moves <= par) return 3;
-  if (st.moves <= par + 1) return 2;
+function starsForMoves(mvCount, par) {
+  if (mvCount <= par) return 3;
+  if (mvCount <= par + 1) return 2;
   return 1;
+}
+function computeStars(st) {
+  return starsForMoves(st.moves, levelPar());
 }
 
 /* ===================== HUD ===================== */
@@ -226,9 +232,56 @@ function starStr(n, total = 3) {
   return s;
 }
 
+// Difficulty emoji by tier — shown in the level dropdown and objective line.
+const TIER_EMOJI = {
+  Tutorial: '🎓', Easy: '🟢', Medium: '🔵', Hard: '🟠', Expert: '🔴',
+};
+const tierEmoji = def => TIER_EMOJI[def && def.tier] || '⚪';
+
+// ── Level unlock progression ───────────────────────────────────────────────
+// A level is unlocked when the player reaches it; the title of locked levels
+// is hidden in the selector. `maxUnlocked` is the highest unlocked index.
+let maxUnlocked = (() => {
+  const m = parseInt(localStorage.getItem('parking.maxUnlocked') || '-1', 10);
+  return isNaN(m) ? -1 : m;
+})();
+function setMaxUnlocked(idx) {
+  if (idx > maxUnlocked) {
+    maxUnlocked = idx;
+    try { localStorage.setItem('parking.maxUnlocked', String(idx)); } catch (e) {}
+  }
+}
+const isUnlocked = idx => isCutscene(LEVELS[idx]) || idx <= maxUnlocked;
+
+// 1-based position counting only playable (non-cutscene) levels.
+function playableRank(idx) {
+  let r = 0;
+  for (let i = 0; i <= idx; i++) if (!isCutscene(LEVELS[i])) r++;
+  return r;
+}
+
+// Build the header dropdown: unlocked levels show emoji + name; locked ones
+// hide their title and are disabled.
+function rebuildLevelSelect() {
+  const sel = $('lvSelect');
+  if (!sel) return;
+  let html = '';
+  for (let i = 0; i < LEVELS.length; i++) {
+    const def = LEVELS[i];
+    if (isCutscene(def)) continue;        // cutscenes aren't selectable levels
+    const n = playableRank(i);
+    const label = isUnlocked(i)
+      ? `${tierEmoji(def)} ${n}. ${def.name}`
+      : `🔒 ${n}. ? ? ?`;
+    html += `<option value="${i}"${i === levelIdx ? ' selected' : ''}` +
+            `${isUnlocked(i) ? '' : ' disabled'}>${label}</option>`;
+  }
+  sel.innerHTML = html;
+  sel.value = String(levelIdx);
+}
+
 function updateHUD() {
-  $('lvName').textContent = `${levelIdx + 1}/${LEVELS.length} · ${level.name}`;
-  $('objective').textContent = `${level.tier} · Par ${levelPar()}`;
+  $('objective').textContent = `${tierEmoji(level)} ${level.tier} · Par ${levelPar()}`;
   const planning = moves.length > 0 || Math.abs(editDist) > 0.01;
   const best = loadBest();
   if (planning) {
@@ -833,6 +886,9 @@ function finishRun() {
     const st = planStats();
     const stars = computeStars(st);
     saveBest(st, stars);
+    // Clearing a level unlocks the next one.
+    const nxt = nextPlayable(levelIdx, +1);
+    if (nxt >= 0) { setMaxUnlocked(nxt); rebuildLevelSelect(); }
     $('ovTitle').textContent = 'Parked!';
     $('ovStars').innerHTML =
       starStr(stars).replace(/☆/g, '<span class="dim">★</span>');
@@ -876,6 +932,7 @@ function setLevel(i) {
   // Don't persist progress while previewing a test level (shifted indices) or
   // while on a cutscene (so the daily intro never overwrites real progress).
   if (!testLevelLoaded && !isCutscene(def)) localStorage.setItem('parking.level', String(levelIdx));
+  if (!isCutscene(def)) setMaxUnlocked(levelIdx); // reaching a level unlocks it
   if (isCutscene(def)) { level = null; showCutscene(def); return; }
   $('intro').classList.add('hidden');  // leaving a cutscene
   setVehicle(def.vehicle || 'default');
@@ -887,6 +944,7 @@ function setLevel(i) {
   solutionUsed = false;
   setEdit(0, 0);
   recomputePlan();
+  rebuildLevelSelect();
 }
 
 /* ===================== Input ===================== */
@@ -994,8 +1052,11 @@ $('goBtn').addEventListener('click', () => {
   startRun();
 });
 
-$('prevLv').addEventListener('click', () => { const t = nextPlayable(levelIdx, -1); if (t >= 0) setLevel(t); });
-$('nextLv').addEventListener('click', () => { const t = nextPlayable(levelIdx, +1); if (t >= 0) setLevel(t); });
+$('lvSelect').addEventListener('change', e => {
+  const t = parseInt(e.target.value, 10);
+  if (!isNaN(t) && isUnlocked(t)) setLevel(t);
+  else rebuildLevelSelect(); // revert selection for locked picks
+});
 
 $('menuBtn').addEventListener('click', () => $('menuOverlay').classList.remove('hidden'));
 $('menuClose').addEventListener('click', () => $('menuOverlay').classList.add('hidden'));
@@ -1100,10 +1161,10 @@ function escHtml(s) {
 async function lbPost(levelIdx, player, stars, st, solutionStr) {
   const body = {
     player, level: levelIdx, level_id: levelKey(levelIdx), level_name: level.name,
-    stars, moves: st.moves,
+    moves: st.moves,
     dist: +st.dist.toFixed(2), time_s: +st.time.toFixed(1),
-    mode: 'quick',
     solution: solutionStr || null,
+    submitted_at: new Date().toISOString(),
   };
   let r = await fetch(`${LB_URL}/rest/v1/leaderboard`, {
     method: 'POST',
@@ -1131,8 +1192,8 @@ async function lbPost(levelIdx, player, stars, st, solutionStr) {
 
 async function lbGet(levelIdx) {
   const p = new URLSearchParams({
-    select: 'player,stars,moves,dist,time_s,solution',
-    level_id: `eq.${levelKey(levelIdx)}`, mode: 'eq.quick',
+    select: 'player,moves,dist,time_s,solution,submitted_at',
+    level_id: `eq.${levelKey(levelIdx)}`,
     order: 'moves.asc,time_s.asc', limit: '50',
   });
   const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
@@ -1157,16 +1218,20 @@ async function openLeaderboard(idx) {
       $('lbTable').innerHTML = '<tr><td colspan="6" class="lb-empty">No entries yet — be first!</td></tr>';
       return;
     }
+    // Stars are derived from moves vs the level's par (no longer stored).
+    const par = LEVELS[idx].par ?? (LEVELS[idx].solution ? LEVELS[idx].solution.length : 4);
     $('lbTable').innerHTML =
       `<tr class="lb-head"><td></td><td class="lb-name">Player</td><td class="lb-stars">★</td>` +
       `<td class="lb-metric">Moves</td><td class="lb-metric">Time</td><td></td></tr>` +
       top.map((r, i) => {
       const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
-      const stars = '★'.repeat(r.stars) + `<span class="lb-dim">★</span>`.repeat(3 - r.stars);
+      const sc = starsForMoves(r.moves, par);
+      const stars = '★'.repeat(sc) + `<span class="lb-dim">★</span>`.repeat(3 - sc);
       const playBtn = r.solution
         ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button></td>`
         : '<td></td>';
-      return `<tr class="${cls}"><td class="lb-rank">${i+1}</td><td class="lb-name">${escHtml(r.player)}</td>` +
+      const when = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '';
+      return `<tr class="${cls}" title="${when}"><td class="lb-rank">${i+1}</td><td class="lb-name">${escHtml(r.player)}</td>` +
         `<td class="lb-stars">${stars}</td><td class="lb-metric">${r.moves}</td>` +
         `<td class="lb-metric">${r.time_s.toFixed(1)}s</td>${playBtn}</tr>`;
     }).join('');
@@ -1654,6 +1719,12 @@ if (!testLevelLoaded && isCutscene(LEVELS[resumeIdx])) {
   const np = nextPlayable(resumeIdx, +1);
   resumeIdx = np >= 0 ? np : 0;
 }
+
+// Unlock everything up to where the player has already reached (migrates
+// existing players who progressed before unlock-gating existed).
+const firstPlayableIdx = nextPlayable(-1, +1);
+if (firstPlayableIdx >= 0) setMaxUnlocked(firstPlayableIdx);
+if (!testLevelLoaded) setMaxUnlocked(resumeIdx);
 
 const introIdx = LEVELS.findIndex(isCutscene);
 if (!testLevelLoaded && !_solHash && introIdx >= 0 && !introShownToday()) {

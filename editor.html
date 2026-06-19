@@ -105,6 +105,7 @@ button.nav{padding:4px 8px;font-weight:700}
    </div>
    <div id="geomPanel">
     <h2>Level</h2>
+    <div class="row"><label>ID</label><input id="sId" type="text" readonly title="Stable leaderboard id — auto-assigned, do not change" style="color:#80d0ff;font-family:Menlo,Consolas,monospace;font-size:11px"></div>
     <div class="row"><label>Name</label><input id="sName" type="text"></div>
     <div class="row"><label>Tier</label>
       <select id="sTier"><option>Tutorial</option><option>Easy</option><option>Medium</option><option>Hard</option><option>Expert</option></select>
@@ -961,6 +962,7 @@ function updateSidebar(){
     if(document.activeElement!==ta) ta.value=(L.message||[]).join('\n');
     return;
   }
+  val('sId',L.id||'(none)');
   val('sName',L.name); val('sTier',L.tier); val('sMode',L.mode);
   val('sVehicle',L.vehicle||'default');
   val('sW',L.w); val('sH',L.h);
