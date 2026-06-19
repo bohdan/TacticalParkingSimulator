@@ -592,6 +592,39 @@ function drawArcGuides(pose, steerRad) {
   }
 }
 
+// Steering geometry overlay: the rear-axle axis (perpendicular to heading),
+// the instantaneous turn centre sitting on it, and the radius lines from the
+// rear axle and both front wheels to that centre. Each front wheel rolls
+// perpendicular to its own radius line (classic Ackermann); the rear-axle →
+// centre segment is the turn radius R = wheelbase / tan(steer).
+function drawSteerGeometry(pose, steerRad) {
+  if (Math.abs(steerRad) < rad(0.5)) return;   // ~straight: centre at infinity
+  const R = CAR.wb / Math.tan(steerRad);
+  const c = Math.cos(pose.h), s = Math.sin(pose.h);
+  const ux = -s, uy = c;                       // rear-axle axis direction (toward centre)
+  const O = { x: pose.x + R * ux, y: pose.y + R * uy };
+  const sgn = Math.sign(R);
+  const at = t => ({ x: pose.x + t * ux, y: pose.y + t * uy });
+
+  // rear-axle axis — thin, extends just past the centre and the opposite side
+  drawPath([at(-sgn * 1.0), at(R + sgn * 1.0)], 'rgba(255,255,255,0.28)', false, 0.035);
+
+  // radius lines from each front wheel to the turn centre
+  const half = CAR.wid / 2 - 0.16;             // matches drawn wheel inset
+  const fw = ly => ({ x: pose.x + CAR.wb * c - ly * s, y: pose.y + CAR.wb * s + ly * c });
+  drawPath([fw(half),  O], 'rgba(255,255,255,0.28)', false, 0.03);
+  drawPath([fw(-half), O], 'rgba(255,255,255,0.28)', false, 0.03);
+
+  // the turn radius itself: rear-axle centre → turn centre
+  drawPath([{ x: pose.x, y: pose.y }, O], 'rgba(120,220,255,0.8)', false, 0.045);
+
+  // turn-centre marker
+  ctx.beginPath();
+  ctx.arc(O.x, O.y, 0.12, 0, 2 * Math.PI);
+  ctx.fillStyle = 'rgba(120,220,255,0.9)';
+  ctx.fill();
+}
+
 function drawArrow(x, y, ang, len, color) {
   const c = Math.cos(ang), s = Math.sin(ang);
   ctx.beginPath();
@@ -689,7 +722,10 @@ function draw(now) {
   ctx.setLineDash([]);
 
   // arc guides (all 4 corners + all 4 wheels) — drawn first so they sit behind everything
-  if (!anim) drawArcGuides(editStartPose(), rad(editSteer));
+  if (!anim) {
+    drawArcGuides(editStartPose(), rad(editSteer));
+    drawSteerGeometry(editStartPose(), rad(editSteer));
+  }
 
   // committed plan: paths + ghosts
   // When editing move editIdx: skip that move's arc (replaced by live preview),
