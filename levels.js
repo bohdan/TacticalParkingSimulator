@@ -507,6 +507,6 @@ const LEVELS = [
       { cx: 29.9, cy: 19.1, h: 0 },
     ],
     hint: "12 m of bus — watch the enormous rear swing as you steer in.",
-    solution: [{ steer: 0, dist: 28 }, { steer: -45, dist: -10 }],
+    solution: [{ steer: -12, dist: 16 }, { steer: 28, dist: -5 }, { steer: -28, dist: 5 }],
   },
 ];
