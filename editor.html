@@ -47,15 +47,22 @@ button.danger:hover{background:#6e2424}
 #saveStatus.err{border-color:#8b3030;color:#e06060}
 #btnSave{background:#1d4f6b;border-color:#2d7396}
 #btnSave.ready{background:#1a4e7a;border-color:#2a78b0;color:#80c8ff}
-#loadSel{background:#1d2330;border:1px solid #2a3040;color:#c8d0dc;border-radius:6px;padding:4px 8px;font-size:12px;max-width:200px}
-#loadSel:focus{outline:none;border-color:#3d8fbf}
+#curSel{background:#1d2330;border:1px solid #2a3040;color:#c8d0dc;border-radius:6px;padding:4px 8px;font-size:12px;max-width:240px}
+#curSel:focus{outline:none;border-color:#3d8fbf}
+button.nav{padding:4px 8px;font-weight:700}
 </style>
 </head>
 <body>
 <div id="toolbar">
   <h1>Level Editor</h1>
   <div class="sep"></div>
-  <select id="loadSel"><option value="">Load level…</option></select>
+  <button id="btnPrev" class="nav" title="Previous level">&#8249;</button>
+  <select id="curSel" title="Current level"></select>
+  <button id="btnNext" class="nav" title="Next level">&#8250;</button>
+  <button id="btnNew" title="New level (inserted after current)">&#65291; New</button>
+  <button id="btnMoveUp" class="nav" title="Move current level earlier">&#9650;</button>
+  <button id="btnMoveDn" class="nav" title="Move current level later">&#9660;</button>
+  <button id="btnDelLevel" class="danger" title="Delete current level">&#128465;</button>
   <div class="sep"></div>
   <button id="toolSelect" class="active" title="Select / move objects  [V]">Select</button>
   <button id="toolWall"   title="Draw wall  [W]">+ Wall</button>
@@ -63,13 +70,12 @@ button.danger:hover{background:#6e2424}
   <button id="toolCar"    title="Place obstacle car  [A]">+ Car</button>
   <button id="toolTraffic" title="Place traffic car  [T]">+ Traffic</button>
   <div class="sep"></div>
-  <button id="btnImport">&#8595; Import string</button>
-  <button class="primary" id="btnExport">Export ↗</button>
-  <div class="sep"></div>
-  <button id="btnTry">&#9654; Try level</button>
+  <button id="btnImport">&#8595; Import</button>
+  <button id="btnExport">Export ↗</button>
+  <button id="btnTry">&#9654; Try</button>
   <div class="sep"></div>
   <button id="btnGH">&#9881; GitHub</button>
-  <button id="btnSave" title="Save level to game.js on GitHub">&#8593; Save</button>
+  <button id="btnSave" class="primary" title="Save all levels to GitHub">&#8593; Save all</button>
 </div>
 
 <div id="main">
@@ -160,13 +166,8 @@ button.danger:hover{background:#6e2424}
 
 <div id="saveOverlay">
   <div id="saveBox">
-    <h3>&#8593; Save to GitHub</h3>
-    <div class="save-choice" id="saveChoice">
-      <label><input type="radio" name="saveMode" value="replace" id="saveModeReplace" checked>
-        Replace <span id="saveReplaceLabel">level N</span> in game.js</label>
-      <label><input type="radio" name="saveMode" value="append" id="saveModeAppend">
-        Append as a new level</label>
-    </div>
+    <h3>&#8593; Save all levels to GitHub</h3>
+    <div id="saveSummary" style="font-size:12px;color:#9aa8bd"></div>
     <div id="saveStatus" style="display:none"></div>
     <div style="display:flex;gap:8px" id="saveBtnRow">
       <button id="btnSaveGo" class="primary">Save</button>
@@ -185,7 +186,16 @@ const VSPEC = {
 };
 
 // ── Level state ──────────────────────────────────────────────────────────────
-let L = newLevel();
+// The editor holds the ENTIRE set of levels in memory. `L` is the current
+// level being edited — it is a reference into `levels[curIdx]`, so every edit
+// mutates the in-memory set directly. Nothing is persisted until "Save all".
+let levels = [];
+let curIdx = 0;
+let L = null;
+let dirty = false; // unsaved changes since last GitHub save
+
+function markDirty(){ dirty = true; }
+
 function newLevel(){
   return {
     name:'New Level', tier:'Easy', mode:'moves', vehicle:'default',
@@ -199,6 +209,26 @@ function newLevel(){
     cars:[], traffic:[],
     starThresh:[3,5], starThreshQuick:[17,26],
     hint:'', solution:[],
+  };
+}
+
+// Normalize any loaded level into the shape the editor expects (fills defaults).
+function normalizeLevel(lv){
+  return {
+    name:lv.name||'',
+    tier:lv.tier||'Easy',
+    mode:lv.mode||'moves',
+    vehicle:lv.vehicle||'default',
+    w:lv.w||22, h:lv.h||13,
+    start:{...lv.start},
+    goal:{...lv.goal, ang:lv.goal.ang||0, heads:[...(lv.goal.heads||[0])], tol:lv.goal.tol||12},
+    walls:(lv.walls||[]).map(w=>({...w})),
+    cars:(lv.cars||[]).map(c=>({...c})),
+    traffic:(lv.traffic||[]).map(t=>({...t})),
+    starThresh:[...(lv.starThresh||[3,5])],
+    starThreshQuick:[...(lv.starThreshQuick||[17,26])],
+    hint:lv.hint||'',
+    solution:[...(lv.solution||[])],
   };
 }
 
@@ -225,6 +255,7 @@ function resize(){
   render();
 }
 function fitLevel(){
+  if(!L) return;
   const pad = 40;
   const wrap = document.getElementById('cvWrap');
   const sx = (wrap.clientWidth  - pad*2) / L.w;
@@ -281,17 +312,36 @@ function rrect(x,y,w,h,r){
   ctx.closePath();
 }
 
-function drawCar(cx,cy,h,sp,fill,stroke,alpha=1){
+// Game-accurate car body — mirrors drawCarBody() in game.js so the editor
+// looks like the real game. (cx,cy) = body CENTER, h = heading. Internally
+// converts to the rear-axle frame the game draws from.
+function drawCar(cx,cy,h,sp,opts){
+  const {fill,stroke,alpha=1,detail=true,wheels=true,steer=0}=opts;
+  const rx=cx-(sp.len/2-sp.rOver)*Math.cos(h);
+  const ry=cy-(sp.len/2-sp.rOver)*Math.sin(h);
   ctx.save();
   ctx.globalAlpha=alpha;
-  ctx.translate(cx,cy); ctx.rotate(h);
-  const hl=sp.len/2,hw=sp.wid/2;
-  rrect(-hl,-hw,sp.len,sp.wid,0.25);
+  ctx.translate(rx,ry); ctx.rotate(h);
+  const x0=-sp.rOver, len=sp.len, w=sp.wid;
+  const wy=w/2-0.16, wl=Math.min(0.9,len*0.075), wt=Math.min(0.18,w*0.10);
+  if(wheels){
+    ctx.fillStyle='#10131a';
+    for(const [wx,wya,a] of [[0,-wy,0],[0,wy,0],[sp.wb,-wy,steer],[sp.wb,wy,steer]]){
+      ctx.save(); ctx.translate(wx,wya); ctx.rotate(a); ctx.fillRect(-wl/2,-wt,wl,wt*2); ctx.restore();
+    }
+  }
+  rrect(x0,-w/2,len,w,Math.min(0.3,w*0.17));
   ctx.fillStyle=fill; ctx.fill();
-  ctx.strokeStyle=stroke; ctx.lineWidth=2*PX(); ctx.stroke();
-  // front band
-  ctx.fillStyle=stroke;
-  ctx.fillRect(hl-0.35,-hw+0.2,0.25,sp.wid-0.4);
+  if(stroke){ ctx.lineWidth=0.07; ctx.strokeStyle=stroke; ctx.stroke(); }
+  if(detail){
+    const wsX=x0+len*0.30, rwX=x0+len*0.09, glH=w-0.44;
+    ctx.fillStyle='rgba(8,12,18,0.45)';
+    rrect(wsX,-w/2+0.22,Math.min(0.85,len*0.20),glH,0.15); ctx.fill();
+    rrect(rwX,-w/2+0.25,Math.min(0.6,len*0.13),glH,0.15); ctx.fill();
+    ctx.fillStyle='#ffe9a8';
+    ctx.fillRect(x0+len-0.18,-w/2+0.15,0.12,Math.min(0.3,w*0.17));
+    ctx.fillRect(x0+len-0.18, w/2-0.45,0.12,Math.min(0.3,w*0.17));
+  }
   ctx.restore();
 }
 
@@ -323,61 +373,46 @@ function wallBounds(w){
 
 function render(){
   ctx.resetTransform();
-  ctx.fillStyle='#080a0e';
+  ctx.fillStyle='#0e1117';            // letterbox outside the map
   ctx.fillRect(0,0,cv.width,cv.height);
+  if(!L) return;
   applyXf();
   const p=PX();
 
-  // Grid
-  ctx.strokeStyle='#13181f'; ctx.lineWidth=p;
-  for(let x=0;x<=L.w;x++){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,L.h);ctx.stroke();}
-  for(let y=0;y<=L.h;y++){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(L.w,y);ctx.stroke();}
-  // Map border
-  ctx.strokeStyle='#304060'; ctx.lineWidth=3*p;
+  // Asphalt (matches game's #23272f)
+  ctx.fillStyle='#23272f';
+  ctx.fillRect(0,0,L.w,L.h);
+  // 1 m grid (matches game)
+  ctx.strokeStyle='rgba(255,255,255,0.05)'; ctx.lineWidth=0.02;
+  ctx.beginPath();
+  for(let x=1;x<L.w;x++){ctx.moveTo(x,0);ctx.lineTo(x,L.h);}
+  for(let y=1;y<L.h;y++){ctx.moveTo(0,y);ctx.lineTo(L.w,y);}
+  ctx.stroke();
+  // Map border (editor aid)
+  ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=2*p;
   ctx.strokeRect(0,0,L.w,L.h);
 
-  // Walls
-  for(let i=0;i<L.walls.length;i++){
-    const w=L.walls[i], isCurb=w.kind==='curb';
-    ctx.save();
-    if(w.ang!=null){ctx.translate(w.cx,w.cy);ctx.rotate(w.ang);rrect(-w.w/2,-w.h/2,w.w,w.h,.1);}
-    else rrect(w.x,w.y,w.w,w.h,.1);
-    ctx.fillStyle=isCurb?'#202a42':'#2e2020';
-    ctx.fill();
-    ctx.strokeStyle=isCurb?'#3a5080':'#5a3838';
-    ctx.lineWidth=1.5*p; ctx.stroke(); ctx.restore();
-    if(sel&&sel.kind==='wall'&&sel.idx===i){
-      const b=wallBounds(w); drawSelBox(b.cx,b.cy,b.w,b.h,b.ang);
-      // corner handles
-      const hw2=b.w/2,hh2=b.h/2,a=b.ang,c=Math.cos(a),s=Math.sin(a);
-      for(const [lx,ly] of [[-hw2,-hh2],[hw2,-hh2],[hw2,hh2],[-hw2,hh2]]){
-        handle(b.cx+lx*c-ly*s,b.cy+lx*s+ly*c,5);
-      }
-    }
-  }
-
-  // Goal
+  // Goal zone (matches game)
   const g=L.goal, ga=g.ang||0;
   ctx.save();
   ctx.translate(g.cx,g.cy); if(ga)ctx.rotate(ga);
   rrect(-g.w/2,-g.h/2,g.w,g.h,.15);
-  ctx.fillStyle='rgba(61,220,132,.1)'; ctx.fill();
-  ctx.strokeStyle='#3ddc84'; ctx.lineWidth=1.5*p;
+  ctx.fillStyle='rgba(61,220,132,0.10)'; ctx.fill();
+  ctx.strokeStyle='#3ddc84'; ctx.lineWidth=0.1;
   ctx.setLineDash([.45,.3]); ctx.stroke(); ctx.setLineDash([]);
   ctx.restore();
   for(const hd of(g.heads||[0])){
     const a=rad(hd);
     ctx.save();
     ctx.translate(g.cx,g.cy); ctx.rotate(a);
-    const al=Math.min(g.w,g.h)*.4;
-    ctx.strokeStyle='rgba(61,220,132,.7)'; ctx.lineWidth=2*p;
-    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(al,0);
-    ctx.moveTo(al,0);ctx.lineTo(al-.35,-.15);ctx.moveTo(al,0);ctx.lineTo(al-.35,.15);
+    const al=Math.min(g.w,g.h)*0.45;
+    ctx.strokeStyle='rgba(61,220,132,0.7)'; ctx.lineWidth=0.12;
+    ctx.beginPath(); ctx.moveTo(-al/2,0); ctx.lineTo(al/2,0);
+    ctx.moveTo(al/2,0);ctx.lineTo(al/2-.45,-.28);ctx.moveTo(al/2,0);ctx.lineTo(al/2-.45,.28);
     ctx.stroke(); ctx.restore();
   }
   if(sel&&sel.kind==='goal'){
     drawSelBox(g.cx,g.cy,g.w,g.h,ga);
-    // corner handles + rotate handle
     const hw2=g.w/2,hh2=g.h/2,c=Math.cos(ga),s=Math.sin(ga);
     for(const [lx,ly] of [[-hw2,-hh2],[hw2,-hh2],[hw2,hh2],[-hw2,hh2]]){
       handle(g.cx+lx*c-ly*s,g.cy+lx*s+ly*c,5);
@@ -385,42 +420,58 @@ function render(){
     handle(g.cx+(g.w/2+0.6)*c,g.cy+(g.w/2+0.6)*s,6,'#80e0ff');
   }
 
-  // Obstacle cars
+  // Walls / curbs (matches game; ground features behind vehicles)
+  for(let i=0;i<L.walls.length;i++){
+    const w=L.walls[i], isCurb=w.kind==='curb';
+    ctx.save();
+    if(w.ang!=null){ctx.translate(w.cx,w.cy);ctx.rotate(w.ang);rrect(-w.w/2,-w.h/2,w.w,w.h,.1);}
+    else rrect(w.x,w.y,w.w,w.h,.1);
+    ctx.fillStyle=isCurb?'#3a4148':'#39404e';
+    ctx.fill();
+    ctx.strokeStyle=isCurb?'#4d565e':'#4a5568';
+    ctx.lineWidth=0.06; ctx.stroke(); ctx.restore();
+    if(sel&&sel.kind==='wall'&&sel.idx===i){
+      const b=wallBounds(w); drawSelBox(b.cx,b.cy,b.w,b.h,b.ang);
+      const hw2=b.w/2,hh2=b.h/2,a=b.ang,c=Math.cos(a),s=Math.sin(a);
+      for(const [lx,ly] of [[-hw2,-hh2],[hw2,-hh2],[hw2,hh2],[-hw2,hh2]]){
+        handle(b.cx+lx*c-ly*s,b.cy+lx*s+ly*c,5);
+      }
+    }
+  }
+
+  // Traffic (decorative; matches game — no detail/wheels)
+  for(let i=0;i<L.traffic.length;i++){
+    const t=L.traffic[i], sp=VSPEC.default;
+    const isSel=sel&&sel.kind==='traffic'&&sel.idx===i;
+    // path arrow
+    ctx.save();ctx.translate(t.x,t.y);ctx.rotate(t.h);
+    ctx.strokeStyle='rgba(80,128,220,.35)';ctx.lineWidth=0.05;
+    ctx.setLineDash([.4,.3]);
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.min(t.loop||20,L.w),0);ctx.stroke();
+    ctx.setLineDash([]);ctx.restore();
+    drawCar(t.x,t.y,t.h,sp,{fill:t.color||'#4e5a6e',stroke:'#3a4255',detail:false,wheels:false,alpha:0.9});
+    if(isSel){
+      drawSelBox(t.x,t.y,sp.len,sp.wid,t.h);
+      handle(t.x+(sp.len/2+.5)*Math.cos(t.h),t.y+(sp.len/2+.5)*Math.sin(t.h),6,'#80e0ff');
+    }
+  }
+
+  // Obstacle cars (matches game — #737d8c body, detail + wheels)
   for(let i=0;i<L.cars.length;i++){
     const c=L.cars[i], sp=carSpec(c);
     const isSel=sel&&sel.kind==='car'&&sel.idx===i;
-    drawCar(c.cx,c.cy,c.h,sp,isSel?'#806020':'#4e5a6e',isSel?'#c09030':'#3a4255');
+    drawCar(c.cx,c.cy,c.h,sp,{fill:isSel?'#8a94a3':'#737d8c',stroke:'#525a66',detail:true,wheels:true});
     if(isSel){
       drawSelBox(c.cx,c.cy,sp.len,sp.wid,c.h);
       handle(c.cx+(sp.len/2+0.5)*Math.cos(c.h),c.cy+(sp.len/2+0.5)*Math.sin(c.h),6,'#80e0ff');
     }
   }
 
-  // Traffic
-  for(let i=0;i<L.traffic.length;i++){
-    const t=L.traffic[i], sp=VSPEC.default;
-    const isSel=sel&&sel.kind==='traffic'&&sel.idx===i;
-    const col=t.color||'#4e5a6e';
-    drawCar(t.x+(sp.len/2-sp.rOver)*Math.cos(t.h), t.y+(sp.len/2-sp.rOver)*Math.sin(t.h),
-            t.h,sp,col,'#2a3050',.7);
-    // path arrow
-    ctx.save();ctx.translate(t.x,t.y);ctx.rotate(t.h);
-    ctx.strokeStyle='rgba(80,128,220,.4)';ctx.lineWidth=1.5*p;
-    ctx.setLineDash([.4,.3]);
-    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.min(t.loop||20,L.w),0);ctx.stroke();
-    ctx.setLineDash([]);ctx.restore();
-    if(isSel){
-      const scx=t.x+(sp.len/2-sp.rOver)*Math.cos(t.h),scy=t.y+(sp.len/2-sp.rOver)*Math.sin(t.h);
-      drawSelBox(scx,scy,sp.len,sp.wid,t.h);
-      handle(scx+(sp.len/2+.5)*Math.cos(t.h),scy+(sp.len/2+.5)*Math.sin(t.h),6,'#80e0ff');
-    }
-  }
-
-  // Start car (green)
+  // Start car (player — green, drawn last so it reads on top)
   {
     const sp=playerSpec(), sc=startCenter();
     const isSel=sel&&sel.kind==='start';
-    drawCar(sc.x,sc.y,L.start.h,sp,isSel?'#1f6e30':'#1a8a3a',isSel?'#50d070':'#27c455');
+    drawCar(sc.x,sc.y,L.start.h,sp,{fill:isSel?'#2f9b56':'#2e7d46',stroke:'#3ddc84',detail:true,wheels:true});
     // rear axle dot
     ctx.save();ctx.fillStyle='#ffe040';
     ctx.beginPath();ctx.arc(L.start.x,L.start.y,4*p,0,2*π);ctx.fill();ctx.restore();
@@ -478,8 +529,7 @@ function hitObjHandles(wx,wy){
   }
   if(sel.kind==='traffic'){
     const t=L.traffic[sel.idx], sp=VSPEC.default;
-    const scx=t.x+(sp.len/2-sp.rOver)*Math.cos(t.h),scy=t.y+(sp.len/2-sp.rOver)*Math.sin(t.h);
-    if(hitHandle(wx,wy,scx+(sp.len/2+.5)*Math.cos(t.h),scy+(sp.len/2+.5)*Math.sin(t.h))) return {handle:'rotate'};
+    if(hitHandle(wx,wy,t.x+(sp.len/2+.5)*Math.cos(t.h),t.y+(sp.len/2+.5)*Math.sin(t.h))) return {handle:'rotate'};
   }
   if(sel.kind==='start'){
     const sp=playerSpec(),sc=startCenter();
@@ -494,11 +544,10 @@ function hitTestAll(wx,wy){
     const c=L.cars[i], sp=carSpec(c);
     if(ptInOBB(wx,wy,c.cx,c.cy,sp.len,sp.wid,c.h)) return {kind:'car',idx:i};
   }
-  // traffic
+  // traffic (t.x,t.y is the body center, matching the game)
   for(let i=L.traffic.length-1;i>=0;i--){
     const t=L.traffic[i], sp=VSPEC.default;
-    const scx=t.x+(sp.len/2-sp.rOver)*Math.cos(t.h),scy=t.y+(sp.len/2-sp.rOver)*Math.sin(t.h);
-    if(ptInOBB(wx,wy,scx,scy,sp.len,sp.wid,t.h)) return {kind:'traffic',idx:i};
+    if(ptInOBB(wx,wy,t.x,t.y,sp.len,sp.wid,t.h)) return {kind:'traffic',idx:i};
   }
   // start
   {
@@ -540,12 +589,12 @@ cv.addEventListener('mousedown', e=>{
     if(tool==='car'){
       L.cars.push({cx:snapW(mw.x),cy:snapW(mw.y),h:0});
       sel={kind:'car',idx:L.cars.length-1};
-      updateSidebar(); render(); return;
+      markDirty(); updateSidebar(); render(); return;
     }
     if(tool==='traffic'){
       L.traffic.push({x:snapW(mw.x),y:snapW(mw.y),h:0,speed:4,loop:30,offset:0});
       sel={kind:'traffic',idx:L.traffic.length-1};
-      updateSidebar(); render(); return;
+      markDirty(); updateSidebar(); render(); return;
     }
     // wall / curb: start drag
     drawRect={ax:snapW(mw.x),ay:snapW(mw.y),bx:snapW(mw.x),by:snapW(mw.y)};
@@ -651,19 +700,12 @@ cv.addEventListener('mousemove', e=>{
       // car / traffic / start: compute heading from center to mouse
       let cx2,cy2;
       if(sel.kind==='car'){cx2=L.cars[sel.idx].cx;cy2=L.cars[sel.idx].cy;}
-      else if(sel.kind==='traffic'){
-        const t=L.traffic[sel.idx],sp=VSPEC.default;
-        cx2=t.x+(sp.len/2-sp.rOver)*Math.cos(t.h);
-        cy2=t.y+(sp.len/2-sp.rOver)*Math.sin(t.h);
-      } else {cx2=startCenter().x;cy2=startCenter().y;}
+      else if(sel.kind==='traffic'){cx2=L.traffic[sel.idx].x;cy2=L.traffic[sel.idx].y;}
+      else {cx2=startCenter().x;cy2=startCenter().y;}
       const a=Math.atan2(mw.y-cy2, mw.x-cx2);
       if(sel.kind==='car') L.cars[sel.idx].h=a;
       else if(sel.kind==='traffic'){
-        // keep traffic x,y (path start) consistent: back-compute from center
-        const t=L.traffic[sel.idx],sp=VSPEC.default;
-        t.h=a;
-        t.x=cx2-(sp.len/2-sp.rOver)*Math.cos(a);
-        t.y=cy2-(sp.len/2-sp.rOver)*Math.sin(a);
+        L.traffic[sel.idx].h=a; // t.x,t.y is the center — only heading changes
       } else {
         // start: rear axle = center - (len/2-rOver) in heading
         const sp=playerSpec();
@@ -685,10 +727,11 @@ cv.addEventListener('mouseup', e=>{
       const kind=tool==='curb'?'curb':'wall';
       L.walls.push({x,y,w,h,kind});
       sel={kind:'wall',idx:L.walls.length-1};
-      updateSidebar();
+      markDirty(); updateSidebar();
     }
     drawRect=null; render(); return;
   }
+  if(drag) markDirty();
   drag=null;
 });
 
@@ -723,6 +766,7 @@ function deleteSelected(){
   if(sel.kind==='wall')  L.walls.splice(sel.idx,1);
   if(sel.kind==='car')   L.cars.splice(sel.idx,1);
   if(sel.kind==='traffic') L.traffic.splice(sel.idx,1);
+  markDirty();
   sel=null; drag=null; updateSidebar(); render();
 }
 
@@ -744,6 +788,7 @@ document.getElementById('toolTraffic').onclick=()=>setTool('traffic');
 function val(id,v){ const el=document.getElementById(id); if(el&&document.activeElement!==el) el.value=v; }
 
 function updateSidebar(){
+  if(!L) return;
   val('sName',L.name); val('sTier',L.tier); val('sMode',L.mode);
   val('sVehicle',L.vehicle||'default');
   val('sW',L.w); val('sH',L.h);
@@ -848,8 +893,7 @@ bind('gAng',   e=>{ L.goal.ang=rad(+e.target.value)||0; render(); });
 bind('gHeads', e=>{ L.goal.heads=e.target.value.split(',').map(s=>+s.trim()).filter(n=>!isNaN(n)); render(); });
 bind('gTol',   e=>{ L.goal.tol=+e.target.value; render(); });
 
-// ── Load levels (levels.js via GitHub API or local fallback) ──────────────────
-let gameLevels=[];
+// ── Level set: load / navigate / structural edits ─────────────────────────────
 function parseLevelsText(text){
   const m=text.match(/const LEVELS\s*=\s*(\[[\s\S]*?\n\];)/);
   if(!m) throw new Error('LEVELS array not found');
@@ -861,50 +905,70 @@ async function fetchLevels(){
     const fd=await ghGet(`/contents/levels.js?ref=${GHS.branch}`);
     return parseLevelsText(b64decode(fd.content));
   }
-  // fallback: fetch locally
+  // fallback: fetch locally (read-only without a PAT)
   const text=await fetch('levels.js').then(r=>{ if(!r.ok)throw new Error('fetch failed'); return r.text(); });
   return parseLevelsText(text);
 }
-async function populateLoadDropdown(selectIdx=null){
-  const selEl=document.getElementById('loadSel');
-  selEl.innerHTML=`<option value="">Loading…</option>`;
-  try {
-    gameLevels=await fetchLevels();
-    selEl.innerHTML=`<option value="">Load level…</option>`+
-      gameLevels.map((lv,i)=>`<option value="${i}">${i+1}. ${lv.name}</option>`).join('');
-    if(selectIdx!=null){ selEl.value=String(selectIdx); }
-  } catch(err){
-    selEl.innerHTML=`<option value="">Load failed</option>`;
-  }
-}
-document.getElementById('loadSel').onchange=e=>{
-  if(e.target.value==='') return;
-  loadedLevelIdx=+e.target.value;
-  applyLevel(gameLevels[loadedLevelIdx]);
-};
 
-function applyLevel(lv){
-  L={
-    name:lv.name||'',
-    tier:lv.tier||'Easy',
-    mode:lv.mode||'moves',
-    vehicle:lv.vehicle||'default',
-    w:lv.w||22, h:lv.h||13,
-    start:{...lv.start},
-    goal:{...lv.goal, ang:lv.goal.ang||0, heads:[...(lv.goal.heads||[0])], tol:lv.goal.tol||12},
-    walls:(lv.walls||[]).map(w=>({...w})),
-    cars:(lv.cars||[]).map(c=>({...c})),
-    traffic:(lv.traffic||[]).map(t=>({...t})),
-    starThresh:[...(lv.starThresh||[3,5])],
-    starThreshQuick:[...(lv.starThreshQuick||[17,26])],
-    hint:lv.hint||'',
-    solution:[...(lv.solution||[])],
-  };
+// Rebuild the current-level <select> from the in-memory set.
+function refreshLevelSelector(){
+  const selEl=document.getElementById('curSel');
+  selEl.innerHTML=levels.map((lv,i)=>
+    `<option value="${i}">${i+1}. ${(lv.name||'(unnamed)')}</option>`).join('');
+  selEl.value=String(curIdx);
+}
+
+// Switch which level is being edited (instant — everything is in memory).
+function setCurrent(i){
+  curIdx=Math.max(0,Math.min(levels.length-1,i));
+  L=levels[curIdx];
   sel=null; drag=null;
+  refreshLevelSelector();
   fitLevel();
   updateSidebar();
   render();
 }
+
+async function loadAllLevels(){
+  try{
+    const fetched=await fetchLevels();
+    levels=fetched.map(normalizeLevel);
+    if(!levels.length) levels=[newLevel()];
+  }catch(err){
+    levels=[newLevel()];
+  }
+  curIdx=0;
+  setCurrent(0);
+}
+
+// Structural operations ────────────────────────────────────────────────────────
+function addLevel(){
+  levels.splice(curIdx+1,0,newLevel());
+  markDirty();
+  setCurrent(curIdx+1);
+}
+function deleteCurrentLevel(){
+  if(levels.length<=1){ alert('Cannot delete the only level.'); return; }
+  if(!confirm(`Delete level ${curIdx+1}: "${L.name}"?`)) return;
+  levels.splice(curIdx,1);
+  markDirty();
+  setCurrent(Math.min(curIdx,levels.length-1));
+}
+function moveCurrentLevel(dir){ // dir = -1 (earlier) or +1 (later)
+  const j=curIdx+dir;
+  if(j<0||j>=levels.length) return;
+  [levels[curIdx],levels[j]]=[levels[j],levels[curIdx]];
+  markDirty();
+  setCurrent(j);
+}
+
+document.getElementById('curSel').onchange=e=>setCurrent(+e.target.value);
+document.getElementById('btnPrev').onclick=()=>setCurrent(curIdx-1);
+document.getElementById('btnNext').onclick=()=>setCurrent(curIdx+1);
+document.getElementById('btnNew').onclick=addLevel;
+document.getElementById('btnDelLevel').onclick=deleteCurrentLevel;
+document.getElementById('btnMoveUp').onclick=()=>moveCurrentLevel(-1);
+document.getElementById('btnMoveDn').onclick=()=>moveCurrentLevel(1);
 
 // ── Export ────────────────────────────────────────────────────────────────────
 function fmtRad(r){
@@ -1000,8 +1064,6 @@ const GHS = {
   set branch(v){ localStorage.setItem('gh_branch',v); },
 };
 
-let loadedLevelIdx = null; // which LEVELS[] index is currently loaded
-
 function ghReady(){ return !!(GHS.pat && GHS.owner && GHS.repo); }
 function updateSaveBtn(){
   const b=document.getElementById('btnSave');
@@ -1040,22 +1102,18 @@ function setSaveStatus(msg, cls=''){
   el.textContent=msg; el.style.display=''; el.className=cls;
 }
 
-async function saveToGitHub(replaceIdx){
+// Commit the entire in-memory level set to levels.js in a single commit.
+async function saveAllToGitHub(){
   setSaveStatus('Fetching levels.js…');
   const fd=await ghGet(`/contents/levels.js?ref=${GHS.branch}`);
-  const levels=parseLevelsText(b64decode(fd.content));
-
-  if(replaceIdx!=null) levels[replaceIdx]=JSON.parse(JSON.stringify(L));
-  else levels.push(JSON.parse(JSON.stringify(L)));
 
   const newContent='const LEVELS = [\n'+levels.map(lv=>buildExport(lv)).join('\n')+'\n];\n';
 
-  setSaveStatus('Committing levels.js…');
-  const msg=replaceIdx!=null?`Update level ${replaceIdx+1}: ${L.name}`:`Add level: ${L.name}`;
-  const putData=await ghPut(`/contents/levels.js`,{message:msg,content:strToBase64(newContent),sha:fd.sha,branch:GHS.branch});
+  setSaveStatus(`Committing ${levels.length} levels…`);
+  const putData=await ghPut(`/contents/levels.js`,{message:`Update levels (${levels.length} total)`,content:strToBase64(newContent),sha:fd.sha,branch:GHS.branch});
   const newSha=putData.commit.sha.slice(0,7);
 
-  // Bump cache-bust in index.html
+  // Bump cache-bust in index.html so the deploy refreshes
   try{
     setSaveStatus(`Bumping cache to ${newSha}…`);
     const ifd=await ghGet(`/contents/index.html?ref=${GHS.branch}`);
@@ -1063,13 +1121,10 @@ async function saveToGitHub(replaceIdx){
     await ghPut(`/contents/index.html`,{message:`Bump cache-bust to ${newSha}`,content:strToBase64(iText),sha:ifd.sha,branch:GHS.branch});
   }catch(e){ /* non-fatal */ }
 
-  const savedIdx = replaceIdx!=null ? replaceIdx : levels.length-1;
-  loadedLevelIdx = savedIdx;
-  setSaveStatus(`✓ Saved — commit ${newSha}`, 'ok');
+  dirty=false;
+  setSaveStatus(`✓ Saved all ${levels.length} levels — commit ${newSha}`, 'ok');
   document.getElementById('saveBtnRow').style.display='none';
-  // Refresh dropdown to reflect new state, keep selection on the saved level
-  populateLoadDropdown(savedIdx);
-  setTimeout(()=>{ document.getElementById('saveOverlay').classList.remove('show'); document.getElementById('saveBtnRow').style.display=''; }, 2000);
+  setTimeout(()=>{ document.getElementById('saveOverlay').classList.remove('show'); document.getElementById('saveBtnRow').style.display=''; }, 2200);
 }
 
 // GitHub settings overlay
@@ -1087,32 +1142,26 @@ document.getElementById('btnGHSave').onclick=()=>{
   GHS.pat=document.getElementById('ghPat').value.trim();
   document.getElementById('ghOverlay').classList.remove('show');
   updateSaveBtn();
-  populateLoadDropdown(); // re-fetch with new credentials
+  // Re-fetch the whole set with the new credentials (only if nothing unsaved)
+  if(!dirty) loadAllLevels();
 };
 document.getElementById('btnGHClose').onclick=()=>document.getElementById('ghOverlay').classList.remove('show');
 document.getElementById('ghOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('ghOverlay'))document.getElementById('ghOverlay').classList.remove('show');});
 
-// Save overlay
+// Save overlay — commits the whole set at once
 document.getElementById('btnSave').onclick=()=>{
   if(!ghReady()){ document.getElementById('btnGH').click(); return; }
-  const replEl=document.getElementById('saveModeReplace');
-  const replLabel=document.getElementById('saveReplaceLabel');
-  const hasLoaded=loadedLevelIdx!=null;
-  replEl.disabled=!hasLoaded;
-  replLabel.textContent=hasLoaded?`level ${loadedLevelIdx+1} (${L.name})`:'(no level loaded from game.js)';
-  if(!hasLoaded) document.getElementById('saveModeAppend').checked=true;
-  else replEl.checked=true;
+  document.getElementById('saveSummary').textContent=
+    `Commit all ${levels.length} levels to ${GHS.owner}/${GHS.repo} (${GHS.branch}). This overwrites levels.js.`;
   document.getElementById('saveStatus').style.display='none';
   document.getElementById('saveBtnRow').style.display='';
   document.getElementById('saveOverlay').classList.add('show');
 };
 document.getElementById('btnSaveGo').onclick=async()=>{
-  const mode=document.querySelector('input[name=saveMode]:checked').value;
-  const replIdx=mode==='replace'?loadedLevelIdx:null;
   document.getElementById('btnSaveGo').disabled=true;
   document.getElementById('btnSaveClose').disabled=true;
   try{
-    await saveToGitHub(replIdx);
+    await saveAllToGitHub();
   }catch(err){
     setSaveStatus('Error: '+err.message,'err');
   }finally{
@@ -1190,24 +1239,39 @@ document.getElementById('importOverlay').addEventListener('click',e=>{
 });
 document.getElementById('btnImportLoad').onclick=()=>{
   try{
-    const lv=levelFromString(document.getElementById('importText').value);
-    applyLevel(lv);
+    const lv=normalizeLevel(levelFromString(document.getElementById('importText').value));
+    // Insert as a new level after the current one and switch to it
+    levels.splice(curIdx+1,0,lv);
+    markDirty();
+    setCurrent(curIdx+1);
     document.getElementById('importOverlay').classList.remove('show');
   } catch(err){
     alert('Could not decode level string: '+err.message);
   }
 };
 
+// Warn before leaving with unsaved changes (nothing persists until Save all)
+window.addEventListener('beforeunload', e=>{
+  if(dirty){ e.preventDefault(); e.returnValue=''; }
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
-// Auto-load from URL hash (#lvl=...)
-(()=>{
-  const m=location.hash.match(/[#&]lvl=([A-Za-z0-9\-_]+)/);
-  if(m){ try{ applyLevel(levelFromString(m[1])); }catch(e){/* ignore bad hash */} }
-})();
+document.getElementById('sidebar').addEventListener('input', markDirty);
 updateSaveBtn();
-updateSidebar();
-resize();
-populateLoadDropdown();
+(async ()=>{
+  await loadAllLevels();
+  // Auto-import a level from the URL hash (#lvl=...) as a new entry
+  const m=location.hash.match(/[#&]lvl=([A-Za-z0-9\-_]+)/);
+  if(m){
+    try{
+      const lv=normalizeLevel(levelFromString(m[1]));
+      levels.splice(curIdx+1,0,lv);
+      markDirty();
+      setCurrent(curIdx+1);
+    }catch(e){/* ignore bad hash */}
+  }
+  resize();
+})();
 </script>
 </body>
 </html>
