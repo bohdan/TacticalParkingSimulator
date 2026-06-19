@@ -1,8 +1,9 @@
 const LEVELS = [
   {
+    id: "jo7stz",
     name: "Lesson 1: Drive", tier: "Tutorial", mode: "moves", w: 18, h: 10,
     start: { x: 3, y: 5, h: 0 },
-    goal: { cx: 13.5, cy: 5, w: 6.5, h: 3, heads: [0], tol: 15 },
+    goal: { cx: 13.5, cy: 5, w: 6.5, h: 3, heads: [0], tol: 45 },
     walls: [],
     cars: [],
     starThresh: [1, 2], starThreshQuick: [6, 9],
@@ -10,9 +11,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 9 }],
   },
   {
+    id: "z4oahc",
     name: "Lesson 1: Drive", tier: "Tutorial", mode: "moves", w: 18, h: 10,
     start: { x: 3, y: 5, h: 0 },
-    goal: { cx: 13.5, cy: 5, w: 6.5, h: 3, heads: [0], tol: 15 },
+    goal: { cx: 13.5, cy: 5, w: 6.5, h: 3, heads: [0], tol: 45 },
     walls: [],
     cars: [],
     starThresh: [1, 2], starThreshQuick: [6, 9],
@@ -20,9 +22,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 10 }],
   },
   {
+    id: "dkhmyv",
     name: "Lesson 2: Steer", tier: "Tutorial", mode: "moves", w: 14, h: 12,
     start: { x: 3, y: 9, h: 0 },
-    goal: { cx: 6.9, cy: 3.8, w: 3.8, h: 5.8, heads: [-90], tol: 15 },
+    goal: { cx: 6.9, cy: 3.8, w: 3.8, h: 5.8, heads: [-90], tol: 45 },
     walls: [],
     cars: [],
     starThresh: [1, 2], starThreshQuick: [5, 8],
@@ -30,9 +33,10 @@ const LEVELS = [
     solution: [{ steer: -35, dist: 3.5 }, { steer: -35, dist: 2 }],
   },
   {
+    id: "oppn1y",
     name: "Lesson 3: Reverse", tier: "Tutorial", mode: "moves", w: 18, h: 10,
     start: { x: 13, y: 5, h: 0 },
-    goal: { cx: 5.5, cy: 5, w: 7, h: 3.2, heads: [0], tol: 15 },
+    goal: { cx: 5.5, cy: 5, w: 7, h: 3.2, heads: [0], tol: 45 },
     walls: [],
     cars: [],
     starThresh: [1, 2], starThreshQuick: [5, 8],
@@ -40,13 +44,15 @@ const LEVELS = [
     solution: [{ steer: 0, dist: -10 }],
   },
   {
+    id: "gvhx9l",
     type: "cutscene", name: "Briefing",
     message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "LICENSE TO KILL: **ACTIVE**", "LICENSE TO PARK ILLEGALLY: **REVOKED**", "", "DUE TO TREASURY BUDGET CONSTRAINTS,", "FUTURE FINES WILL BE DEDUCTED FROM YOUR", "MARTINI ALLOWANCE."],
   },
   {
+    id: "p3qylc",
     name: "First Steps", tier: "Easy", mode: "moves", w: 18, h: 12,
     start: { x: 2.5, y: 9.8, h: -Math.PI / 2 },
-    goal: { cx: 14.2, cy: 2.8, w: 5.8, h: 2.6, heads: [0], tol: 12 },
+    goal: { cx: 14.2, cy: 2.8, w: 5.8, h: 2.6, heads: [0], tol: 45 },
     walls: [
       { x: 7, y: 5, w: 2.6, h: 7 },
     ],
@@ -56,9 +62,10 @@ const LEVELS = [
     solution: [{ steer: 20, dist: 13 }, { steer: -20, dist: 1.2 }],
   },
   {
+    id: "rybjdb",
     name: "Open Bay", tier: "Easy", mode: "moves", w: 20, h: 13,
     start: { x: 16.5, y: 8.6, h: Math.PI },
-    goal: { cx: 8.2, cy: 2.7, w: 3.9, h: 5, heads: [90, -90], tol: 10 },
+    goal: { cx: 8.2, cy: 2.7, w: 3.9, h: 5, heads: [90, -90], tol: 45 },
     walls: [],
     cars: [
       { cx: 2.4, cy: 2.85, h: Math.PI / 2 },
@@ -71,9 +78,10 @@ const LEVELS = [
     solution: [{ steer: 12, dist: 7 }, { steer: 35, dist: 3.5 }],
   },
   {
+    id: "hdbsvd",
     name: "First Parallel", tier: "Easy", mode: "moves", w: 24, h: 13,
     start: { x: 2.6, y: 7, h: 0 },
-    goal: { cx: 16.2, cy: 9.3, w: 5.8, h: 2, heads: [0], tol: 12 },
+    goal: { cx: 16.2, cy: 9.3, w: 5.8, h: 2, heads: [0], tol: 45 },
     walls: [
       { x: 0, y: 10.5, w: 24, h: 2.5, kind: "curb" },
       { x: 0, y: 0, w: 24, h: 1.4, kind: "curb" },
@@ -93,9 +101,10 @@ const LEVELS = [
     solution: [{ steer: 12, dist: 2 }, { steer: 2, dist: 7 }, { steer: -6, dist: 3.5 }, { steer: -28, dist: 0.6 }],
   },
   {
+    id: "d9lm3k",
     name: "Diagonal Slot", tier: "Easy", mode: "moves", w: 24, h: 12,
     start: { x: 1.2, y: 7.3, h: 0 },
-    goal: { cx: 13.9, cy: 3.3, w: 2.4, h: 5.1, ang: Math.PI / 4, heads: [-45], tol: 8 },
+    goal: { cx: 13.9, cy: 3.3, w: 2.4, h: 5.1, ang: Math.PI / 4, heads: [-45], tol: 45 },
     walls: [
       { x: 0, y: 0, w: 24, h: 0.5, kind: "curb" },
       { x: 0, y: 9.1, w: 24, h: 0.3, kind: "curb" },
@@ -114,9 +123,10 @@ const LEVELS = [
     solution: [{ steer: -15, dist: 6 }, { steer: 0, dist: 4 }, { steer: -35, dist: 1 }],
   },
   {
+    id: "uxebvt",
     name: "Easy Exit", tier: "Easy", mode: "moves", w: 22, h: 13,
     start: { x: 8, y: 9.5, h: 0 },
-    goal: { cx: 19, cy: 6.1, w: 5.5, h: 4.3, heads: [0], tol: 20 },
+    goal: { cx: 19, cy: 6.1, w: 5.5, h: 4.3, heads: [0], tol: 45 },
     walls: [
       { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
       { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
@@ -131,9 +141,10 @@ const LEVELS = [
     solution: [{ steer: -35, dist: 4.5 }, { steer: 35, dist: 4.5 }],
   },
   {
+    id: "x5xy7q",
     name: "Parallel Squeeze", tier: "Medium", mode: "moves", w: 22, h: 13,
     start: { x: 2.6, y: 7, h: 0 },
-    goal: { cx: 10.15, cy: 9.4, w: 6.4, h: 2.2, heads: [0], tol: 12 },
+    goal: { cx: 10.15, cy: 9.4, w: 6.4, h: 2.2, heads: [0], tol: 45 },
     walls: [
       { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
       { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
@@ -148,9 +159,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
   },
   {
+    id: "v82iil",
     name: "Outer Bend Park", tier: "Medium", mode: "moves", w: 22, h: 13,
     start: { x: 1.2, y: 2.8, h: 0 },
-    goal: { cx: 12.7, cy: 8.1, w: 5.7, h: 2.3, ang: Math.PI / 6, heads: [30], tol: 15 },
+    goal: { cx: 12.7, cy: 8.1, w: 5.7, h: 2.3, ang: Math.PI / 6, heads: [30], tol: 45 },
     walls: [
       { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
       { x: 0, y: 7.3, w: 5.4, h: 5.7, kind: "curb" },
@@ -183,9 +195,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 12 }, { steer: 35, dist: -3 }, { steer: -35, dist: -4 }],
   },
   {
+    id: "z30oy8",
     name: "Reverse Diagonal Slot", tier: "Hard", mode: "moves", w: 24, h: 12,
     start: { x: 1.2, y: 7.3, h: 0 },
-    goal: { cx: 13.9, cy: 3.3, w: 2.4, h: 5.1, ang: Math.PI / 4, heads: [135], tol: 8 },
+    goal: { cx: 13.9, cy: 3.3, w: 2.4, h: 5.1, ang: Math.PI / 4, heads: [135], tol: 45 },
     walls: [
       { x: 0, y: 0, w: 24, h: 0.5, kind: "curb" },
       { x: 0, y: 9.1, w: 24, h: 0.3, kind: "curb" },
@@ -204,9 +217,10 @@ const LEVELS = [
     solution: [{ steer: -15, dist: 6 }, { steer: 0, dist: 4 }, { steer: -35, dist: 1 }],
   },
   {
+    id: "y6o5vf",
     name: "Dead End", tier: "Medium", mode: "dist", w: 22, h: 13,
     start: { x: 12.8, y: 6.5, h: 0 },
-    goal: { cx: 4.8, cy: 6.4, w: 8, h: 6.6, heads: [180], tol: 12 },
+    goal: { cx: 4.8, cy: 6.4, w: 8, h: 6.6, heads: [180], tol: 45 },
     walls: [
       { x: 0, y: 0, w: 22, h: 3.3 },
       { x: 0, y: 10.1, w: 22, h: 2.9 },
@@ -218,9 +232,10 @@ const LEVELS = [
     solution: [{ steer: 12, dist: 3 }, { steer: -35, dist: 3 }, { steer: 35, dist: -3 }, { steer: -35, dist: 1.5 }, { steer: 0, dist: -1.5 }, { steer: -35, dist: 5 }],
   },
   {
+    id: "mubpy4",
     name: "Tight Bay", tier: "Medium", mode: "moves", w: 20, h: 13,
     start: { x: 16.5, y: 8.6, h: Math.PI },
-    goal: { cx: 9.4, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 10 },
+    goal: { cx: 9.4, cy: 2.85, w: 2.7, h: 4.8, heads: [90, -90], tol: 45 },
     walls: [],
     cars: [
       { cx: 2.4, cy: 2.85, h: Math.PI / 2 },
@@ -235,9 +250,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 10.6 }, { steer: 35, dist: -6.3 }, { steer: 0, dist: -2.9 }],
   },
   {
+    id: "ooi7yc",
     name: "Slalom", tier: "Medium", mode: "moves", w: 28, h: 12,
     start: { x: 2.8, y: 9.3, h: 0 },
-    goal: { cx: 23.6, cy: 7, w: 7.1, h: 2.9, heads: [0], tol: 15 },
+    goal: { cx: 23.6, cy: 7, w: 7.1, h: 2.9, heads: [0], tol: 45 },
     walls: [
       { x: 7.5, y: 0, w: 2.4, h: 7 },
       { x: 16.5, y: 5.4, w: 2.4, h: 6.6 },
@@ -248,9 +264,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 4 }, { steer: -25, dist: 6 }, { steer: 25, dist: 10 }, { steer: -25, dist: 3 }],
   },
   {
+    id: "vf4qyz",
     name: "Narrow Dead End", tier: "Hard", mode: "dist", w: 22, h: 12,
     start: { x: 12.2, y: 5.9, h: 0 },
-    goal: { cx: 4.6, cy: 6, w: 8, h: 5.8, heads: [180], tol: 12 },
+    goal: { cx: 4.6, cy: 6, w: 8, h: 5.8, heads: [180], tol: 45 },
     walls: [
       { x: 0, y: 0, w: 22, h: 3.1 },
       { x: 0, y: 8.9, w: 22, h: 3.1 },
@@ -262,9 +279,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 5 }, { steer: -35, dist: 1 }, { steer: 35, dist: -2.5 }, { steer: -35, dist: 0.5 }, { steer: 35, dist: -1 }, { steer: -35, dist: 1 }, { steer: 35, dist: -1 }, { steer: -35, dist: 1 }, { steer: 35, dist: -0.5 }, { steer: -35, dist: 3 }],
   },
   {
+    id: "nb4rua",
     name: "The Garage", tier: "Expert", mode: "moves", w: 24, h: 13,
     start: { x: 3, y: 10.6, h: 0 },
-    goal: { cx: 19.4, cy: 2.7, w: 2.2, h: 4.8, heads: [-90], tol: 10 },
+    goal: { cx: 19.4, cy: 2.7, w: 2.2, h: 4.8, heads: [-90], tol: 45 },
     walls: [
       { x: 13, y: 0, w: 0.6, h: 4.9 },
       { x: 13, y: 8.1, w: 0.6, h: 4.9 },
@@ -279,10 +297,11 @@ const LEVELS = [
     solution: [{ steer: -35, dist: 3 }, { steer: 15, dist: 10 }, { steer: -35, dist: 6 }, { steer: 25, dist: -0.5 }],
   },
   {
+    id: "s23h6e",
     name: "Bus Terminal", tier: "Expert", mode: "moves", w: 36, h: 21,
     vehicle: "bus",
     start: { x: 3, y: 16, h: 0 },
-    goal: { cx: 22, cy: 7.2, w: 5, h: 14, heads: [90, -90], tol: 10 },
+    goal: { cx: 22, cy: 7.2, w: 5, h: 14, heads: [90, -90], tol: 45 },
     walls: [
       { x: 0, y: 20.5, w: 36, h: 0.5, kind: "curb" },
       { x: 18, y: 0, w: 0.8, h: 6.5 },
@@ -297,9 +316,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 25 }, { steer: -45, dist: -10 }],
   },
   {
+    id: "hzl4ot",
     name: "One Way", tier: "Hard", mode: "moves", w: 24, h: 13,
     start: { x: 2.6, y: 7, h: 0 },
-    goal: { cx: 10.1, cy: 9.4, w: 5.1, h: 2, heads: [0], tol: 10 },
+    goal: { cx: 10.1, cy: 9.4, w: 5.1, h: 2, heads: [0], tol: 45 },
     walls: [
       { x: 0, y: 10.5, w: 24, h: 2.5, kind: "curb" },
       { x: 0, y: 0, w: 24, h: 2.7, kind: "curb" },
@@ -317,9 +337,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
   },
   {
+    id: "r0nmos",
     name: "Boxed In", tier: "Hard", mode: "moves", w: 22, h: 13,
     start: { x: 9.5, y: 9.4, h: 0 },
-    goal: { cx: 17.9, cy: 5.9, w: 7.7, h: 4.5, heads: [0], tol: 15 },
+    goal: { cx: 17.9, cy: 5.9, w: 7.7, h: 4.5, heads: [0], tol: 45 },
     walls: [
       { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
       { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
@@ -334,9 +355,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: -0.4 }, { steer: -35, dist: 3 }, { steer: 35, dist: 3 }],
   },
   {
+    id: "m5zrvk",
     name: "Aftermath", tier: "Medium", mode: "moves", w: 20, h: 13,
     start: { x: 18.7, y: 2.9, h: 2.6451 },
-    goal: { cx: 3.4, cy: 6.3, w: 6.8, h: 4.3, heads: [180], tol: 15 },
+    goal: { cx: 3.4, cy: 6.3, w: 6.8, h: 4.3, heads: [180], tol: 45 },
     walls: [
       { x: 0, y: 0, w: 20, h: 1.5, kind: "curb" },
       { x: 0, y: 11, w: 20, h: 2, kind: "curb" },
@@ -354,9 +376,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: -4.4 }, { steer: -35, dist: 6 }],
   },
   {
+    id: "s2p1ol",
     name: "Inner Bend Park", tier: "Hard", mode: "moves", w: 22, h: 13,
     start: { x: 1.2, y: 5.6, h: 0 },
-    goal: { cx: 15.5, cy: 5.8, w: 5.7, h: 2.3, ang: Math.PI / 6, heads: [-150], tol: 15 },
+    goal: { cx: 15.5, cy: 5.8, w: 5.7, h: 2.3, ang: Math.PI / 6, heads: [-150], tol: 45 },
     walls: [
       { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
       { x: 0, y: 7.3, w: 5.4, h: 5.7, kind: "curb" },
@@ -389,9 +412,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 12 }, { steer: 35, dist: -3 }, { steer: -35, dist: -4 }],
   },
   {
+    id: "bg95m2",
     name: "One Way 2", tier: "Hard", mode: "moves", w: 24, h: 13,
     start: { x: 2.6, y: 7, h: 0 },
-    goal: { cx: 10.1, cy: 9.4, w: 5.1, h: 2, heads: [0], tol: 10 },
+    goal: { cx: 10.1, cy: 9.4, w: 5.1, h: 2, heads: [0], tol: 45 },
     walls: [
       { x: 0, y: 10.5, w: 24, h: 2.5, kind: "curb" },
       { x: 0, y: 0, w: 24, h: 3.3, kind: "curb" },
@@ -409,9 +433,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
   },
   {
+    id: "wktmu5",
     name: "Street Squeeze", tier: "Medium", mode: "moves", w: 22, h: 13,
     start: { x: 10.1, y: 9.4, h: 0 },
-    goal: { cx: 19.5, cy: 5.3, w: 4.9, h: 5.9, heads: [0], tol: 18 },
+    goal: { cx: 19.5, cy: 5.3, w: 4.9, h: 5.9, heads: [0], tol: 45 },
     walls: [
       { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
       { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
@@ -426,9 +451,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: -0.8 }, { steer: -35, dist: 4.5 }, { steer: 35, dist: 4.5 }],
   },
   {
+    id: "q0vz36",
     name: "The Garage 2", tier: "Expert", mode: "moves", w: 24, h: 13,
     start: { x: 3, y: 10.6, h: 0 },
-    goal: { cx: 19.4, cy: 2.7, w: 2.2, h: 4.8, heads: [90], tol: 10 },
+    goal: { cx: 19.4, cy: 2.7, w: 2.2, h: 4.8, heads: [90], tol: 45 },
     walls: [
       { x: 13, y: 0, w: 0.6, h: 4.9 },
       { x: 13, y: 8.1, w: 0.6, h: 4.9 },
@@ -443,9 +469,10 @@ const LEVELS = [
     solution: [{ steer: -35, dist: 3 }, { steer: 15, dist: 10 }, { steer: -35, dist: 6 }, { steer: 25, dist: -0.5 }],
   },
   {
+    id: "al9miy",
     name: "The Gauntlet", tier: "Expert", mode: "dist", w: 22, h: 11,
     start: { x: 13.4, y: 5.4, h: 0 },
-    goal: { cx: 4.6, cy: 5.5, w: 8, h: 5.5, heads: [180], tol: 12 },
+    goal: { cx: 4.6, cy: 5.5, w: 8, h: 5.5, heads: [180], tol: 45 },
     walls: [
       { x: 0, y: 0, w: 22, h: 2.75 },
       { x: 0, y: 8.25, w: 22, h: 2.75 },
@@ -457,10 +484,11 @@ const LEVELS = [
     solution: [{ steer: -35, dist: 1.5 }, { steer: 20, dist: 6 }, { steer: -35, dist: -2 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 0.5 }, { steer: -35, dist: -0.5 }, { steer: 35, dist: 3 }],
   },
   {
+    id: "iyp8hx",
     name: "Miata Alley", tier: "Medium", mode: "moves", w: 22, h: 10,
     vehicle: "miata",
     start: { x: 0.9, y: 7.5, h: 0 },
-    goal: { cx: 5.3, cy: 3.1, w: 2.2, h: 4.5, heads: [-90, 90], tol: 12 },
+    goal: { cx: 5.3, cy: 3.1, w: 2.2, h: 4.5, heads: [-90, 90], tol: 45 },
     walls: [
       { x: 0, y: 0, w: 22, h: 0.5, kind: "curb" },
       { x: 9.7, y: 0.5, w: 0.7, h: 9.5 },
@@ -478,10 +506,11 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 8 }, { steer: -40, dist: 4 }],
   },
   {
+    id: "yg12nu",
     name: "Miata Squeeze", tier: "Hard", mode: "moves", w: 22, h: 12,
     vehicle: "miata",
     start: { x: 2.5, y: 7, h: 0 },
-    goal: { cx: 9.9, cy: 9.2, w: 4.7, h: 2, heads: [0], tol: 12 },
+    goal: { cx: 9.9, cy: 9.2, w: 4.7, h: 2, heads: [0], tol: 45 },
     walls: [
       { x: 0, y: 10.5, w: 22, h: 1.5, kind: "curb" },
       { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
@@ -496,10 +525,11 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 10 }, { steer: 40, dist: -2.5 }, { steer: -40, dist: -2.5 }],
   },
   {
+    id: "x62bx2",
     name: "Bus Depot", tier: "Hard", mode: "moves", w: 36, h: 21,
     vehicle: "bus",
     start: { x: 3.1, y: 15.8, h: 0 },
-    goal: { cx: 17.6, cy: 6.7, w: 5.3, h: 13.2, heads: [90, -90], tol: 10 },
+    goal: { cx: 17.6, cy: 6.7, w: 5.3, h: 13.2, heads: [90, -90], tol: 45 },
     walls: [
       { x: 0, y: 20.5, w: 36, h: 0.5, kind: "curb" },
     ],

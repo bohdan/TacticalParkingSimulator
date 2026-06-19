@@ -75,7 +75,7 @@ let _solHash = null;
 //
 //   create table leaderboard (
 //     id bigserial primary key, player text not null,
-//     level int not null, level_name text not null,
+//     level int not null, level_id text, level_name text not null,
 //     stars int not null, moves int, dist real, time_s real,
 //     mode text not null, solution text,
 //     submitted_at timestamptz default now()
@@ -85,8 +85,9 @@ let _solHash = null;
 //   create policy "public insert" on leaderboard for insert
 //     with check (char_length(player) between 1 and 20);
 //
-// If upgrading an existing table, add the solution column:
+// If upgrading an existing table, add the newer columns:
 //   alter table leaderboard add column if not exists solution text;
+//   alter table leaderboard add column if not exists level_id text;
 //
 const LB_URL = 'https://qvjorkpzlwvswsptkwyn.supabase.co';
 const LB_KEY = 'sb_publishable_geHaaCkSfPilYWV3fYQHQA_KZdYNrpC';
@@ -848,8 +849,8 @@ function finishRun() {
     $('ovTip').textContent = stars === 3 ? (overPar < 0 ? 'Under par!' : 'On par!') :
       `★★★ at Par ${par} move${par !== 1 ? 's' : ''}`;
     $('ovNext').style.display = nextPlayable(levelIdx, +1) >= 0 ? '' : 'none';
-    pendingLb = solutionUsed ? null : { levelIdx, stars, st: { ...st }, moves: [...moves] };
-    $('ovSubmitRow').style.display = (lbEnabled() && !solutionUsed) ? '' : 'none';
+    pendingLb = (solutionUsed || !lbAllowed()) ? null : { levelIdx, stars, st: { ...st }, moves: [...moves] };
+    $('ovSubmitRow').style.display = (lbAllowed() && !solutionUsed) ? '' : 'none';
     $('ovSubmit').disabled = false;
     $('ovSubmit').textContent = 'Submit to leaderboard';
     $('overlay').classList.remove('hidden');
@@ -1011,14 +1012,23 @@ $('menuSol').addEventListener('click', () => {
 });
 $('menuLb').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
-  if (lbEnabled()) openLeaderboard(levelIdx);
-  else toast('Leaderboard not configured — see LB_URL / LB_KEY in game.js');
+  if (!lbEnabled()) toast('Leaderboard not configured — see LB_URL / LB_KEY in game.js');
+  else if (!lbAllowed()) toast('No leaderboard for tutorial levels');
+  else openLeaderboard(levelIdx);
 });
-$('menuIntro').addEventListener('click', () => {
+$('menuNewGame').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
+  if (!confirm('Start a new game? This resets your saved level position.')) return;
+  try { localStorage.removeItem('parking.level'); } catch (e) {}
+  // Replay the intro, then begin at the first playable level.
   const ci = LEVELS.findIndex(isCutscene);
-  if (ci >= 0) setLevel(ci);
-  else toast('No cutscene in this game');
+  const firstPlayable = nextPlayable(ci >= 0 ? ci : -1, +1);
+  if (ci >= 0) {
+    introReturnIdx = firstPlayable >= 0 ? firstPlayable : 0;
+    setLevel(ci);
+  } else {
+    setLevel(firstPlayable >= 0 ? firstPlayable : 0);
+  }
 });
 $('helpClose').addEventListener('click', () => $('helpOverlay').classList.add('hidden'));
 $('lbClose').addEventListener('click', () => $('lbOverlay').classList.add('hidden'));
@@ -1076,6 +1086,12 @@ function selectMove(i) {
 
 // ── Leaderboard functions ────────────────────────────────────────────────────
 const lbEnabled = () => !!(LB_URL && LB_KEY);
+// Tutorial levels are practice — they don't have a leaderboard.
+const lbAllowed = (def = level) => lbEnabled() && !!def && def.tier !== 'Tutorial';
+
+// Stable per-level key for the leaderboard: the level's id (survives rename /
+// reorder), falling back to its name for any legacy level without an id.
+const levelKey = idx => LEVELS[idx].id || LEVELS[idx].name;
 
 function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -1083,7 +1099,7 @@ function escHtml(s) {
 
 async function lbPost(levelIdx, player, stars, st, solutionStr) {
   const body = {
-    player, level: levelIdx, level_name: level.name,
+    player, level: levelIdx, level_id: levelKey(levelIdx), level_name: level.name,
     stars, moves: st.moves,
     dist: +st.dist.toFixed(2), time_s: +st.time.toFixed(1),
     mode: 'quick',
@@ -1098,8 +1114,9 @@ async function lbPost(levelIdx, player, stars, st, solutionStr) {
     body: JSON.stringify(body),
   });
   if (!r.ok && r.status === 400) {
-    // solution column may not exist yet — retry without it
+    // Newer columns (solution, level_id) may not exist yet — retry without them
     delete body.solution;
+    delete body.level_id;
     r = await fetch(`${LB_URL}/rest/v1/leaderboard`, {
       method: 'POST',
       headers: {
@@ -1115,8 +1132,8 @@ async function lbPost(levelIdx, player, stars, st, solutionStr) {
 async function lbGet(levelIdx) {
   const p = new URLSearchParams({
     select: 'player,stars,moves,dist,time_s,solution',
-    level_name: `eq.${LEVELS[levelIdx].name}`, mode: 'eq.quick',
-    order: 'stars.desc,moves.asc,time_s.asc', limit: '50',
+    level_id: `eq.${levelKey(levelIdx)}`, mode: 'eq.quick',
+    order: 'moves.asc,time_s.asc', limit: '50',
   });
   const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
     headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
@@ -1128,7 +1145,7 @@ async function lbGet(levelIdx) {
 async function openLeaderboard(idx) {
   const par = LEVELS[idx].par ?? (LEVELS[idx].solution ? LEVELS[idx].solution.length : null);
   $('lbTitle').textContent = `${LEVELS[idx].name}${par != null ? ` · Par ${par}` : ''}`;
-  $('lbTable').innerHTML = '<tr><td colspan="5" class="lb-empty">Loading…</td></tr>';
+  $('lbTable').innerHTML = '<tr><td colspan="6" class="lb-empty">Loading…</td></tr>';
   $('lbOverlay').classList.remove('hidden');
   try {
     const rows = await lbGet(idx);
@@ -1137,20 +1154,24 @@ async function openLeaderboard(idx) {
       if (seen.has(r.player)) return false; seen.add(r.player); return true;
     }).slice(0, 10);
     if (!top.length) {
-      $('lbTable').innerHTML = '<tr><td colspan="5" class="lb-empty">No entries yet — be first!</td></tr>';
+      $('lbTable').innerHTML = '<tr><td colspan="6" class="lb-empty">No entries yet — be first!</td></tr>';
       return;
     }
-    $('lbTable').innerHTML = top.map((r, i) => {
+    $('lbTable').innerHTML =
+      `<tr class="lb-head"><td></td><td class="lb-name">Player</td><td class="lb-stars">★</td>` +
+      `<td class="lb-metric">Moves</td><td class="lb-metric">Time</td><td></td></tr>` +
+      top.map((r, i) => {
       const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
-      const metric = `${r.moves}<span class="sc-note"> mv</span>`;
       const stars = '★'.repeat(r.stars) + `<span class="lb-dim">★</span>`.repeat(3 - r.stars);
       const playBtn = r.solution
         ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button></td>`
         : '<td></td>';
-      return `<tr class="${cls}"><td class="lb-rank">${i+1}</td><td class="lb-name">${escHtml(r.player)}</td><td class="lb-stars">${stars}</td><td class="lb-metric">${metric}</td>${playBtn}</tr>`;
+      return `<tr class="${cls}"><td class="lb-rank">${i+1}</td><td class="lb-name">${escHtml(r.player)}</td>` +
+        `<td class="lb-stars">${stars}</td><td class="lb-metric">${r.moves}</td>` +
+        `<td class="lb-metric">${r.time_s.toFixed(1)}s</td>${playBtn}</tr>`;
     }).join('');
   } catch (e) {
-    $('lbTable').innerHTML = `<tr><td colspan="5" class="lb-empty" style="color:#ff7070">Error: ${escHtml(e.message)}</td></tr>`;
+    $('lbTable').innerHTML = `<tr><td colspan="6" class="lb-empty" style="color:#ff7070">Error: ${escHtml(e.message)}</td></tr>`;
   }
 }
 

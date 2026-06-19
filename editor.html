@@ -222,12 +222,22 @@ let dirty = false; // unsaved changes since last GitHub save
 
 function markDirty(){ dirty = true; }
 
+// Stable unique level id — assigned once, never changed by rename/reorder.
+// The leaderboard keys off this so scores stay attached to the right level.
+function genLevelId(){
+  let id;
+  do { id = Math.random().toString(36).slice(2,8); }
+  while(/^\d/.test(id) || levels.some(l=>l && l.id===id));
+  return id;
+}
+
 function newLevel(){
   return {
+    id:genLevelId(),
     name:'New Level', tier:'Easy', mode:'moves', vehicle:'default',
     w:22, h:13,
     start:{ x:3, y:7, h:0 },
-    goal:{ cx:11, cy:9.5, w:8, h:2.2, ang:0, heads:[0], tol:12 },
+    goal:{ cx:11, cy:9.5, w:8, h:2.2, ang:0, heads:[0], tol:45 },
     walls:[
       { x:0, y:10.5, w:22, h:2.5, kind:'curb' },
       { x:0, y:0,    w:22, h:1.6, kind:'curb' },
@@ -240,18 +250,20 @@ function newLevel(){
 const isCutscene = lv => !!lv && lv.type === 'cutscene';
 
 // Normalize any loaded level into the shape the editor expects (fills defaults).
+// Preserves the stable id, generating one only if the level lacks it.
 function normalizeLevel(lv){
   if(lv.type==='cutscene'){
-    return { type:'cutscene', name:lv.name||'Cutscene', message:[...(lv.message||[])] };
+    return { id:lv.id||genLevelId(), type:'cutscene', name:lv.name||'Cutscene', message:[...(lv.message||[])] };
   }
   return {
+    id:lv.id||genLevelId(),
     name:lv.name||'',
     tier:lv.tier||'Easy',
     mode:lv.mode||'moves',
     vehicle:lv.vehicle||'default',
     w:lv.w||22, h:lv.h||13,
     start:{...lv.start},
-    goal:{...lv.goal, ang:lv.goal.ang||0, heads:[...(lv.goal.heads||[0])], tol:lv.goal.tol||12},
+    goal:{...lv.goal, ang:lv.goal.ang||0, heads:[...(lv.goal.heads||[0])], tol:lv.goal.tol||45},
     walls:(lv.walls||[]).map(w=>({...w})),
     cars:(lv.cars||[]).map(c=>({...c})),
     traffic:(lv.traffic||[]).map(t=>({...t})),
@@ -1338,6 +1350,7 @@ function buildExport(lv=L){
   const l=lv;
   if(l.type==='cutscene'){
     const out=['  {'];
+    if(l.id) out.push(`    id: ${JSON.stringify(l.id)},`);
     out.push(`    type: "cutscene", name: ${JSON.stringify(l.name||'')},`);
     out.push(`    message: [${(l.message||[]).map(s=>JSON.stringify(s)).join(', ')}],`);
     out.push('  },');
@@ -1346,6 +1359,7 @@ function buildExport(lv=L){
   const g=l.goal;
   const lines=[];
   lines.push(`  {`);
+  if(l.id) lines.push(`    id: ${JSON.stringify(l.id)},`);
   lines.push(`    name: ${JSON.stringify(l.name)}, tier: ${JSON.stringify(l.tier)}, mode: ${JSON.stringify(l.mode)}, w: ${l.w}, h: ${l.h},`);
   if(l.vehicle&&l.vehicle!=='default') lines.push(`    vehicle: ${JSON.stringify(l.vehicle)},`);
   lines.push(`    start: { x: ${fn(l.start.x)}, y: ${fn(l.start.y)}, h: ${fmtRad(l.start.h)} },`);
