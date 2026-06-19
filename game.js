@@ -261,10 +261,13 @@ function planTime(mvs) {
 const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 
+// A "cutscene" level isn't a parking puzzle — it plays a briefing animation.
+const isCutscene = def => !!def && def.type === 'cutscene';
+
 let levelIdx = testLevelLoaded
   ? 0  // start on the ★ test level when one was passed in
   : clamp(parseInt(localStorage.getItem('parking.level') || '0', 10) || 0, 0, LEVELS.length - 1);
-let level = buildLevel(LEVELS[levelIdx]);
+let level = isCutscene(LEVELS[levelIdx]) ? null : buildLevel(LEVELS[levelIdx]);
 
 let moves = [];        // [{steer (rad), dist (m)}]
 let planSims = [];     // cached simulateMove result per move
@@ -608,6 +611,9 @@ function drawArrow(x, y, ang, len, color) {
 }
 
 function draw(now) {
+  // On a cutscene there's no puzzle to render — the briefing overlay covers
+  // the screen. Keep the RAF alive so play resumes when we leave it.
+  if (!level) { requestAnimationFrame(draw); return; }
   fitView();
   screenTransform();
   ctx.fillStyle = '#171a21';
@@ -845,15 +851,17 @@ function finishRun() {
 /* ===================== Level switching ===================== */
 
 function setLevel(i) {
-  const prevIdx = levelIdx;
   levelIdx = (i + LEVELS.length) % LEVELS.length;
   // Don't persist progress while previewing a test level — the shifted
   // indices would corrupt the real game's saved position.
   if (!testLevelLoaded) localStorage.setItem('parking.level', String(levelIdx));
-  setVehicle(LEVELS[levelIdx].vehicle || 'default');
+  const def = LEVELS[levelIdx];
+  if (isCutscene(def)) { level = null; showCutscene(def); return; }
+  $('intro').classList.add('hidden');  // leaving a cutscene
+  setVehicle(def.vehicle || 'default');
   steerEl.min = -CAR.maxSteer;
   steerEl.max = CAR.maxSteer;
-  level = buildLevel(LEVELS[levelIdx]);
+  level = buildLevel(def);
   moves = [];
   planSims = [];
   anim = null;
@@ -861,12 +869,6 @@ function setLevel(i) {
   solutionUsed = false;
   setEdit(0, 0);
   recomputePlan();
-  // Show dashboard intro when leaving the last tutorial level for the first time
-  const firstEasyIdx = LEVELS.findIndex(l => l.tier !== 'Tutorial');
-  if (levelIdx === firstEasyIdx && prevIdx === firstEasyIdx - 1
-      && !localStorage.getItem('parking.dashIntroSeen')) {
-    setTimeout(playIntroDash, 80);
-  }
 }
 
 /* ===================== Input ===================== */
@@ -966,7 +968,9 @@ $('menuLb').addEventListener('click', () => {
 });
 $('menuIntro').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
-  playIntroDash();
+  const ci = LEVELS.findIndex(isCutscene);
+  if (ci >= 0) setLevel(ci);
+  else toast('No cutscene in this game');
 });
 $('helpClose').addEventListener('click', () => $('helpOverlay').classList.add('hidden'));
 $('lbClose').addEventListener('click', () => $('lbOverlay').classList.add('hidden'));
@@ -1182,9 +1186,19 @@ cv.addEventListener('pointercancel', () => { drag = null; });
 
 document.addEventListener('gesturestart', e => e.preventDefault());
 
-/* ===================== Intro briefing ===================== */
+/* ===================== Cutscene / dashboard briefing ===================== */
 
-/* ===================== Dashboard intro animation ===================== */
+// Default briefing text, used when a cutscene level omits its own `message`.
+const DEFAULT_CUTSCENE_MSG = [
+  '> MSG INCOMING', '', '  AGENT 7', '  VALET', '',
+  '  PKG BY 0300.', '  NO SCRATCHES.', '', '> MISSION: GO.',
+];
+let cutsceneMessage = DEFAULT_CUTSCENE_MSG;
+
+function showCutscene(def) {
+  cutsceneMessage = (def.message && def.message.length) ? def.message : DEFAULT_CUTSCENE_MSG;
+  playIntroDash();
+}
 
 let introAnimId = null;
 
@@ -1221,18 +1235,8 @@ function playIntroDash() {
   const SC_H = DASH_H * 0.84;
   const SC_R = 8;
 
-  const MSG = [
-    '> MSG INCOMING',
-    '',
-    '  AGENT 7',
-    '  VALET',
-    '',
-    '  PKG BY 0300.',
-    '  NO SCRATCHES.',
-    '',
-    '> MISSION: GO.',
-  ];
-  // Font fits all 9 lines with top padding
+  const MSG = cutsceneMessage;
+  // Font fits all lines with top padding
   const FS    = Math.max(11, Math.min(18, Math.floor((SC_H - 10) / (MSG.length * 1.65))));
   const LH    = Math.ceil(FS * 1.65);
   const SC_PAD = Math.max(8, SC_W * 0.05);
@@ -1495,15 +1499,15 @@ function playIntroDash() {
   introAnimId = requestAnimationFrame(frame);
 }
 
-function closeIntroDash() {
+// A cutscene is a level — finishing it (Skip or Begin) advances to the next.
+function endCutscene() {
   cancelAnimationFrame(introAnimId);
   introAnimId = null;
-  $('intro').classList.add('hidden');
   $('introGo').classList.add('hidden');
-  localStorage.setItem('parking.dashIntroSeen', '1');
+  setLevel(levelIdx + 1);
 }
-$('introSkip').addEventListener('click', closeIntroDash);
-$('introGo').addEventListener('click', closeIntroDash);
+$('introSkip').addEventListener('click', endCutscene);
+$('introGo').addEventListener('click', endCutscene);
 
 /* ===================== Boot ===================== */
 

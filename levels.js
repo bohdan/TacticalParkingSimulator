@@ -1,5 +1,9 @@
 const LEVELS = [
   {
+    type: "cutscene", name: "Briefing",
+    message: ["> MSG INCOMING", "", "  AGENT 7", "  VALET", "", "  PKG BY 0300.", "  NO SCRATCHES.", "", "> MISSION: GO."],
+  },
+  {
     name: "Lesson 1: Drive", tier: "Tutorial", mode: "moves", w: 18, h: 10,
     start: { x: 3, y: 5, h: 0 },
     goal: { cx: 13.5, cy: 5, w: 6.5, h: 3, heads: [0], tol: 15 },

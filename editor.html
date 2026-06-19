@@ -63,6 +63,7 @@ button.nav{padding:4px 8px;font-weight:700}
   <select id="curSel" title="Current level"></select>
   <button id="btnNext" class="nav" title="Next level">&#8250;</button>
   <button id="btnNew" title="New level (inserted after current)">&#65291; New</button>
+  <button id="btnNewCutscene" title="New cutscene (inserted after current)">&#65291; 🎬</button>
   <button id="btnMoveUp" class="nav" title="Move current level earlier">&#9650;</button>
   <button id="btnMoveDn" class="nav" title="Move current level later">&#9660;</button>
   <button id="btnDelLevel" class="danger" title="Delete current level">&#128465;</button>
@@ -84,6 +85,14 @@ button.nav{padding:4px 8px;font-weight:700}
 <div id="main">
   <div id="cvWrap"><canvas id="cv"></canvas></div>
   <div id="sidebar">
+   <div id="cutscenePanel" style="display:none">
+    <h2>Cutscene 🎬</h2>
+    <div class="row"><label>Name</label><input id="csName" type="text"></div>
+    <h2>Briefing text <span style="font-size:10px;color:#3d8fbf">(one line per row)</span></h2>
+    <textarea id="csMsg" spellcheck="false" style="width:100%;height:300px;background:#080a0e;color:#8affc0;border:1px solid #2a3040;border-radius:6px;padding:8px;font:12px/1.5 Menlo,Consolas,monospace;resize:vertical"></textarea>
+    <p class="sel-hint">Blank rows are kept as spacing. Lines starting with <code>&gt;</code> read as headers in the briefing.</p>
+   </div>
+   <div id="geomPanel">
     <h2>Level</h2>
     <div class="row"><label>Name</label><input id="sName" type="text"></div>
     <div class="row"><label>Tier</label>
@@ -121,6 +130,7 @@ button.nav{padding:4px 8px;font-weight:700}
 
     <h2>Selected</h2>
     <div id="selPanel"><p class="sel-hint">Click an object on the canvas.<br>Delete key removes it.</p></div>
+   </div>
   </div>
 </div>
 
@@ -215,8 +225,13 @@ function newLevel(){
   };
 }
 
+const isCutscene = lv => !!lv && lv.type === 'cutscene';
+
 // Normalize any loaded level into the shape the editor expects (fills defaults).
 function normalizeLevel(lv){
+  if(lv.type==='cutscene'){
+    return { type:'cutscene', name:lv.name||'Cutscene', message:[...(lv.message||[])] };
+  }
   return {
     name:lv.name||'',
     tier:lv.tier||'Easy',
@@ -258,7 +273,7 @@ function resize(){
   render();
 }
 function fitLevel(){
-  if(!L) return;
+  if(!L || isCutscene(L)) return;
   const pad = 40;
   const wrap = document.getElementById('cvWrap');
   const sx = (wrap.clientWidth  - pad*2) / L.w;
@@ -374,11 +389,43 @@ function wallBounds(w){
     : {cx:w.x+w.w/2,cy:w.y+w.h/2,w:w.w,h:w.h,ang:0};
 }
 
+// Placeholder canvas for cutscene levels — a mock briefing card previewing
+// the message lines (edited in the sidebar). No geometry tools apply here.
+function renderCutscene(){
+  ctx.resetTransform();
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#0b0e13'; ctx.fillRect(0,0,W,H);
+  const cw=Math.min(W*0.6,460), ch=Math.min(H*0.7,420);
+  const cx=(W-cw)/2, cy=(H-ch)/2;
+  // CRT-ish card
+  ctx.fillStyle='#0f1a14'; ctx.strokeStyle='#1f5c3a'; ctx.lineWidth=2;
+  rrectPx(cx,cy,cw,ch,10); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#7ee0a8'; ctx.font='600 13px Menlo,Consolas,monospace';
+  ctx.textBaseline='top';
+  ctx.fillText('🎬 CUTSCENE',cx+18,cy+14);
+  ctx.strokeStyle='rgba(126,224,168,0.2)'; ctx.beginPath();
+  ctx.moveTo(cx+14,cy+38); ctx.lineTo(cx+cw-14,cy+38); ctx.stroke();
+  const msg=L.message||[];
+  const fs=Math.max(12,Math.min(18,Math.floor((ch-70)/Math.max(msg.length,1)/1.5)));
+  ctx.font=`${fs}px Menlo,Consolas,monospace`; ctx.fillStyle='#8affc0';
+  let y=cy+54;
+  for(const line of msg){ ctx.fillText(line||'',cx+18,y); y+=fs*1.5; }
+  ctx.fillStyle='#56708a'; ctx.font='12px system-ui,sans-serif';
+  ctx.fillText('Edit the briefing text in the sidebar →',cx+18,cy+ch-26);
+}
+function rrectPx(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
 function render(){
   ctx.resetTransform();
   ctx.fillStyle='#0e1117';            // letterbox outside the map
   ctx.fillRect(0,0,cv.width,cv.height);
   if(!L) return;
+  if(isCutscene(L)){ renderCutscene(); return; }
   applyXf();
   const p=PX();
 
@@ -580,6 +627,7 @@ function snapW(v){ return Math.round(v*10)/10; }
 // ── Mouse events ─────────────────────────────────────────────────────────────
 cv.addEventListener('mousedown', e=>{
   e.preventDefault();
+  if(isCutscene(L)) return;   // no geometry on a cutscene card
   const mw=mouseWorld(e);
 
   // Pan: middle button or right button
@@ -792,6 +840,15 @@ function val(id,v){ const el=document.getElementById(id); if(el&&document.active
 
 function updateSidebar(){
   if(!L) return;
+  const cs=isCutscene(L);
+  document.getElementById('cutscenePanel').style.display=cs?'':'none';
+  document.getElementById('geomPanel').style.display=cs?'none':'';
+  if(cs){
+    val('csName',L.name);
+    const ta=document.getElementById('csMsg');
+    if(document.activeElement!==ta) ta.value=(L.message||[]).join('\n');
+    return;
+  }
   val('sName',L.name); val('sTier',L.tier); val('sMode',L.mode);
   val('sVehicle',L.vehicle||'default');
   val('sW',L.w); val('sH',L.h);
@@ -876,7 +933,10 @@ function updateSelPanel(){
 
 // Level meta inputs
 function bind(id,fn){ document.getElementById(id).addEventListener('input',fn); }
-bind('sName',  e=>{ L.name=e.target.value; });
+// Cutscene inputs
+bind('csName', e=>{ L.name=e.target.value; refreshLevelSelector(); });
+bind('csMsg',  e=>{ L.message=e.target.value.split('\n'); render(); });
+bind('sName',  e=>{ L.name=e.target.value; refreshLevelSelector(); });
 bind('sTier',  e=>{ L.tier=e.target.value; });
 bind('sMode',  e=>{ L.mode=e.target.value; });
 bind('sVehicle',e=>{ L.vehicle=e.target.value; render(); });
@@ -917,7 +977,7 @@ async function fetchLevels(){
 function refreshLevelSelector(){
   const selEl=document.getElementById('curSel');
   selEl.innerHTML=levels.map((lv,i)=>
-    `<option value="${i}">${i+1}. ${(lv.name||'(unnamed)')}</option>`).join('');
+    `<option value="${i}">${i+1}. ${isCutscene(lv)?'🎬 ':''}${(lv.name||'(unnamed)')}</option>`).join('');
   selEl.value=String(curIdx);
 }
 
@@ -950,6 +1010,12 @@ function addLevel(){
   markDirty();
   setCurrent(curIdx+1);
 }
+function addCutscene(){
+  levels.splice(curIdx+1,0,{type:'cutscene',name:'Cutscene',
+    message:['> MSG INCOMING','','  YOUR TEXT','  HERE','','> MISSION: GO.']});
+  markDirty();
+  setCurrent(curIdx+1);
+}
 function deleteCurrentLevel(){
   if(levels.length<=1){ alert('Cannot delete the only level.'); return; }
   if(!confirm(`Delete level ${curIdx+1}: "${L.name}"?`)) return;
@@ -969,6 +1035,7 @@ document.getElementById('curSel').onchange=e=>setCurrent(+e.target.value);
 document.getElementById('btnPrev').onclick=()=>setCurrent(curIdx-1);
 document.getElementById('btnNext').onclick=()=>setCurrent(curIdx+1);
 document.getElementById('btnNew').onclick=addLevel;
+document.getElementById('btnNewCutscene').onclick=addCutscene;
 document.getElementById('btnDelLevel').onclick=deleteCurrentLevel;
 document.getElementById('btnMoveUp').onclick=()=>moveCurrentLevel(-1);
 document.getElementById('btnMoveDn').onclick=()=>moveCurrentLevel(1);
@@ -998,7 +1065,15 @@ function fmtRad(r){
 function fn(n,d=2){ const s=n.toFixed(d); return parseFloat(s)+''; }
 
 function buildExport(lv=L){
-  const l=lv, g=l.goal;
+  const l=lv;
+  if(l.type==='cutscene'){
+    const out=['  {'];
+    out.push(`    type: "cutscene", name: ${JSON.stringify(l.name||'')},`);
+    out.push(`    message: [${(l.message||[]).map(s=>JSON.stringify(s)).join(', ')}],`);
+    out.push('  },');
+    return out.join('\n');
+  }
+  const g=l.goal;
   const lines=[];
   lines.push(`  {`);
   lines.push(`    name: ${JSON.stringify(l.name)}, tier: ${JSON.stringify(l.tier)}, mode: ${JSON.stringify(l.mode)}, w: ${l.w}, h: ${l.h},`);
