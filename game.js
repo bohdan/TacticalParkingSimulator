@@ -1466,7 +1466,7 @@ async function renderLbAll(allRows, autoSelectIdx) {
       const movesStr = (!locked && r) ? r.moves : '—';
       const distStr = (!locked && r && r.dist != null) ? r.dist.toFixed(0) + 'm' : '—';
       const playBtn = (!locked && r?.solution)
-        ? `<button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button>` : '';
+        ? `<button class="lb-sol-btn" data-sol="${escHtml(r.solution)}" data-level-idx="${i}">&#9654;</button>` : '';
       const sel = i === autoSelectIdx ? ' lb-row-sel' : '';
       return `<tr class="lb-row${sel}" data-idx="${i}" style="cursor:pointer">` +
         `<td class="lb-name">${name}</td><td class="lb-name">${player}</td>` +
@@ -1475,20 +1475,16 @@ async function renderLbAll(allRows, autoSelectIdx) {
     }).join('');
 }
 
-async function renderLbDetail(idx, allRows) {
+function renderLbDetail(idx, allRows) {
   const l = LEVELS[idx];
   const par = l.par ?? (l.solution ? l.solution.length : 4);
-  $('lbDetailTitle').textContent = `${l.name} · Top scores`;
-  $('lbDetail').style.display = '';
-  const tbl = $('lbDetailTable');
-
-  // Filter allRows to this level, dedupe by player
+  $('lbCurTitle').textContent = l.name;
   const key = l.id || l.name;
   const seen = new Set();
   const top = allRows
     .filter(r => (r.level_id ?? '') === key && !seen.has(r.player) && seen.add(r.player))
     .slice(0, 10);
-
+  const tbl = $('lbDetailTable');
   if (!top.length) {
     tbl.innerHTML = '<tr><td colspan="5" class="lb-empty">No entries yet — be first!</td></tr>';
     return;
@@ -1501,7 +1497,7 @@ async function renderLbDetail(idx, allRows) {
       const sc = starsForMoves(r.moves, par);
       const stars = '★'.repeat(sc) + `<span class="lb-dim">★</span>`.repeat(3 - sc);
       const playBtn = r.solution
-        ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button></td>`
+        ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}" data-level-idx="${idx}">&#9654;</button></td>`
         : '<td></td>';
       const when = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '';
       const dist = r.dist != null ? r.dist.toFixed(0) + 'm' : '—';
@@ -1515,57 +1511,48 @@ async function renderLbDetail(idx, allRows) {
 let _lbAllRows = [];
 
 async function openLeaderboard(idx) {
-  $('lbDetail').style.display = 'none';
+  $('lbDetailTable').innerHTML = '<tr><td colspan="5" class="lb-empty">Loading…</td></tr>';
   $('lbTable').innerHTML = '<tr><td colspan="5" class="lb-empty">Loading…</td></tr>';
   $('lbOverlay').classList.remove('hidden');
   try {
     _lbAllRows = await lbGetAll();
-    await renderLbAll(_lbAllRows, idx);
-    if (idx != null && isUnlocked(idx)) await renderLbDetail(idx, _lbAllRows);
+    renderLbAll(_lbAllRows, idx);
+    if (idx != null && isUnlocked(idx)) renderLbDetail(idx, _lbAllRows);
   } catch (e) {
     $('lbTable').innerHTML = `<tr><td colspan="5" class="lb-empty" style="color:#ff7070">Error: ${escHtml(e.message)}</td></tr>`;
   }
 }
 
-$('lbTable').addEventListener('click', async e => {
-  // Row click → expand detail for that level
-  const row = e.target.closest('tr[data-idx]');
-  if (row && !e.target.closest('.lb-sol-btn')) {
-    const idx = parseInt(row.dataset.idx, 10);
-    if (!isUnlocked(idx)) return;
-    // Highlight selected row
-    $('lbTable').querySelectorAll('.lb-row-sel').forEach(r => r.classList.remove('lb-row-sel'));
-    row.classList.add('lb-row-sel');
-    await renderLbDetail(idx, _lbAllRows);
-    $('lbDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    return;
-  }
-  // Solution play button
-  const btn = e.target.closest('.lb-sol-btn');
-  if (!btn) return;
+function lbLoadSolution(btn) {
   const mvs = movesFromAny(btn.dataset.sol);
   if (!mvs) { toast('Could not decode solution'); return; }
   $('lbOverlay').classList.add('hidden');
+  const targetIdx = btn.dataset.levelIdx != null ? parseInt(btn.dataset.levelIdx, 10) : null;
+  if (targetIdx != null && targetIdx !== levelIdx) setLevel(targetIdx);
   moves = quantizeMoves(mvs);
   solutionUsed = true;
   editIdx = null;
   setEdit(0, 0);
   recomputePlan();
   toast('Solution loaded — leaderboard disabled until Reset');
+}
+
+$('lbTable').addEventListener('click', e => {
+  const btn = e.target.closest('.lb-sol-btn');
+  if (btn) { lbLoadSolution(btn); return; }
+  // Row click → update left column detail
+  const row = e.target.closest('tr[data-idx]');
+  if (!row) return;
+  const idx = parseInt(row.dataset.idx, 10);
+  if (!isUnlocked(idx)) return;
+  $('lbTable').querySelectorAll('.lb-row-sel').forEach(r => r.classList.remove('lb-row-sel'));
+  row.classList.add('lb-row-sel');
+  renderLbDetail(idx, _lbAllRows);
 });
 
 $('lbDetailTable').addEventListener('click', e => {
   const btn = e.target.closest('.lb-sol-btn');
-  if (!btn) return;
-  const mvs = movesFromAny(btn.dataset.sol);
-  if (!mvs) { toast('Could not decode solution'); return; }
-  $('lbOverlay').classList.add('hidden');
-  moves = quantizeMoves(mvs);
-  solutionUsed = true;
-  editIdx = null;
-  setEdit(0, 0);
-  recomputePlan();
-  toast('Solution loaded — leaderboard disabled until Reset');
+  if (btn) lbLoadSolution(btn);
 });
 
 async function doLbSubmit(player) {
