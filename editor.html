@@ -1276,7 +1276,7 @@ function updateSelPanel(){
     }
   } else if(sel.kind==='car'){
     const c=L.cars[sel.idx];
-    const tOpts=[['','Sedan'],['miata','Miata'],['bus','Bus']].map(([v,l])=>`<option value="${v}"${(c.type||'')=== v?' selected':''}>${l}</option>`).join('');
+    const tOpts=[['','Sedan'],['miata','Miata'],['bus','Bus'],['tractor','Tractor']].map(([v,l])=>`<option value="${v}"${(c.type||'')=== v?' selected':''}>${l}</option>`).join('');
     html+=row('cx',`<input type=number step=.1 id=seCx value="${fmt(c.cx)}">`);
     html+=row('cy',`<input type=number step=.1 id=seCy value="${fmt(c.cy)}">`);
     html+=row('h°', `<input type=number step=5  id=seAng value="${fmt(deg(c.h),1)}">`);
