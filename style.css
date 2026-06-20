@@ -428,7 +428,7 @@ button:active:not(:disabled) { filter: brightness(1.25); }
 }
 .name-input:focus { border-color: #4fc3f7; }
 
-.lb-card { max-height: 90vh; overflow-y: auto; width: min(740px, 94vw); }
+#lbOverlay .lb-card { max-height: 90vh; overflow-y: auto; width: min(740px, 94vw); }
 .lb-cols { display: flex; gap: 20px; align-items: flex-start; }
 .lb-col { flex: 1; min-width: 0; }
 .lb-col-all { flex: 1.1; border-left: 1px solid #2a3142; padding-left: 20px; }

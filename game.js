@@ -894,7 +894,9 @@ function draw(now) {
       const sp = o.carSpec || SEDAN;
       const obstVeh = o.pose.type || 'default';
       const sameAsTractor = obstVeh === 'tractor' && (level.vehicle || 'default') === 'tractor';
-      const obstFill = sameAsTractor ? '#737d8c' : undefined;
+      // Default obstacle color is gray; only a lone tractor (player is NOT a
+      // tractor) keeps its natural orange body.
+      const obstFill = (obstVeh === 'tractor' && !sameAsTractor) ? undefined : '#737d8c';
       drawCarBody({ x: o.pose.cx - Math.cos(o.pose.h) * (sp.len / 2 - sp.rOver),
                     y: o.pose.cy - Math.sin(o.pose.h) * (sp.len / 2 - sp.rOver),
                     h: o.pose.h },
