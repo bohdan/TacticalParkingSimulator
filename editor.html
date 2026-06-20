@@ -1902,8 +1902,10 @@ document.getElementById('btnTry').onclick=()=>{
 };
 
 // ── Solver ────────────────────────────────────────────────────────────────────
-// Anytime min-turn solve: streams improving plans, keeps the best at each turn
-// count as a candidate, and mirrors the fewest-turn plan into L.solution (shown).
+// Anytime min-turn solve: streams improving plans and keeps the best at each turn
+// count as a candidate (solutions[]). It does NOT overwrite the author's shown
+// plan (L.solution) — only fills it when the level has none yet; otherwise the
+// author picks an option via "Show this one".
 let solveCancel = false;
 const planDist = s => s.reduce((a, m) => a + Math.abs(m.dist), 0);
 
@@ -1921,11 +1923,14 @@ document.getElementById('btnSolve').onclick = async () => {
   status.textContent = '⚙ Starting…';
   // turns -> best (lowest-distance) plan found at that turn count
   const byTurns = new Map();
+  const hadSolution = !!(L.solution && L.solution.length);
   const applyBest = () => {
     let ks = [...byTurns.keys()].sort((a, b) => a - b);
     if (ks.length) ks = ks.filter(k => k <= ks[0] + 2);   // K* .. K*+2 options only
     L.solutions = ks.map(k => byTurns.get(k).map(m => ({ ...m })));
-    L.solution = L.solutions.length ? L.solutions[0].map(m => ({ ...m })) : (L.solution || []);
+    // Don't clobber the author's shown plan; only fill it if none exists yet.
+    if (!hadSolution)
+      L.solution = L.solutions.length ? L.solutions[0].map(m => ({ ...m })) : (L.solution || []);
   };
   try {
     const solution = await solveParkingLevel(L, { timeMs: 60000, idleMs: 6000, shouldStop: () => solveCancel }, ev => {
@@ -1945,7 +1950,9 @@ document.getElementById('btnSolve').onclick = async () => {
     applyBest();
     if (byTurns.size) {
       const best = Math.min(...byTurns.keys());
-      status.textContent = `✓ ${best} turn${best !== 1 ? 's' : ''}, ${byTurns.size} option${byTurns.size !== 1 ? 's' : ''}${solveCancel ? ' (stopped)' : ''} — save to persist`;
+      const n = L.solutions.length;
+      status.textContent = `✓ ${best} turn${best !== 1 ? 's' : ''}, ${n} option${n !== 1 ? 's' : ''}${solveCancel ? ' (stopped)' : ''}` +
+        (hadSolution ? ' — pick one to show' : ' — save to persist');
     } else {
       status.textContent = solveCancel ? '■ Stopped — no solution yet' : '✗ No solution found';
     }
