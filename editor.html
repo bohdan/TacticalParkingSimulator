@@ -1559,11 +1559,11 @@ document.getElementById('btnSolve').onclick = async () => {
   status.style.display = 'inline';
   status.textContent = '⚙ Starting…';
   try {
-    const solution = await solveParkingLevel(L, { beam: 1200, maxDepth: 7 }, ev => {
+    const solution = await solveParkingLevel(L, { weight: 1.5, maxExpand: 400000 }, ev => {
       if (ev.type === 'solution')
         status.textContent = `⚙ Found ${ev.moves.length}-move solution…`;
       else
-        status.textContent = `⚙ Depth ${ev.depth} (beam ${ev.beamSize})…`;
+        status.textContent = `⚙ Searching… (${ev.depth} expanded, ${ev.beamSize} open)`;
     });
     if (solution) {
       L.solution = solution;

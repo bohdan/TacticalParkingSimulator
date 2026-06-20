@@ -1,89 +1,119 @@
 'use strict';
-// Beam-search parking solver.
-// Requires physics.js to be loaded first (uses CAR, VEHICLES, setVehicle,
-// buildLevel, advance, simulateMove, inGoal, normAng, rad, deg as globals).
+// Weighted-A* parking solver over the kinematic bicycle model (hybrid-A* style:
+// continuous motion, but a discretized pose grid for de-duplication so deep,
+// many-move maneuvers stay tractable).
 //
-// solveParkingLevel(def, opts, progressCb) → Promise<{steer°, dist}[] | null>
-//   def        — level definition object (same format as LEVELS entries)
-//   opts       — { beam=1000, maxDepth=7 }
-//   progressCb — called with { type:'depth'|'solution', depth, moves?, beamSize? }
+// Requires physics.js globals: CAR, VEHICLES, setVehicle, buildLevel, advance,
+// simulateMove, inGoal, normAng, rad, deg.
+//
+// solveParkingLevel(def, opts, cb) -> Promise<{steer (deg), dist}[] | null>
+//   opts: { weight, maxExpand, posCell, angCellDeg, yield }
+//   Candidate steer/dist are clean values and are simulated with the exact
+//   numbers that get stored, so a returned solution replays to the same pose.
+
+function _heapPush(h, s) {
+  h.push(s);
+  let i = h.length - 1;
+  while (i > 0) { const p = (i - 1) >> 1; if (h[p].f <= h[i].f) break; const t = h[p]; h[p] = h[i]; h[i] = t; i = p; }
+}
+function _heapPop(h) {
+  const top = h[0], last = h.pop();
+  if (h.length) {
+    h[0] = last; let i = 0; const n = h.length;
+    for (;;) {
+      let l = 2 * i + 1, r = 2 * i + 2, m = i;
+      if (l < n && h[l].f < h[m].f) m = l;
+      if (r < n && h[r].f < h[m].f) m = r;
+      if (m === i) break;
+      const t = h[m]; h[m] = h[i]; h[i] = t; i = m;
+    }
+  }
+  return top;
+}
 
 async function solveParkingLevel(def, opts = {}, progressCb = null) {
-  const { beam: BEAM = 1000, maxDepth: MAX_DEPTH = 7 } = opts;
+  const {
+    weight = 2.0,        // heuristic weight: higher = greedier/faster, longer plans
+    maxExpand = 150000,  // safety cap on state expansions
+    timeMs = Infinity,   // wall-clock budget per attempt
+    posCell = 0.2,       // m, visited-grid resolution
+    angCellDeg = 9,      // deg, visited-grid heading resolution
+    yield: doYield = true,
+  } = opts;
 
-  // Save and switch vehicle so CAR matches the level.
   const savedCar = Object.assign({}, CAR);
   setVehicle(def.vehicle || 'default');
-
   const lvl = buildLevel(def);
   const { obstacles, goal, start } = lvl;
+  const ms = CAR.maxSteer;
 
-  // Candidate steer angles — finer grid near 0 for precision parking
-  const STEERS_DEG = [-35, -28, -20, -12, -6, -2, 0, 2, 6, 12, 20, 28, 35]
-    .filter(s => Math.abs(s) <= CAR.maxSteer);
-  const STEERS = STEERS_DEG.map(rad);
+  // Clean candidate values → stored == simulated == replayed (no drift).
+  const fracs = [-1, -0.62, -0.36, -0.16, 0, 0.16, 0.36, 0.62, 1];
+  const STEERS_DEG = [...new Set(fracs.map(f => Math.round(f * ms)))];
+  const DISTS = [-9, -6, -4, -2.5, -1.4, -0.7, -0.35,
+                  0.35, 0.7, 1.4, 2.5, 4, 6, 9, 13];
 
-  // Candidate distances (m) — short steps for tight spots, long for open ones
-  const DISTS = [-10, -7, -5, -3.5, -2, -1.2, -0.6,
-                   0.6, 1.2, 2, 3.5, 5, 7, 10, 13, 16];
+  const angCell = rad(angCellDeg);
+  const key = p =>
+    Math.round(p.x / posCell) + ',' +
+    Math.round(p.y / posCell) + ',' +
+    Math.round(normAng(p.h) / angCell);
 
-  function heuristic(pose) {
-    const dx = pose.x - goal.cx, dy = pose.y - goal.cy;
-    const bestHead = goal.heads.reduce((best, hd) => {
-      const err = Math.abs(normAng(pose.h - rad(hd)));
-      return err < best ? err : best;
-    }, Infinity);
-    // Euclidean distance² + heavily weighted heading error²
-    return dx*dx + dy*dy + (bestHead * 5) ** 2;
+  const goalHeads = goal.heads.map(rad);
+  function heur(p) {
+    const d = Math.hypot(p.x - goal.cx, p.y - goal.cy);
+    let he = Infinity;
+    for (const g of goalHeads) { const e = Math.abs(normAng(p.h - g)); if (e < he) he = e; }
+    // rough estimate of moves remaining: travel/typical-arc + heading/max-turn
+    return d / 9 + he / rad(ms);
   }
 
-  let beamStates = [{ pose: start, moves: [] }];
-  let best = null;
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const open = [];
+  const visited = new Map();
+  _heapPush(open, { pose: start, moves: [], g: 0, f: weight * heur(start) });
+  visited.set(key(start), 0);
 
-  for (let depth = 0; depth < MAX_DEPTH; depth++) {
-    const next = [];
-    let lastYield = performance.now();
+  let best = inGoal(start, goal) ? [] : null;
+  let expand = 0, lastYield = now();
+  const startTime = now();
 
-    for (const state of beamStates) {
-      for (const s of STEERS) {
-        for (const d of DISTS) {
-          const sim = simulateMove(state.pose, s, d, obstacles);
-          if (sim.hit) continue;
-          const moves = [...state.moves,
-            { steer: Math.round(deg(s) * 10) / 10, dist: +d.toFixed(2) }];
-          if (inGoal(sim.end, goal)) {
-            const totalDist = moves.reduce((t, m) => t + Math.abs(m.dist), 0);
-            const prevDist  = best ? best.reduce((t, m) => t + Math.abs(m.dist), 0) : Infinity;
-            if (!best || moves.length < best.length ||
-                (moves.length === best.length && totalDist < prevDist)) {
-              best = moves;
-              progressCb?.({ type: 'solution', depth: depth+1, moves });
-            }
-            continue; // don't extend winning states further
-          }
-          // Prune branches already as long as the best found solution
-          if (best && moves.length >= best.length) continue;
-          next.push({ pose: sim.end, moves, h: heuristic(sim.end) });
+  while (open.length && !best && expand < maxExpand) {
+    if ((expand & 1023) === 0 && now() - startTime > timeMs) break;
+    const cur = _heapPop(open);
+    expand++;
+    let done = false;
+    for (const sd of STEERS_DEG) {
+      const s = rad(sd);
+      for (const d of DISTS) {
+        const sim = simulateMove(cur.pose, s, d, obstacles);
+        if (sim.hit) continue;
+        const end = sim.end;
+        const moves = cur.moves.concat([{ steer: sd, dist: d }]);
+        if (inGoal(end, goal)) {
+          best = moves;
+          progressCb && progressCb({ type: 'solution', depth: moves.length, moves });
+          done = true; break;
         }
+        const g2 = cur.g + 1;
+        const k = key(end);
+        const pv = visited.get(k);
+        if (pv !== undefined && pv <= g2) continue;
+        visited.set(k, g2);
+        _heapPush(open, { pose: end, moves, g: g2, f: g2 + weight * heur(end) });
       }
-      // Yield to UI every 16 ms so the browser stays responsive
-      if (performance.now() - lastYield > 16) {
-        await new Promise(r => setTimeout(r, 0));
-        lastYield = performance.now();
-      }
+      if (done) break;
     }
-
-    progressCb?.({ type: 'depth', depth: depth+1, beamSize: next.length });
-
-    if (best && best.length <= depth+1) break; // can't do better
-    next.sort((a, b) => a.h - b.h);
-    beamStates = next.slice(0, BEAM);
-    if (!beamStates.length) break;
+    if (doYield && now() - lastYield > 16) {
+      await new Promise(r => setTimeout(r, 0));
+      lastYield = now();
+      progressCb && progressCb({ type: 'depth', depth: expand, beamSize: open.length });
+    }
   }
 
-  // Restore vehicle state
   Object.assign(CAR, savedCar);
   CAR.fOver = CAR.len - CAR.wb - CAR.rOver;
-
-  return best; // null if no solution found within MAX_DEPTH
+  return best;
 }
+
+if (typeof module !== 'undefined' && module.exports) module.exports = { solveParkingLevel };

@@ -44,7 +44,9 @@ let testLevelLoaded = false;
 
 // Encode a moves array [{steer (rad), dist}] to a URL-safe base64 string.
 function movesToString(mvs) {
-  const arr = mvs.map(m => [+(deg(m.steer).toFixed(1)), +m.dist.toFixed(2)]);
+  // High precision so a loaded/shared plan replays to the same end pose.
+  // Coarse rounding here used to accumulate enough drift to miss the goal.
+  const arr = mvs.map(m => [+(deg(m.steer).toFixed(4)), +m.dist.toFixed(4)]);
   const bytes = new TextEncoder().encode(JSON.stringify(arr));
   let b = '';
   for (const byte of bytes) b += String.fromCharCode(byte);
@@ -147,7 +149,6 @@ let editIdx = null;    // index of the move being tweaked (null = composing next
 let anim = null;       // {samples, cum, total, t0, speed}
 let pendingLb = null;  // {levelIdx, stars, st} — awaiting leaderboard submit
 let solutionUsed = false; // viewing the solution locks leaderboard until Reset
-let introReturnIdx = null; // where to resume after the daily boot intro
 let view = { scale: 1, ox: 0, oy: 0 };
 
 function planEnd() {
@@ -1079,17 +1080,18 @@ $('menuLb').addEventListener('click', () => {
 });
 $('menuNewGame').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
-  if (!confirm('Start a new game? This resets your saved level position.')) return;
-  try { localStorage.removeItem('parking.level'); } catch (e) {}
-  // Replay the intro, then begin at the first playable level.
+  if (!confirm('Start a new game? This resets your progress.')) return;
+  try {
+    localStorage.removeItem('parking.level');
+    localStorage.removeItem('parking.maxUnlocked');
+    localStorage.removeItem('parking.introDay');
+  } catch (e) {}
+  maxUnlocked = -1;
+  const firstPlayable = nextPlayable(-1, +1);
+  if (firstPlayable >= 0) setMaxUnlocked(firstPlayable);
+  // Replay the intro; it flows into the first level when it ends.
   const ci = LEVELS.findIndex(isCutscene);
-  const firstPlayable = nextPlayable(ci >= 0 ? ci : -1, +1);
-  if (ci >= 0) {
-    introReturnIdx = firstPlayable >= 0 ? firstPlayable : 0;
-    setLevel(ci);
-  } else {
-    setLevel(firstPlayable >= 0 ? firstPlayable : 0);
-  }
+  setLevel(ci >= 0 ? ci : (firstPlayable >= 0 ? firstPlayable : 0));
 });
 $('helpClose').addEventListener('click', () => $('helpOverlay').classList.add('hidden'));
 $('lbClose').addEventListener('click', () => $('lbOverlay').classList.add('hidden'));
@@ -1133,8 +1135,10 @@ $('ovRetry').addEventListener('click', () => {
 });
 $('ovNext').addEventListener('click', () => {
   $('overlay').classList.add('hidden');
-  const t = nextPlayable(levelIdx, +1);
-  if (t >= 0) setLevel(t);
+  // Step to the very next item: a cutscene there will play, otherwise the
+  // next level loads. (Cutscenes are part of the linear progression.)
+  const t = levelIdx + 1;
+  if (t < LEVELS.length) setLevel(t);
 });
 
 function selectMove(i) {
@@ -1685,16 +1689,11 @@ function endCutscene() {
   cancelAnimationFrame(introAnimId);
   introAnimId = null;
   $('introGo').classList.add('hidden');
-  // After the daily boot intro, resume where the player left off.
-  if (introReturnIdx != null) {
-    const t = introReturnIdx;
-    introReturnIdx = null;
-    setLevel(t);
-    return;
-  }
-  let t = nextPlayable(levelIdx, +1);
-  if (t < 0) t = nextPlayable(levelIdx, -1);  // cutscene sits at the very end
-  setLevel(t >= 0 ? t : levelIdx);
+  // Advance to the next item so consecutive cutscenes chain and the intro
+  // flows straight into the first level.
+  const t = levelIdx + 1;
+  if (t < LEVELS.length) setLevel(t);
+  else { const b = nextPlayable(levelIdx, -1); setLevel(b >= 0 ? b : 0); }
 }
 $('introSkip').addEventListener('click', endCutscene);
 $('introGo').addEventListener('click', endCutscene);
@@ -1729,8 +1728,7 @@ if (!testLevelLoaded) setMaxUnlocked(resumeIdx);
 const introIdx = LEVELS.findIndex(isCutscene);
 if (!testLevelLoaded && !_solHash && introIdx >= 0 && !introShownToday()) {
   markIntroShownToday();
-  introReturnIdx = resumeIdx;     // after the briefing, resume here
-  setLevel(introIdx);
+  setLevel(introIdx);     // intro plays, then flows into the first level
 } else {
   setLevel(resumeIdx);
 }
