@@ -759,14 +759,24 @@ function drawSolutionPath(){
     let oL,iL,oT,iT;
     if(!seg.rev){ if(steerRight){oL=2;iL=1;oT=3;iT=0;}else{oL=1;iL=2;oT=0;iT=3;} }
     else        { if(steerRight){oL=3;iL=0;oT=2;iT=1;}else{oL=0;iL=3;oT=1;iT=2;} }
+    // For fwd: the rear corners sweep the arcs (oT=rear-outer, iL=front-inner).
+    // For rev: trailing=front, leading=rear, so rear corners are oL and iT.
     const p0=polys[0], pN=polys[n-1];
     ctx.beginPath();
-    ctx.moveTo(p0[iT].x,p0[iT].y);          // inner-trailing at start
-    ctx.lineTo(p0[oT].x,p0[oT].y);          // trailing edge (straight)
-    for(let i=1;i<n;i++) ctx.lineTo(polys[i][oT].x,polys[i][oT].y); // outer arc (oT corner)
-    ctx.lineTo(pN[oL].x,pN[oL].y);          // outer side at end (straight)
-    ctx.lineTo(pN[iL].x,pN[iL].y);          // leading edge at end (straight)
-    for(let i=n-2;i>=0;i--) ctx.lineTo(polys[i][iL].x,polys[i][iL].y); // inner arc back (iL corner)
+    ctx.moveTo(p0[iT].x,p0[iT].y);               // inner-trailing at start
+    ctx.lineTo(p0[oT].x,p0[oT].y);               // trailing edge
+    if(!seg.rev){
+      for(let i=1;i<n;i++) ctx.lineTo(polys[i][oT].x,polys[i][oT].y); // outer arc (oT=rear-outer)
+      ctx.lineTo(pN[oL].x,pN[oL].y);             // outer side at end
+      ctx.lineTo(pN[iL].x,pN[iL].y);             // leading edge at end
+      for(let i=n-2;i>=0;i--) ctx.lineTo(polys[i][iL].x,polys[i][iL].y); // inner arc (iL=front-inner)
+    } else {
+      ctx.lineTo(p0[oL].x,p0[oL].y);             // outer side at start
+      for(let i=1;i<n;i++) ctx.lineTo(polys[i][oL].x,polys[i][oL].y); // outer arc (oL=rear-outer)
+      ctx.lineTo(pN[iL].x,pN[iL].y);             // leading edge
+      ctx.lineTo(pN[iT].x,pN[iT].y);             // inner side at end
+      for(let i=n-2;i>=0;i--) ctx.lineTo(polys[i][iT].x,polys[i][iT].y); // inner arc (iT=front-inner)
+    }
     ctx.closePath();
     ctx.fillStyle=hot?'rgba(255,224,80,0.18)':'rgba(255,200,50,0.09)';
     ctx.fill();
