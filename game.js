@@ -1442,31 +1442,35 @@ async function renderLbAll() {
   $('lbTable').innerHTML = '<tr><td colspan="5" class="lb-empty">Loading…</td></tr>';
   try {
     const rows = await lbGetAll();
-    // Deduplicate: for each (player, level_id) keep the best row (already sorted best-first)
-    const seen = new Map();
+    // Keep best entry per level_id (rows already sorted best-first)
+    const bestByLevel = new Map();
     for (const r of rows) {
-      const key = r.player + '\0' + (r.level_id ?? '');
-      if (!seen.has(key)) seen.set(key, r);
+      const key = r.level_id ?? '';
+      if (!bestByLevel.has(key)) bestByLevel.set(key, r);
     }
-    const sorted = [...seen.values()].sort((a, b) => a.moves - b.moves || (a.dist ?? 0) - (b.dist ?? 0));
-    const top = sorted.slice(0, 10);
-    if (!top.length) {
+    // Show one row per level in LEVELS order, skipping levels with no entries
+    const display = LEVELS
+      .filter(l => !l.draft && l.type !== 'cutscene')
+      .flatMap(l => {
+        const r = bestByLevel.get(l.id || l.name);
+        return r ? [{ l, r }] : [];
+      });
+    if (!display.length) {
       $('lbTable').innerHTML = '<tr><td colspan="5" class="lb-empty">No entries yet.</td></tr>';
       return;
     }
     $('lbTable').innerHTML =
-      `<tr class="lb-head"><td></td><td class="lb-name">Player</td><td class="lb-name">Level</td>` +
+      `<tr class="lb-head"><td class="lb-name">Level</td><td class="lb-name">Player</td>` +
       `<td class="lb-metric">Moves</td><td class="lb-metric">Dist</td><td></td></tr>` +
-      top.map((r, i) => {
-        const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
+      display.map(({ l, r }) => {
         const playBtn = r.solution
           ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button></td>`
           : '<td></td>';
         const when = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '';
         const dist = r.dist != null ? r.dist.toFixed(0) + 'm' : '—';
-        return `<tr class="${cls}" title="${when}"><td class="lb-rank">${i+1}</td>` +
+        return `<tr title="${when}">` +
+          `<td class="lb-name">${escHtml(l.name)}</td>` +
           `<td class="lb-name">${escHtml(r.player)}</td>` +
-          `<td class="lb-name" style="font-size:11px;opacity:.75">${escHtml(r.level_name ?? '')}</td>` +
           `<td class="lb-metric">${r.moves}</td><td class="lb-metric">${dist}</td>${playBtn}</tr>`;
       }).join('');
   } catch (e) {
