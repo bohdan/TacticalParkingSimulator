@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#171a21">
-<title>Park Planner</title>
+<title>Tactical Parking Simulator</title>
 <link rel="stylesheet" href="style.css?v=7a33a74">
 </head>
 <body>
@@ -88,13 +88,13 @@
     <div class="help-body">
       <b>Goal</b> — Park the car inside the green zone.<br><br>
       <b>Plan moves</b> — Drag on the canvas: the ghost car follows your finger along a drivable arc. Use the sliders for fine control. Tap <i>Add move</i> (or <b>double-tap</b> the canvas) to queue it up.<br><br>
-      <b>Run</b> — Animates your full plan. The last pending move is auto-committed when you hit Run.<br><br>
-      <b>Edit past moves</b> — Tap a numbered badge on the canvas to load that move back into the sliders. <i>Update #N</i> saves the change; <i>Cancel</i> discards it.<br><br>
-      <b>&#9733; Stars</b> — based on estimated time (car accelerates/brakes at 2 m/s&sup2; up to 3 m/s, steering 60&deg;/s, +1.5s per direction reversal):<br>
-      &nbsp;&#9733;&#9733;&#9733; — Perfect<br>
-      &nbsp;&#9733;&#9733;&#9734; — Good<br>
-      &nbsp;&#9733;&#9734;&#9734; — Parked, keep improving<br><br>
-      <b>&#128161; Solution</b> — Loads the verified optimal move sequence. Using it disables leaderboard submission for the level until you press <i>Reset</i>.
+      <b>Turn strip</b> — The row of chips above the sliders lists every move; the gold one is the move you're editing. Tap a chip (or a numbered badge on the canvas) to edit that move — adjust it, then <i>Update #N</i>. Later moves automatically re-base on top. Tap <b>&#65291;</b> to start a new move; <b>&#128465; Delete</b> removes the selected move.<br><br>
+      <b>Run</b> — Animates your full plan; any pending move is auto-committed first. Each move is locked to the exact distance the car actually travels, so the saved plan is precisely what you saw.<br><br>
+      <b>&#9733; Stars (par)</b> — like golf, against the level's <b>Par</b> (target move count):<br>
+      &nbsp;&#9733;&#9733;&#9733; — at or under Par<br>
+      &nbsp;&#9733;&#9733;&#9734; — Par + 1 (bogey)<br>
+      &nbsp;&#9733;&#9734;&#9734; — parked<br><br>
+      <b>&#128161; Solution</b> — Loads a known solution for the level. Using it disables leaderboard submission until you press <i>Reset</i>.
     </div>
     <div style="text-align:center;margin-top:16px;">
       <button id="helpClose" style="height:44px;padding:0 24px;border-radius:12px;border:1px solid #313a4b;background:#1d4f6b;border-color:#2d7396;color:#e7ecf3;font-size:14px;font-weight:600;">Got it</button>
