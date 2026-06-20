@@ -322,29 +322,6 @@ const LEVELS = [
     solution: [{ steer: -4.4, dist: 23.81 }, { steer: 45, dist: -6.85 }, { steer: -18, dist: 6.3 }],
   },
   {
-    id: "hm5m7r",
-    name: "South Central Station", tier: "Expert", mode: "moves", w: 36, h: 21,
-    vehicle: "bus",
-    start: { x: 3, y: 16, h: 0 },
-    goal: { cx: 22, cy: 7.2, w: 5, h: 14, heads: [90], tol: 45 },
-    walls: [
-      { x: 0, y: 17.7, w: 36, h: 0.5, kind: "curb" },
-      { x: 18, y: 0, w: 0.8, h: 6.5 },
-      { x: 25, y: 0, w: 0.8, h: 6.5 },
-    ],
-    cars: [
-      { cx: 5.3, cy: 6.1, h: Math.PI / 2, type: "bus" },
-      { cx: 2.1, cy: 6.1, h: Math.PI / 2, type: "bus" },
-      { cx: 34.5, cy: 6.2, h: Math.PI / 2, type: "bus" },
-    ],
-    traffic: [
-      { x: 2.3, y: 19.7, h: 0, speed: 3, loop: 30, offset: 20 },
-    ],
-    draft: true,
-    hint: "Who designed this?",
-    solution: [{ steer: -13.6, dist: 14.92 }, { steer: 16.4, dist: -2.1 }, { steer: -25, dist: 4.55 }, { steer: 2.8, dist: -5.35 }, { steer: 45, dist: 1.85 }, { steer: -30.6, dist: 4.61 }, { steer: 4.6, dist: -4.85 }, { steer: 45, dist: 1.55 }, { steer: -45, dist: 2.5 }, { steer: 0.2, dist: -4.4 }, { steer: 45, dist: 2 }, { steer: -45, dist: 3.1 }, { steer: 0, dist: -5.15 }, { steer: 23.8, dist: 4.2 }, { steer: -15.4, dist: 0.9 }, { steer: 45, dist: -2.05 }, { steer: 2.8, dist: -2.7 }, { steer: 24, dist: 4.5 }, { steer: 45, dist: -1.6 }],
-  },
-  {
     id: "ahbt26",
     name: "South Central Station", tier: "Expert", mode: "moves", w: 36, h: 21,
     vehicle: "bus",
@@ -365,6 +342,33 @@ const LEVELS = [
     ],
     hint: "Who designed this?",
     solution: [{ steer: -13.6, dist: 14.92 }, { steer: 16.4, dist: -2.1 }, { steer: -25, dist: 4.55 }, { steer: 2.8, dist: -5.35 }, { steer: 45, dist: 1.85 }, { steer: -30.6, dist: 4.61 }, { steer: 4.6, dist: -4.85 }, { steer: 45, dist: 1.55 }, { steer: -45, dist: 2.5 }, { steer: 0.2, dist: -4.4 }, { steer: 45, dist: 2 }, { steer: -45, dist: 3.1 }, { steer: 0, dist: -5.15 }, { steer: 23.8, dist: 4.2 }, { steer: -15.4, dist: 0.9 }, { steer: 45, dist: -2.05 }, { steer: 2.8, dist: -2.7 }, { steer: 24, dist: 4.5 }, { steer: 45, dist: -1.6 }],
+  },
+  {
+    id: "hm5m7r",
+    name: "South Central Station 2", tier: "Expert", mode: "moves", w: 36, h: 21,
+    vehicle: "bus",
+    start: { x: 3, y: 16, h: 0 },
+    goal: { cx: 22, cy: 7.2, w: 5, h: 14, heads: [90], tol: 45 },
+    walls: [
+      { x: 0, y: 17.7, w: 36, h: 0.5, kind: "curb" },
+      { x: 18, y: 0, w: 0.8, h: 6.5 },
+      { x: 25, y: 0, w: 0.8, h: 6.5 },
+    ],
+    cars: [
+      { cx: 5.3, cy: 6.1, h: Math.PI / 2, type: "bus" },
+      { cx: 2.1, cy: 6.1, h: Math.PI / 2, type: "bus" },
+      { cx: 34.5, cy: 6.2, h: Math.PI / 2, type: "bus" },
+    ],
+    traffic: [
+      { x: 2.3, y: 19.7, h: 0, speed: 3, loop: 30, offset: 20 },
+    ],
+    draft: true,
+    hint: "I was holding it wrong!",
+    solution: [{ steer: -20.200000000000003, dist: 11.4 }, { steer: 31.400000000000002, dist: 11.4 }, { steer: -45, dist: -8.6 }, { steer: 45, dist: -1.2 }],
+    solutions: [
+      [{ steer: -20.200000000000003, dist: 11.4 }, { steer: 31.400000000000002, dist: 11.4 }, { steer: -45, dist: -8.6 }, { steer: 45, dist: -1.2 }],
+      [{ steer: -20.200000000000003, dist: 11.4 }, { steer: 31.400000000000002, dist: 11.4 }, { steer: -45, dist: -5.9 }, { steer: 45, dist: 0.9 }, { steer: -11.600000000000001, dist: -3.1 }],
+    ],
   },
   {
     id: "h518uw",
