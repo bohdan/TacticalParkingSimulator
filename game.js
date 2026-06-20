@@ -301,21 +301,31 @@ function updateHUD() {
   renderMoveList();
 }
 
-// Horizontal strip of move chips; the active (being-edited) one is highlighted,
-// and a trailing ＋ chip composes a new move. Tapping a chip selects it.
+// Horizontal strip of move chips; the active (being-edited) one is highlighted.
+// The trailing slot shows the move currently being composed (live preview) when
+// it has length, otherwise a ＋ to start one. Tapping a chip selects it.
+function moveChip(num, steerDeg, dist, active, dataI) {
+  const st = Math.abs(steerDeg) < 0.1 ? '0°' : `${Math.abs(steerDeg).toFixed(0)}°${steerDeg < 0 ? 'L' : 'R'}`;
+  const d = `${dist < 0 ? '−' : '+'}${Math.abs(dist).toFixed(1)}`;
+  return `<div class="mv-chip${active ? ' active' : ''}" data-i="${dataI}">` +
+         `<span class="mv-n">${num}</span>${st} ${d}</div>`;
+}
 function renderMoveList() {
   const el = $('moveList');
   if (!el) return;
-  if (!moves.length) { el.innerHTML = ''; return; }
+  const composing = editIdx === null;
+  const pending = composing && Math.abs(editDist) >= 0.01;
+  if (!moves.length && !pending) { el.innerHTML = ''; return; }
   let html = '';
   for (let i = 0; i < moves.length; i++) {
-    const m = moves[i], s = deg(m.steer);
-    const st = Math.abs(s) < 0.1 ? '0°' : `${Math.abs(s).toFixed(0)}°${s < 0 ? 'L' : 'R'}`;
-    const d = `${m.dist < 0 ? '−' : '+'}${Math.abs(m.dist).toFixed(1)}`;
-    html += `<div class="mv-chip${editIdx === i ? ' active' : ''}" data-i="${i}">` +
-            `<span class="mv-n">${i + 1}</span>${st} ${d}</div>`;
+    const active = editIdx === i;          // show the live edit on the active chip
+    const sDeg = active ? editSteer : deg(moves[i].steer);
+    const dist = active ? editDist : moves[i].dist;
+    html += moveChip(i + 1, sDeg, dist, active, i);
   }
-  html += `<div class="mv-chip add${editIdx === null ? ' active' : ''}" data-i="new">&#65291;</div>`;
+  html += pending
+    ? moveChip(moves.length + 1, editSteer, editDist, true, 'new')
+    : `<div class="mv-chip add${composing ? ' active' : ''}" data-i="new">&#65291;</div>`;
   el.innerHTML = html;
   const act = el.querySelector('.active');
   if (act) act.scrollIntoView({ inline: 'nearest', block: 'nearest' });
