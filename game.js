@@ -351,8 +351,8 @@ function updateHUD() {
 // The trailing slot shows the move currently being composed (live preview) when
 // it has length, otherwise a ＋ to start one. Tapping a chip selects it.
 function moveChip(num, steerDeg, dist, active, dataI) {
-  const st = Math.abs(steerDeg) < 0.1 ? '0°' : `${Math.abs(steerDeg).toFixed(0)}°${steerDeg < 0 ? 'L' : 'R'}`;
-  const d = `${dist < 0 ? '−' : '+'}${Math.abs(dist).toFixed(1)}`;
+  const st = Math.abs(steerDeg) < 0.1 ? '0°' : `${+Math.abs(steerDeg).toFixed(1)}°${steerDeg < 0 ? 'L' : 'R'}`;
+  const d = `${dist < 0 ? '−' : '+'}${+Math.abs(dist).toFixed(2)}`;
   return `<div class="mv-chip${active ? ' active' : ''}" data-i="${dataI}">` +
          `<span class="mv-n">${num}</span>${st} ${d}</div>`;
 }
@@ -464,15 +464,18 @@ function drawCarBody(pose, opts, spec) {
   const wl = Math.min(0.9, len * 0.075), wt = Math.min(0.18, w * 0.10);
 
   if (opts.wheels && vtype === 'tractor') {
-    // Tractor: small steered front wheels, big rear drive wheels (poke out).
-    ctx.fillStyle = '#0d0f14';
-    const fl = wl * 0.8, ft = wt * 0.85, rl = wl * 1.5, rt = Math.min(0.34, wt * 1.95);
-    for (const wya of [-wy, wy]) {
-      ctx.save(); ctx.translate(spec.wb, wya); ctx.rotate(opts.steer || 0);
-      ctx.fillRect(-fl / 2, -ft, fl, ft * 2); ctx.restore();
-      ctx.save(); ctx.translate(0, wya);
-      ctx.fillStyle = '#0d0f14'; ctx.fillRect(-rl / 2, -rt, rl, rt * 2);
-      ctx.fillStyle = '#39414d'; ctx.fillRect(-rl * 0.18, -rt * 0.5, rl * 0.36, rt); // hub
+    // Rear: large drive wheels — outer edge pinned to body half-width so they
+    // never exceed the collision bounding box.
+    const rRad = 0.22, rLen = spec.wb * 0.32, rCy = w / 2 - rRad;
+    // Front: narrow steered wheels, same outer-edge constraint.
+    const fRad = 0.10, fLen = rLen * 0.48, fCy = w / 2 - fRad;
+    for (const sign of [-1, 1]) {
+      ctx.save(); ctx.translate(0, sign * rCy);
+      ctx.fillStyle = '#0d0f14'; ctx.fillRect(-rLen / 2, -rRad, rLen, rRad * 2);
+      ctx.fillStyle = '#39414d'; ctx.fillRect(-rLen * 0.20, -rRad * 0.5, rLen * 0.40, rRad); // hub
+      ctx.restore();
+      ctx.save(); ctx.translate(spec.wb, sign * fCy); ctx.rotate(opts.steer || 0);
+      ctx.fillStyle = '#0d0f14'; ctx.fillRect(-fLen / 2, -fRad, fLen, fRad * 2);
       ctx.restore();
     }
   } else if (opts.wheels) {
@@ -492,9 +495,12 @@ function drawCarBody(pose, opts, spec) {
   }
 
   // Body — Miata red, tractor green; bus has squarer corners.
+  // Tractor body is drawn narrower than the collision width so the big rear
+  // wheels visually flank the cab (like a real tractor).
   const fill = vtype === 'miata' ? '#d23b3b' : vtype === 'tractor' ? '#3f7d2f' : opts.fill;
   const corner = vtype === 'bus' ? Math.min(0.18, w * 0.08) : Math.min(0.3, w * 0.17);
-  roundRect(x0, -w / 2, len, w, corner);
+  const bw = vtype === 'tractor' ? w * 0.74 : w;
+  roundRect(x0, -bw / 2, len, bw, corner);
   ctx.fillStyle = fill;
   ctx.fill();
   if (opts.stroke) {
