@@ -86,6 +86,7 @@ button.nav{padding:4px 8px;font-weight:700}
   <button id="btnNext" class="nav" title="Next level">&#8250;</button>
   <button id="btnNew" title="New level (inserted after current)">&#65291; New</button>
   <button id="btnNewCutscene" title="New cutscene (inserted after current)">&#65291; 🎬</button>
+  <button id="btnDupLevel" title="Duplicate current level (new ID)">⧉ Dup</button>
   <button id="btnMoveUp" class="nav" title="Move current level earlier">&#9650;</button>
   <button id="btnMoveDn" class="nav" title="Move current level later">&#9660;</button>
   <button id="btnDelLevel" class="danger" title="Delete current level">&#128465;</button>
@@ -692,16 +693,6 @@ function render(){
   }
 }
 
-function convexHull(pts){
-  if(pts.length<3) return pts;
-  pts=pts.slice().sort((a,b)=>a.x!==b.x?a.x-b.x:a.y-b.y);
-  const cross=(O,A,B)=>(A.x-O.x)*(B.y-O.y)-(A.y-O.y)*(B.x-O.x);
-  const lo=[],hi=[];
-  for(const p of pts){ while(lo.length>=2&&cross(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); }
-  for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; while(hi.length>=2&&cross(hi[hi.length-2],hi[hi.length-1],p)<=0) hi.pop(); hi.push(p); }
-  lo.pop(); hi.pop(); return lo.concat(hi);
-}
-
 // Trace the solution as a schematic curve: forward arcs cyan (solid),
 // reverse arcs orange (dashed), white dots at each move boundary, and a
 // numbered label per move. Uses the shared physics engine (advance()).
@@ -720,24 +711,27 @@ function drawSolutionPath(){
     pose=pts[pts.length-1];
   }
 
-  // Swept envelope: convex hull of all car corner positions → single clean outline.
-  {
-    const allPoses=[{x:L.start.x,y:L.start.y,h:L.start.h}];
-    for(const seg of segs) for(const pt of seg.pts.slice(1)) allPoses.push(pt);
-    const corners=[];
-    for(const pp of allPoses) for(const pt of carPoly(pp)) corners.push(pt);
-    const hull=convexHull(corners);
-    if(hull.length>=3){
-      ctx.save();
-      ctx.fillStyle='rgba(255,200,50,0.10)';
-      ctx.strokeStyle='rgba(255,200,50,0.55)';
-      ctx.lineWidth=0.07; ctx.lineJoin='round';
-      ctx.beginPath(); ctx.moveTo(hull[0].x,hull[0].y);
-      for(let i=1;i<hull.length;i++) ctx.lineTo(hull[i].x,hull[i].y);
-      ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.restore();
-    }
+  // Swept envelope: one filled polygon per segment (overlaps are fine).
+  // Each polygon = trailing-side of start pose + leading-corner trace forward
+  //   + leading-corner trace reversed on the other side + close.
+  ctx.save();
+  ctx.fillStyle='rgba(255,200,50,0.11)';
+  ctx.strokeStyle='rgba(255,200,50,0.50)';
+  ctx.lineWidth=0.05; ctx.lineJoin='round';
+  for(const seg of segs){
+    const fwd=!seg.rev;
+    // Forward: leading corners = front (1=FR, 2=FL), trailing = rear (0=RR, 3=RL)
+    // Backward: leading corners = rear  (0=RR, 3=RL), trailing = front (1=FR, 2=FL)
+    const iR=fwd?1:0, iL=fwd?2:3, iTR=fwd?0:1, iTL=fwd?3:2;
+    const polys=seg.pts.map(p=>carPoly(p));
+    ctx.beginPath();
+    ctx.moveTo(polys[0][iTR].x,polys[0][iTR].y);
+    for(const q of polys) ctx.lineTo(q[iR].x,q[iR].y);
+    for(let i=polys.length-1;i>=0;i--) ctx.lineTo(polys[i][iL].x,polys[i][iL].y);
+    ctx.lineTo(polys[0][iTL].x,polys[0][iTL].y);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
   }
+  ctx.restore();
 
   Object.assign(CAR,saved); CAR.fOver=CAR.len-CAR.wb-CAR.rOver;
 
@@ -1505,6 +1499,13 @@ function addCutscene(){
   markDirty();
   setCurrent(curIdx+1);
 }
+function duplicateCurrentLevel(){
+  const copy=normalizeLevel(JSON.parse(JSON.stringify(L)));
+  copy.id=genLevelId(); // always assign fresh ID
+  levels.splice(curIdx+1,0,copy);
+  markDirty();
+  setCurrent(curIdx+1);
+}
 function deleteCurrentLevel(){
   if(levels.length<=1){ alert('Cannot delete the only level.'); return; }
   if(!confirm(`Delete level ${curIdx+1}: "${L.name}"?`)) return;
@@ -1525,6 +1526,7 @@ document.getElementById('btnPrev').onclick=()=>setCurrent(curIdx-1);
 document.getElementById('btnNext').onclick=()=>setCurrent(curIdx+1);
 document.getElementById('btnNew').onclick=addLevel;
 document.getElementById('btnNewCutscene').onclick=addCutscene;
+document.getElementById('btnDupLevel').onclick=duplicateCurrentLevel;
 document.getElementById('btnDelLevel').onclick=deleteCurrentLevel;
 document.getElementById('btnMoveUp').onclick=()=>moveCurrentLevel(-1);
 document.getElementById('btnMoveDn').onclick=()=>moveCurrentLevel(1);
@@ -1844,7 +1846,7 @@ document.getElementById('importOverlay').addEventListener('click',e=>{
 document.getElementById('btnImportLoad').onclick=()=>{
   try{
     const lv=normalizeLevel(levelFromString(document.getElementById('importText').value));
-    // Insert as a new level after the current one and switch to it
+    lv.id=genLevelId(); // always assign a fresh ID on import
     levels.splice(curIdx+1,0,lv);
     markDirty();
     setCurrent(curIdx+1);
@@ -1878,6 +1880,7 @@ updateSaveBtn();
     history.replaceState(null,'',location.pathname+location.search);
     try{
       const lv=normalizeLevel(levelFromString(m[1]));
+      lv.id=genLevelId(); // always assign a fresh ID on import
       levels.splice(curIdx+1,0,lv);
       markDirty();
       setCurrent(curIdx+1);
