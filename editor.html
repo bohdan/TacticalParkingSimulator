@@ -733,42 +733,29 @@ function drawSolutionPath(){
     pose=pts[pts.length-1];
   }
 
-  // Swept envelope: one filled polygon per segment.
+  // Swept envelope per segment = union of the car rectangle sampled along the
+  // arc. Tracing explicit outer/inner rails is fiddly (the boundary corners flip
+  // with steering sign and direction), so instead we add every sampled rectangle
+  // as a subpath and fill ONCE with nonzero winding: overlaps merge into a single
+  // solid region with no alpha banding and no internal seams. The resulting
+  // boundary is exactly the two end-cap car sides joined by the inner/outer arcs.
   // carPoly order: [0]=RR, [1]=FR, [2]=FL, [3]=RL
-  //
-  // For FORWARD moves, the front corners (FR, FL) lead. The polygon traces:
-  //   RR[0] → FR[0..n-1] (start-right cap + FR rail)
-  //   → FL[n-1..0] (end-front cap + FL backward)
-  //   → RL[0] (start-left cap) → close (RL→RR = start-rear cap)
-  //
-  // For REVERSE moves, the rear corners (RR, RL) lead. Symmetric:
-  //   FR[0] → RR[0..n-1] (start-right cap + RR rail)
-  //   → RL[n-1..0] (end-rear cap + RL backward)
-  //   → FL[0] (start-left cap) → close (FL→FR = start-front cap)
   ctx.save();
   ctx.lineJoin='round';
   for(let si=0;si<segs.length;si++){
     const seg=segs[si], hot=(solSel===si);
     const polys=seg.pts.map(p=>carPoly(p));
     const n=polys.length;
-    ctx.fillStyle=hot?'rgba(255,224,80,0.22)':'rgba(255,200,50,0.11)';
+    ctx.fillStyle=hot?'rgba(255,224,80,0.20)':'rgba(255,200,50,0.10)';
     ctx.beginPath();
-    if(!seg.rev){
-      // Forward: FR and FL are the leading corners
-      ctx.moveTo(polys[0][0].x,polys[0][0].y);              // RR[0]
-      for(let i=0;i<n;i++) ctx.lineTo(polys[i][1].x,polys[i][1].y); // → FR[0..n-1]
-      for(let i=n-1;i>=0;i--) ctx.lineTo(polys[i][2].x,polys[i][2].y); // → FL[n-1..0]
-      ctx.lineTo(polys[0][3].x,polys[0][3].y);              // → RL[0]
-    } else {
-      // Reverse: RR and RL are the leading corners
-      ctx.moveTo(polys[0][1].x,polys[0][1].y);              // FR[0]
-      for(let i=0;i<n;i++) ctx.lineTo(polys[i][0].x,polys[i][0].y); // → RR[0..n-1]
-      for(let i=n-1;i>=0;i--) ctx.lineTo(polys[i][3].x,polys[i][3].y); // → RL[n-1..0]
-      ctx.lineTo(polys[0][2].x,polys[0][2].y);              // → FL[0]
+    for(const poly of polys){
+      ctx.moveTo(poly[0].x,poly[0].y);
+      for(let k=1;k<4;k++) ctx.lineTo(poly[k].x,poly[k].y);
+      ctx.closePath();
     }
-    ctx.closePath(); ctx.fill();
+    ctx.fill();   // single fill → clean union, no banding
     // Car outline at end position — stroke only, no fill
-    ctx.strokeStyle=hot?'rgba(255,224,80,0.8)':'rgba(255,200,50,0.45)';
+    ctx.strokeStyle=hot?'rgba(255,224,80,0.85)':'rgba(255,200,50,0.5)';
     ctx.lineWidth=hot?0.07:0.05;
     const last=polys[n-1];
     ctx.beginPath();
