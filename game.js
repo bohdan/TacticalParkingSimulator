@@ -300,6 +300,9 @@ function rebuildLevelSelect() {
   }
   sel.innerHTML = html;
   sel.value = String(levelIdx);
+  const prevBtn = $('lvPrev'), nextBtn = $('lvNext');
+  if (prevBtn) prevBtn.disabled = adjacentUnlocked(-1) < 0;
+  if (nextBtn) nextBtn.disabled = adjacentUnlocked(+1) < 0;
 }
 
 function updateHUD() {
@@ -1101,6 +1104,13 @@ function nextPlayable(from, dir) {
   return -1;
 }
 
+// Nearest unlocked, non-cutscene level in `dir` from the current one (header arrows).
+function adjacentUnlocked(dir) {
+  for (let i = levelIdx + dir; i >= 0 && i < LEVELS.length; i += dir)
+    if (!isCutscene(LEVELS[i]) && isUnlocked(i)) return i;
+  return -1;
+}
+
 function setLevel(i) {
   levelIdx = (i + LEVELS.length) % LEVELS.length;
   const def = LEVELS[levelIdx];
@@ -1260,6 +1270,9 @@ $('lvSelect').addEventListener('change', e => {
   if (!isNaN(t) && isUnlocked(t)) setLevel(t);
   else rebuildLevelSelect(); // revert selection for locked picks
 });
+
+$('lvPrev').addEventListener('click', () => { const t = adjacentUnlocked(-1); if (t >= 0) setLevel(t); });
+$('lvNext').addEventListener('click', () => { const t = adjacentUnlocked(+1); if (t >= 0) setLevel(t); });
 
 $('menuBtn').addEventListener('click', () => $('menuOverlay').classList.remove('hidden'));
 $('menuClose').addEventListener('click', () => $('menuOverlay').classList.add('hidden'));
