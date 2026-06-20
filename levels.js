@@ -42,8 +42,10 @@ const LEVELS = [
     walls: [
       { x: 7, y: 5, w: 2.6, h: 7 },
     ],
-    cars: [],
-    hint: "Get around the block into the green zone.",
+    cars: [
+      { cx: 14.9, cy: 5.9, h: 0, type: "miata" },
+    ],
+    hint: "Park next to that fancy race car",
     solution: [{ steer: 20, dist: 13 }, { steer: -20, dist: 1.2 }],
   },
   {
