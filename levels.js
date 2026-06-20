@@ -458,12 +458,14 @@ const LEVELS = [
       { x: 13, y: 8.1, w: 0.6, h: 4.9 },
     ],
     cars: [
-      { cx: 16, cy: 2.7, h: Math.PI / 2 },
-      { cx: 22.4, cy: 2.8, h: Math.PI / 2 },
-      { cx: 15.8, cy: 10.5, h: 270 * Math.PI / 180 },
+      { cx: 17.1, cy: 2.7, h: Math.PI / 2 },
+      { cx: 21.7, cy: 2.7, h: Math.PI / 2 },
+      { cx: 14.9, cy: 10.5, h: 270 * Math.PI / 180 },
+      { cx: 14.9, cy: 2.7, h: Math.PI / 2 },
+      { cx: 17.1, cy: 10.5, h: -Math.PI / 2 },
     ],
     hint: "Not so straightforward",
-    solution: [{ steer: -35, dist: 2 }, { steer: 6, dist: 13 }, { steer: 35, dist: 3.5 }, { steer: -28, dist: -3.5 }, { steer: 0, dist: -3.5 }],
+    solution: [{ steer: -17.4, dist: 6 }, { steer: 16.4, dist: 13.1 }, { steer: -35, dist: -3.5 }, { steer: 2, dist: -4.35 }],
   },
   {
     id: "al9miy",
