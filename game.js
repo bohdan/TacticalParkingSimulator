@@ -196,7 +196,7 @@ function recomputeEdit() {
   const hit = !!(editSim?.hit);
   distEl.classList.toggle('hit', hit);
   $('distVal').textContent = editDist === 0 ? '—'
-    : `${editDist < 0 ? 'Rev' : 'Fwd'} ${Math.abs(editDist).toFixed(1)} m${hit ? ' ⚠' : ''}`;
+    : `${editDist < 0 ? 'Rev' : 'Fwd'} ${Math.abs(editDist).toFixed(2)} m${hit ? ' ⚠' : ''}`;
   $('addBtn').disabled = !editSim || editSim.pts.length < 2 || !!anim;
   $('addBtn').textContent = editIdx !== null ? `Update #${editIdx + 1}` : 'Add move';
 }
@@ -958,7 +958,7 @@ function setEdit(steerDeg, dist) {
   editSteer = clamp(Math.abs(steerDeg) < 0.5 ? 0 : steerDeg, -CAR.maxSteer, CAR.maxSteer);
   editDist = Math.abs(dist) < 0.15 ? 0 : dist;
   $('steerVal').textContent = editSteer === 0 ? '0°'
-    : `${Math.abs(editSteer).toFixed(1)}° ${editSteer < 0 ? 'left' : 'right'}`;
+    : `${Math.abs(editSteer).toFixed(2)}° ${editSteer < 0 ? 'left' : 'right'}`;
   recomputeEdit();
   updateHUD();
 }
@@ -987,14 +987,13 @@ function makeRelativeSlider(el, range, sensitivity, getVal, applyVal) {
   el.addEventListener('lostpointercapture', end);
 }
 
-// Steer: 0.25°/px → 140 px for full ±35° range; fine-tune with short drags.
-// CAR.maxSteer is read dynamically so it adapts when the vehicle changes.
-makeRelativeSlider(steerEl, 45, 0.25,
+// Steer: 0.15°/px — finer feel; re-drag (it recentres on release) for big swings.
+makeRelativeSlider(steerEl, 45, 0.15,
   () => editSteer,
   v  => setEdit(v, editDist));
 
-// Dist: 0.1 m/px → 250 px for ±25 m; re-drag for larger distances.
-makeRelativeSlider(distEl, 25, 0.1,
+// Dist: 0.04 m/px — 4 cm per pixel so fine positioning doesn't feel stepped.
+makeRelativeSlider(distEl, 25, 0.04,
   () => editDist,
   v  => setEdit(editSteer, v));
 
