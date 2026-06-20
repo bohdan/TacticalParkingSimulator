@@ -771,7 +771,19 @@ function drawSolutionPath(){
     ctx.fillStyle=hot?'rgba(255,224,80,0.18)':'rgba(255,200,50,0.09)';
     ctx.fill();
     ctx.strokeStyle=hot?'rgba(255,224,80,0.80)':'rgba(255,200,50,0.42)';
-    ctx.lineWidth=hot?0.06:0.04;
+    ctx.lineWidth=hot?0.03:0.015;
+    ctx.stroke();
+  }
+  // Ghost car outline at end of each turn
+  for(let si=0;si<segs.length;si++){
+    const seg=segs[si], hot=(solSel===si);
+    const poly=carPoly(seg.pts[seg.pts.length-1]);
+    ctx.beginPath();
+    ctx.moveTo(poly[0].x,poly[0].y);
+    for(let k=1;k<4;k++) ctx.lineTo(poly[k].x,poly[k].y);
+    ctx.closePath();
+    ctx.strokeStyle=hot?'rgba(69,196,255,0.90)':'rgba(69,196,255,0.30)';
+    ctx.lineWidth=hot?0.04:0.02;
     ctx.stroke();
   }
   ctx.restore();
