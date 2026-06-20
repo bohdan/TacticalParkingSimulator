@@ -572,7 +572,7 @@ const LEVELS = [
       { cx: 2.7, cy: 9.7, h: Math.PI, type: "tractor" },
     ],
     hint: "I'll just reverse out from now on!",
-    solution: [],
+    solution: [{ steer: -6.2, dist: -8.85 }, { steer: 52, dist: -3.4 }, { steer: 1, dist: -2.85 }, { steer: 52, dist: -2.65 }, { steer: -0.8, dist: -12.25 }],
   },
   {
     id: "ouhmic",
