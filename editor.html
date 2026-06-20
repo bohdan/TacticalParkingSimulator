@@ -64,6 +64,13 @@ button.nav{padding:4px 8px;font-weight:700}
 .sol-n{flex:0 0 16px;font-size:11px;color:#7080a0;text-align:right}
 .sol-row input{flex:1;min-width:0}
 .sol-u{flex:0 0 auto;font-size:10px;color:#5a6a80}
+.sol-cands{display:flex;flex-direction:column;gap:3px}
+.sol-cand{gap:6px;align-items:center;padding:2px 4px;border-radius:5px}
+.sol-cand.sol-cand-on{background:rgba(69,196,255,.12)}
+.sol-cand-d{flex:1;font-size:11px;color:#9fb3c8}
+.sol-cand-on .sol-cand-d{color:#45c4ff}
+.sol-show{flex:0 0 auto;font-size:11px;padding:1px 7px}
+.sol-cand-del{flex:0 0 auto}
 .sol-del{flex:0 0 auto;padding:2px 6px;background:#3a2030;border-color:#6e2424;color:#e09090}
 /* Phone / narrow: stack the sidebar below the canvas, fatten touch targets. */
 @media (max-width:760px){
@@ -109,7 +116,8 @@ button.nav{padding:4px 8px;font-weight:700}
   <button id="btnImport">&#8595; Import</button>
   <button id="btnExport">Export ↗</button>
   <button id="btnTry">&#9654; Try</button>
-  <button id="btnSolve" title="Run beam-search solver and save solution to this level">&#9881; Solve</button>
+  <button id="btnSolve" title="Find fewest-turn solutions (streams improvements as it runs)">&#9881; Solve</button>
+  <button id="btnStopSolve" title="Stop solving and keep the best found so far" style="display:none">&#9632; Stop</button>
   <span id="solveStatus"></span>
   <div class="sep"></div>
   <button id="btnGH">&#9881; GitHub</button>
@@ -302,6 +310,8 @@ function normalizeLevel(lv){
     ...(lv.draft ? { draft: true } : {}),
     hint:lv.hint||'',
     solution:[...(lv.solution||[])],
+    // Author-curated alternative plans; the shown one is mirrored into `solution`.
+    solutions:(lv.solutions||[]).map(s=>s.map(m=>({...m}))),
   };
 }
 
@@ -1222,6 +1232,14 @@ function updateSidebar(){
 
 // Editable list of solution moves. The ⚙ Solve button populates L.solution;
 // edits here update the schematic curve live and re-derive Par.
+// Deep-ish equality of two move plans (steer/dist within input precision).
+function sameMoves(a,b){
+  if(!a||!b||a.length!==b.length) return false;
+  for(let i=0;i<a.length;i++)
+    if(Math.abs(a[i].steer-b[i].steer)>0.05||Math.abs(a[i].dist-b[i].dist)>0.005) return false;
+  return true;
+}
+
 function updateSolutionPanel(){
   const el=document.getElementById('solPanel');
   if(!el) return;
@@ -1243,6 +1261,29 @@ function updateSolutionPanel(){
       +`<button id="solAdd">+ Add move</button>`
       +`<button id="solClear" class="danger">Clear</button>`
       +`</div>`;
+  }
+  // Saved alternative plans (from ⚙ Solve): pick which one the player sees.
+  if(L.solutions && L.solutions.length){
+    const shownIdx=L.solutions.findIndex(s=>sameMoves(s,L.solution));
+    const cands=L.solutions.map((s,i)=>{
+      const on=i===shownIdx, d=s.reduce((a,m)=>a+Math.abs(m.dist),0);
+      return `<div class="row sol-cand${on?' sol-cand-on':''}" data-ci="${i}">`
+        +`<span class="sol-n">${s.length}t</span>`
+        +`<span class="sol-cand-d">${d.toFixed(1)} m${on?' · shown':''}</span>`
+        +`<button class="sol-show" data-ci="${i}" title="Show this plan to the player"${on?' disabled':''}>${on?'✓':'Show'}</button>`
+        +`<button class="sol-cand-del" data-ci="${i}" title="Remove this option">✕</button>`
+        +`</div>`;
+    }).join('');
+    el.insertAdjacentHTML('afterbegin',
+      `<p class="sel-hint" style="margin:0 0 4px">${L.solutions.length} option${L.solutions.length!==1?'s':''} — fewest turns first:</p>`
+      +`<div class="sol-cands">${cands}</div>`
+      +`<div style="border-top:1px solid #1f2636;margin:8px 0 6px"></div>`);
+    el.querySelectorAll('.sol-show').forEach(b=>b.addEventListener('click',()=>{
+      L.solution=L.solutions[+b.dataset.ci].map(m=>({...m})); solSel=null; markDirty(); updateSolutionPanel(); render();
+    }));
+    el.querySelectorAll('.sol-cand-del').forEach(b=>b.addEventListener('click',()=>{
+      L.solutions.splice(+b.dataset.ci,1); markDirty(); updateSolutionPanel(); render();
+    }));
   }
   // wire row inputs
   el.querySelectorAll('.sol-row').forEach(rowEl=>{
@@ -1718,11 +1759,16 @@ function buildExport(lv=L){
   if(l.draft) lines.push(`    draft: true,`);
   if(l.par != null) lines.push(`    par: ${l.par},`);
   lines.push(`    hint: ${JSON.stringify(l.hint||'')},`);
+  const fmtMoves=s=>'['+s.map(m=>`{ steer: ${m.steer}, dist: ${m.dist} }`).join(', ')+']';
   if(l.solution&&l.solution.length){
-    const sol=l.solution.map(m=>`{ steer: ${m.steer}, dist: ${m.dist} }`).join(', ');
-    lines.push(`    solution: [${sol}],`);
+    lines.push(`    solution: ${fmtMoves(l.solution)},`);
   } else {
     lines.push(`    solution: [],`);
+  }
+  if(l.solutions&&l.solutions.length){
+    lines.push(`    solutions: [`);
+    for(const s of l.solutions) lines.push(`      ${fmtMoves(s)},`);
+    lines.push(`    ],`);
   }
   lines.push(`  },`);
   return lines.join('\n');
@@ -1856,33 +1902,60 @@ document.getElementById('btnTry').onclick=()=>{
 };
 
 // ── Solver ────────────────────────────────────────────────────────────────────
+// Anytime min-turn solve: streams improving plans, keeps the best at each turn
+// count as a candidate, and mirrors the fewest-turn plan into L.solution (shown).
+let solveCancel = false;
+const planDist = s => s.reduce((a, m) => a + Math.abs(m.dist), 0);
+
+document.getElementById('btnStopSolve').onclick = () => { solveCancel = true; };
+
 document.getElementById('btnSolve').onclick = async () => {
   if (!L || isCutscene(L)) { alert('Select a regular level first.'); return; }
   const btn = document.getElementById('btnSolve');
+  const stopBtn = document.getElementById('btnStopSolve');
   const status = document.getElementById('solveStatus');
+  solveCancel = false;
   btn.disabled = true;
+  stopBtn.style.display = '';
   status.style.display = 'inline';
   status.textContent = '⚙ Starting…';
+  // turns -> best (lowest-distance) plan found at that turn count
+  const byTurns = new Map();
+  const applyBest = () => {
+    let ks = [...byTurns.keys()].sort((a, b) => a - b);
+    if (ks.length) ks = ks.filter(k => k <= ks[0] + 2);   // K* .. K*+2 options only
+    L.solutions = ks.map(k => byTurns.get(k).map(m => ({ ...m })));
+    L.solution = L.solutions.length ? L.solutions[0].map(m => ({ ...m })) : (L.solution || []);
+  };
   try {
-    const solution = await solveParkingLevel(L, { weight: 1.5, maxExpand: 3000000, timeMs: 20000 }, ev => {
-      if (ev.type === 'solution')
-        status.textContent = `⚙ Found ${ev.moves.length}-move solution…`;
-      else
-        status.textContent = `⚙ Searching… (${ev.depth} expanded, ${ev.beamSize} open)`;
+    const solution = await solveParkingLevel(L, { timeMs: 60000, idleMs: 6000, shouldStop: () => solveCancel }, ev => {
+      if (ev.type === 'solution') {
+        const cur = byTurns.get(ev.turns);
+        if (!cur || planDist(ev.moves) < planDist(cur) - 1e-9) byTurns.set(ev.turns, ev.moves);
+        applyBest();
+        dirty = true;
+        const best = Math.min(...byTurns.keys());
+        status.textContent = `⚙ ${best} turn${best !== 1 ? 's' : ''} · ${byTurns.size} option${byTurns.size !== 1 ? 's' : ''}…`;
+        updateSidebar();
+        render();
+      } else if (ev.type === 'depth') {
+        if (!byTurns.size) status.textContent = `⚙ Searching… (${ev.depth} expanded)`;
+      }
     });
-    if (solution) {
-      L.solution = solution;
-      dirty = true;
-      status.textContent = `✓ ${solution.length} move${solution.length !== 1 ? 's' : ''} — save to persist`;
-      updateSidebar();
-      render();
+    applyBest();
+    if (byTurns.size) {
+      const best = Math.min(...byTurns.keys());
+      status.textContent = `✓ ${best} turn${best !== 1 ? 's' : ''}, ${byTurns.size} option${byTurns.size !== 1 ? 's' : ''}${solveCancel ? ' (stopped)' : ''} — save to persist`;
     } else {
-      status.textContent = '✗ No solution found';
+      status.textContent = solveCancel ? '■ Stopped — no solution yet' : '✗ No solution found';
     }
+    updateSidebar();
+    render();
   } catch (err) {
     status.textContent = '✗ Error: ' + err.message;
   } finally {
     btn.disabled = false;
+    stopBtn.style.display = 'none';
   }
 };
 
