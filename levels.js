@@ -604,6 +604,22 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 12.5 }, { steer: 52, dist: 2.65 }, { steer: 0.4, dist: 3.25 }, { steer: 52, dist: 2.5 }, { steer: 52, dist: 1.7 }, { steer: -26.6, dist: 4.15 }, { steer: 1.2, dist: 4.2 }],
   },
   {
+    id: "xiiivs",
+    name: "Back to the Barn Backwards", tier: "Hard", mode: "moves", w: 18, h: 11,
+    vehicle: "tractor",
+    start: { x: 1.1, y: 1.6, h: 0 },
+    goal: { cx: 2.8, cy: 5.7, w: 4.3, h: 3.7, heads: [0], tol: 45 },
+    walls: [
+      { x: 0, y: 3.2, w: 14.1, h: 0.4 },
+      { x: 0, y: 7.9, w: 7.4, h: 0.4 },
+      { x: 0, y: 3.6, w: 0.5, h: 4.3 },
+      { x: 13.5, y: 3.6, w: 0.6, h: 2.8 },
+    ],
+    cars: [],
+    hint: "Swing the tractor into the barn.",
+    solution: [{ steer: 0, dist: 12.35 }, { steer: 47.2, dist: 2.65 }, { steer: 20, dist: 3.6 }, { steer: 52, dist: 2.35 }, { steer: -31, dist: 2.8 }, { steer: 31.4, dist: -3.65 }, { steer: -26.6, dist: 3.1 }, { steer: 3, dist: -4.35 }, { steer: -0.2, dist: 4.85 }, { steer: 52, dist: -0.65 }, { steer: 3.2, dist: -6.05 }],
+  },
+  {
     id: "ph2nks",
     name: "Wrong Way", tier: "Hard", mode: "moves", w: 18, h: 11,
     vehicle: "tractor",
