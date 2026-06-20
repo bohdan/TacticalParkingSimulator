@@ -81,7 +81,7 @@ const LEVELS = [
       { x: 10, y: -1.5, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     hint: "So much space... you can do it!",
-    solution: [{ steer: 10.1905, dist: 5.5619 }, { steer: -8.5238, dist: 6.6286 }],
+    solution: [{ steer: 10.2, dist: 5.55 }, { steer: -8.6, dist: 6.65 }],
   },
   {
     id: "d9lm3k",

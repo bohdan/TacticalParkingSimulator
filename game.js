@@ -954,11 +954,19 @@ const steerEl = $('steer'), distEl = $('dist');
 steerEl.style.setProperty('--zero', '50%');
 distEl.style.setProperty('--zero', '50%');
 
+// Single input grid: every move value (from canvas drag OR sliders) is snapped
+// here, so the on-screen number IS the stored value — fully reproducible, no
+// hidden precision. STEER_Q/DIST_Q match the slider step and the display digits.
+const STEER_Q = 0.2;  // degrees
+const DIST_Q  = 0.05; // metres
+const snapTo = (v, q) => Math.round(v / q) * q;
+
 function setEdit(steerDeg, dist) {
-  editSteer = clamp(Math.abs(steerDeg) < 0.5 ? 0 : steerDeg, -CAR.maxSteer, CAR.maxSteer);
-  editDist = Math.abs(dist) < 0.15 ? 0 : dist;
+  const s = Math.abs(steerDeg) < 0.1 ? 0 : snapTo(steerDeg, STEER_Q);
+  editSteer = +clamp(s, -CAR.maxSteer, CAR.maxSteer).toFixed(1);
+  editDist  = Math.abs(dist) < DIST_Q / 2 ? 0 : +snapTo(dist, DIST_Q).toFixed(2);
   $('steerVal').textContent = editSteer === 0 ? '0°'
-    : `${Math.abs(editSteer).toFixed(2)}° ${editSteer < 0 ? 'left' : 'right'}`;
+    : `${Math.abs(editSteer).toFixed(1)}° ${editSteer < 0 ? 'left' : 'right'}`;
   recomputeEdit();
   updateHUD();
 }
@@ -987,13 +995,13 @@ function makeRelativeSlider(el, range, sensitivity, getVal, applyVal) {
   el.addEventListener('lostpointercapture', end);
 }
 
-// Steer: 0.15°/px — finer feel; re-drag (it recentres on release) for big swings.
-makeRelativeSlider(steerEl, 45, 0.15,
+// Slider step == the input grid: one pixel = one grid step, so the slider can
+// land on every value the readout shows (re-drag, it recentres, for big swings).
+makeRelativeSlider(steerEl, 45, STEER_Q,
   () => editSteer,
   v  => setEdit(v, editDist));
 
-// Dist: 0.04 m/px — 4 cm per pixel so fine positioning doesn't feel stepped.
-makeRelativeSlider(distEl, 25, 0.04,
+makeRelativeSlider(distEl, 25, DIST_Q,
   () => editDist,
   v  => setEdit(editSteer, v));
 
