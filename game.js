@@ -1405,9 +1405,9 @@ async function lbPost(levelIdx, player, stars, st, solutionStr) {
 
 async function lbGet(levelIdx) {
   const p = new URLSearchParams({
-    select: 'player,moves,dist,time_s,solution,submitted_at',
+    select: 'player,moves,dist,solution,submitted_at',
     level_id: `eq.${levelKey(levelIdx)}`,
-    order: 'moves.asc,time_s.asc', limit: '50',
+    order: 'moves.asc,dist.asc', limit: '100',
   });
   const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
     headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
@@ -1416,11 +1416,66 @@ async function lbGet(levelIdx) {
   return r.json();
 }
 
-async function openLeaderboard(idx) {
-  const par = LEVELS[idx].par ?? (LEVELS[idx].solution ? LEVELS[idx].solution.length : null);
-  $('lbTitle').textContent = `${LEVELS[idx].name}${par != null ? ` · Par ${par}` : ''}`;
+async function lbGetAll() {
+  const p = new URLSearchParams({
+    select: 'player,level_id,level_name,moves,dist,solution,submitted_at',
+    order: 'moves.asc,dist.asc', limit: '500',
+  });
+  const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
+    headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function lbPopulateSel(selIdx) {
+  const sel = $('lbLevelSel');
+  sel.innerHTML = '<option value="all">All levels</option>' +
+    LEVELS.flatMap((l, i) =>
+      l.draft || l.type === 'cutscene' ? [] :
+      [`<option value="${i}">${escHtml(l.name)}</option>`]
+    ).join('');
+  sel.value = selIdx == null ? 'all' : String(selIdx);
+}
+
+async function renderLbAll() {
+  $('lbTable').innerHTML = '<tr><td colspan="5" class="lb-empty">Loading…</td></tr>';
+  try {
+    const rows = await lbGetAll();
+    // Deduplicate: for each (player, level_id) keep the best row (already sorted best-first)
+    const seen = new Map();
+    for (const r of rows) {
+      const key = r.player + '\0' + (r.level_id ?? '');
+      if (!seen.has(key)) seen.set(key, r);
+    }
+    const sorted = [...seen.values()].sort((a, b) => a.moves - b.moves || (a.dist ?? 0) - (b.dist ?? 0));
+    const top = sorted.slice(0, 10);
+    if (!top.length) {
+      $('lbTable').innerHTML = '<tr><td colspan="5" class="lb-empty">No entries yet.</td></tr>';
+      return;
+    }
+    $('lbTable').innerHTML =
+      `<tr class="lb-head"><td></td><td class="lb-name">Player</td><td class="lb-name">Level</td>` +
+      `<td class="lb-metric">Moves</td><td class="lb-metric">Dist</td><td></td></tr>` +
+      top.map((r, i) => {
+        const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
+        const playBtn = r.solution
+          ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button></td>`
+          : '<td></td>';
+        const when = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '';
+        const dist = r.dist != null ? r.dist.toFixed(0) + 'm' : '—';
+        return `<tr class="${cls}" title="${when}"><td class="lb-rank">${i+1}</td>` +
+          `<td class="lb-name">${escHtml(r.player)}</td>` +
+          `<td class="lb-name" style="font-size:11px;opacity:.75">${escHtml(r.level_name ?? '')}</td>` +
+          `<td class="lb-metric">${r.moves}</td><td class="lb-metric">${dist}</td>${playBtn}</tr>`;
+      }).join('');
+  } catch (e) {
+    $('lbTable').innerHTML = `<tr><td colspan="5" class="lb-empty" style="color:#ff7070">Error: ${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function renderLbLevel(idx) {
   $('lbTable').innerHTML = '<tr><td colspan="6" class="lb-empty">Loading…</td></tr>';
-  $('lbOverlay').classList.remove('hidden');
   try {
     const rows = await lbGet(idx);
     const seen = new Set();
@@ -1431,27 +1486,52 @@ async function openLeaderboard(idx) {
       $('lbTable').innerHTML = '<tr><td colspan="6" class="lb-empty">No entries yet — be first!</td></tr>';
       return;
     }
-    // Stars are derived from moves vs the level's par (no longer stored).
     const par = LEVELS[idx].par ?? (LEVELS[idx].solution ? LEVELS[idx].solution.length : 4);
     $('lbTable').innerHTML =
       `<tr class="lb-head"><td></td><td class="lb-name">Player</td><td class="lb-stars">★</td>` +
-      `<td class="lb-metric">Moves</td><td class="lb-metric">Time</td><td></td></tr>` +
+      `<td class="lb-metric">Moves</td><td class="lb-metric">Dist</td><td></td></tr>` +
       top.map((r, i) => {
-      const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
-      const sc = starsForMoves(r.moves, par);
-      const stars = '★'.repeat(sc) + `<span class="lb-dim">★</span>`.repeat(3 - sc);
-      const playBtn = r.solution
-        ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button></td>`
-        : '<td></td>';
-      const when = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '';
-      return `<tr class="${cls}" title="${when}"><td class="lb-rank">${i+1}</td><td class="lb-name">${escHtml(r.player)}</td>` +
-        `<td class="lb-stars">${stars}</td><td class="lb-metric">${r.moves}</td>` +
-        `<td class="lb-metric">${r.time_s.toFixed(1)}s</td>${playBtn}</tr>`;
-    }).join('');
+        const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
+        const sc = starsForMoves(r.moves, par);
+        const stars = '★'.repeat(sc) + `<span class="lb-dim">★</span>`.repeat(3 - sc);
+        const playBtn = r.solution
+          ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button></td>`
+          : '<td></td>';
+        const when = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '';
+        const dist = r.dist != null ? r.dist.toFixed(0) + 'm' : '—';
+        return `<tr class="${cls}" title="${when}"><td class="lb-rank">${i+1}</td>` +
+          `<td class="lb-name">${escHtml(r.player)}</td>` +
+          `<td class="lb-stars">${stars}</td><td class="lb-metric">${r.moves}</td>` +
+          `<td class="lb-metric">${dist}</td>${playBtn}</tr>`;
+      }).join('');
   } catch (e) {
     $('lbTable').innerHTML = `<tr><td colspan="6" class="lb-empty" style="color:#ff7070">Error: ${escHtml(e.message)}</td></tr>`;
   }
 }
+
+async function openLeaderboard(idx) {
+  $('lbTitle').textContent = 'Leaderboard';
+  lbPopulateSel(idx);
+  $('lbOverlay').classList.remove('hidden');
+  if (idx == null) {
+    await renderLbAll();
+  } else {
+    await renderLbLevel(idx);
+  }
+}
+
+$('lbLevelSel').addEventListener('change', async () => {
+  const v = $('lbLevelSel').value;
+  if (v === 'all') {
+    $('lbTitle').textContent = 'Leaderboard';
+    await renderLbAll();
+  } else {
+    const idx = parseInt(v, 10);
+    const par = LEVELS[idx].par ?? (LEVELS[idx].solution ? LEVELS[idx].solution.length : null);
+    $('lbTitle').textContent = `${LEVELS[idx].name}${par != null ? ` · Par ${par}` : ''}`;
+    await renderLbLevel(idx);
+  }
+});
 
 // Load a LB entry's solution when its play button is clicked
 $('lbTable').addEventListener('click', e => {
