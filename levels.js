@@ -519,6 +519,6 @@ const LEVELS = [
       { cx: 12, cy: 2.5, h: Math.PI },
     ],
     hint: "Only a Miata fits — use its 40° steering lock to squeeze in.",
-    solution: [{ steer: 0, dist: 13 }, { steer: -14, dist: -0.35 }, { steer: 14, dist: -6 }, { steer: -40, dist: -1.4 }, { steer: 25, dist: 0.7 }],
+    solution: [{ steer: 0, dist: 10.25 }, { steer: 35, dist: -2.35 }, { steer: -21.8, dist: -2.95 }, { steer: 40, dist: 0.55 }],
   },
 ];
