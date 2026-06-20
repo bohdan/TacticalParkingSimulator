@@ -81,7 +81,6 @@ button.nav {
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
-#moveList:empty { display: none; }
 .mv-chip {
   flex: 0 0 auto;
   display: flex; flex-direction: column; align-items: center; justify-content: center;

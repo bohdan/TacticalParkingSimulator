@@ -317,7 +317,8 @@ function renderMoveList() {
   if (!el) return;
   const composing = editIdx === null;
   const pending = composing && Math.abs(editDist) >= 0.01;
-  if (!moves.length && !pending) { el.innerHTML = ''; return; }
+  // Always render (at least the ＋ chip) so the strip keeps its height and the
+  // panel never jumps when the first move appears.
   let html = '';
   for (let i = 0; i < moves.length; i++) {
     const active = editIdx === i;          // show the live edit on the active chip
