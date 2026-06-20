@@ -369,6 +369,26 @@ const LEVELS = [
     solution: [{ steer: 0, dist: 13 }, { steer: 13, dist: -2.5 }, { steer: 35, dist: -1.4 }, { steer: -6, dist: -2.5 }, { steer: -35, dist: -1.4 }, { steer: 22, dist: 0.7 }],
   },
   {
+    id: "nsagb3",
+    name: "Very Narrow", tier: "Expert", mode: "moves", w: 24, h: 13,
+    start: { x: 2.6, y: 7.3, h: 0 },
+    goal: { cx: 10.1, cy: 9.4, w: 5.1, h: 2, heads: [0], tol: 45 },
+    walls: [
+      { x: 0, y: 10.5, w: 24, h: 2.5, kind: "curb" },
+      { x: 0, y: 0, w: 23.9, h: 3.9, kind: "curb" },
+    ],
+    cars: [
+      { cx: 4.8, cy: 9.4, h: 0 },
+      { cx: 15.4, cy: 9.4, h: 0 },
+      { cx: 9, cy: 5.1, h: 0 },
+      { cx: 20.2, cy: 9.4, h: 0 },
+      { cx: 13.9, cy: 5.1, h: 0 },
+      { cx: 18.7, cy: 5.1, h: 0 },
+    ],
+    hint: "Need to nail it",
+    solution: [{ steer: 0, dist: 13 }, { steer: -6, dist: 0.7 }, { steer: 6, dist: -4 }, { steer: 6, dist: 1.4 }, { steer: 13, dist: -4 }, { steer: -13, dist: -0.7 }, { steer: -35, dist: -1.4 }, { steer: 22, dist: 0.7 }, { steer: -22, dist: 0.7 }, { steer: 13, dist: -0.35 }, { steer: -35, dist: -0.35 }],
+  },
+  {
     id: "r0nmos",
     name: "Boxed In", tier: "Hard", mode: "moves", w: 22, h: 13,
     start: { x: 9.5, y: 9.4, h: 0 },
