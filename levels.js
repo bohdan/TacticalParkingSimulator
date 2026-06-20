@@ -530,7 +530,6 @@ const LEVELS = [
   },
   {
     id: "q8angu",
-    draft: true,
     type: "cutscene", name: "Cutscene Tractor",
     message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "SUSPECT DR M. T. DEVELOPING", "BIOWEAPONIZED CHICKENS", "", "INFILTRATE NEUTRALIZE", "", "P.S. CONGRATULATION ON YOUR NEW", "LAMBORGHINI"],
   },
@@ -547,7 +546,6 @@ const LEVELS = [
       { x: 13.5, y: 3.6, w: 0.6, h: 2.8 },
     ],
     cars: [],
-    draft: true,
     hint: "Swing the tractor into the barn.",
     solution: [{ steer: 0, dist: 12.5 }, { steer: 52, dist: 2.65 }, { steer: 0.4, dist: 3.25 }, { steer: 52, dist: 2.5 }, { steer: 52, dist: 1.7 }, { steer: -26.6, dist: 4.15 }, { steer: 1.2, dist: 4.2 }],
   },
@@ -561,7 +559,6 @@ const LEVELS = [
       { x: 8.2, y: 3.4, w: 1.8, h: 4.2 },
     ],
     cars: [],
-    draft: true,
     hint: "Steer the tractor around the hay bale.",
     solution: [{ steer: 19, dist: 0.7 }, { steer: 52, dist: 1.4 }, { steer: -19, dist: 13 }, { steer: -52, dist: -1.9 }],
   },
