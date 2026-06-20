@@ -308,7 +308,7 @@ const LEVELS = [
       { cx: 30, cy: 19, h: 0 },
     ],
     hint: "Thread between the pillars before easing the 12 m bus in.",
-    solution: [{ steer: 0, dist: 13 }, { steer: -28, dist: 6 }, { steer: 45, dist: -4 }, { steer: -16, dist: 6 }, { steer: -45, dist: 0.7 }],
+    solution: [{ steer: -4.4, dist: 23.81 }, { steer: 45, dist: -6.85 }, { steer: -18, dist: 6.3 }],
   },
   {
     type: "cutscene", name: "Cutscene Fineland",
