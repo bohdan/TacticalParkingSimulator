@@ -35,6 +35,10 @@ const LEVELS = [
     solution: [{ steer: 0, dist: -9 }],
   },
   {
+    type: "cutscene", name: "Cutscene - Corrections",
+    message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "EXPERIMENTAL TACTICAL PARKING", "QUANTUM COMPUTER ENGAGED", "", "RETROACTIVE CORRECTION ENGAGED", "", "SEE TRAINING MANUAL FOR DETAILS"],
+  },
+  {
     id: "p3qylc",
     name: "First Steps", tier: "Easy", mode: "moves", w: 18, h: 12,
     start: { x: 2.5, y: 9.8, h: -Math.PI / 2 },
@@ -43,7 +47,9 @@ const LEVELS = [
       { x: 7, y: 5, w: 2.6, h: 7 },
     ],
     cars: [
-      { cx: 14.9, cy: 5.9, h: 0, type: "miata" },
+      { cx: 14.6, cy: 6.4, h: 0, type: "miata" },
+      { cx: 14.7, cy: 8.6, h: 0 },
+      { cx: 14.7, cy: 10.8, h: 0 },
     ],
     hint: "Park next to that fancy race car",
     solution: [{ steer: 20, dist: 13 }, { steer: -20, dist: 1.2 }],
