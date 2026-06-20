@@ -362,7 +362,6 @@ const LEVELS = [
     traffic: [
       { x: 2.3, y: 19.7, h: 0, speed: 3, loop: 30, offset: 20 },
     ],
-    draft: true,
     hint: "I was holding it wrong!",
     solution: [{ steer: -20.200000000000003, dist: 11.4 }, { steer: 31.400000000000002, dist: 11.4 }, { steer: -45, dist: -8.6 }, { steer: 45, dist: -1.2 }],
     solutions: [
