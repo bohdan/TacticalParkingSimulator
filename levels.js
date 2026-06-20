@@ -349,7 +349,7 @@ const LEVELS = [
       { cx: 9.5, cy: 2.55, h: Math.PI },
     ],
     hint: "Centimetre gaps — a tiny nudge back opens just enough room.",
-    solution: [],
+    solution: [{ steer: 35, dist: -0.42 }, { steer: -35, dist: 0.96 }, { steer: 35, dist: -0.3 }, { steer: -1.4, dist: 6.4 }],
   },
   {
     id: "m5zrvk",
