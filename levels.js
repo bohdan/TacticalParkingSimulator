@@ -617,7 +617,7 @@ const LEVELS = [
     ],
     cars: [],
     hint: "Swing the tractor into the barn.",
-    solution: [{ steer: 0, dist: 12.35 }, { steer: 47.2, dist: 2.65 }, { steer: 20, dist: 3.6 }, { steer: 52, dist: 2.35 }, { steer: -31, dist: 2.8 }, { steer: 31.4, dist: -3.65 }, { steer: -26.6, dist: 3.1 }, { steer: 3, dist: -4.35 }, { steer: -0.2, dist: 4.85 }, { steer: 52, dist: -0.65 }, { steer: 3.2, dist: -6.05 }],
+    solution: [{ steer: 0, dist: 12.35 }, { steer: 47.2, dist: 2.65 }, { steer: 20, dist: 3.6 }, { steer: 52, dist: 2.35 }, { steer: -31, dist: 2.8 }, { steer: 31.4, dist: -3.65 }, { steer: -26.6, dist: 3.1 }, { steer: 3, dist: -4.35 }, { steer: -0.2, dist: 4.85 }, { steer: 52, dist: -0.65 }, { steer: 3.2, dist: -12.1 }],
   },
   {
     id: "ph2nks",
