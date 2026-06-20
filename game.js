@@ -1100,14 +1100,8 @@ $('moveList').addEventListener('click', e => {
   if (anim) return;
   const chip = e.target.closest('.mv-chip');
   if (!chip) return;
-  if (chip.dataset.i === 'new') {
-    commitMove();          // bank the in-progress move and start a fresh one
-    return;
-  }
-  const i = +chip.dataset.i;
-  if (editIdx === i) { commitMove(); return; } // tapping the active move banks it
-  commitMove();            // bank anything pending, then edit the tapped move
-  selectMove(i);
+  if (chip.dataset.i === 'new') commitMove(); // bank the in-progress move, start fresh
+  else selectMove(+chip.dataset.i);           // selectMove banks any pending edit
 });
 
 $('resetBtn').addEventListener('click', () => {
@@ -1218,10 +1212,14 @@ $('ovNext').addEventListener('click', () => {
 
 function selectMove(i) {
   if (anim) return;
-  if (editIdx === i) { editIdx = null; setEdit(0, 0); return; }
+  // Tapping the move you're already on banks it and closes the edit.
+  if (editIdx === i) { commitMove(); return; }
+  // Switching to another move banks whatever's in progress first (a new move
+  // or an edit), so nothing needs an explicit Add/Update. Appends never shift
+  // earlier indices, so `i` stays valid afterwards.
+  commitMove();
   editIdx = i;
-  const m = moves[i];
-  setEdit(deg(m.steer), m.dist);
+  setEdit(deg(moves[i].steer), moves[i].dist);
 }
 
 // ── Leaderboard functions ────────────────────────────────────────────────────
