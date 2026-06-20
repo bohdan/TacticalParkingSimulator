@@ -678,7 +678,7 @@ function render(){
     const obstVeh=c.type||'default';
     // When player and obstacle are both tractors, force gray so they're distinguishable
     const sameAsTractor=obstVeh==='tractor'&&(L.vehicle||'default')==='tractor';
-    const obstFill=isSel?'#8a94a3':(sameAsTractor?'#737d8c':undefined);
+    const obstFill=isSel?'#8a94a3':((obstVeh==='tractor'&&!sameAsTractor)?undefined:'#737d8c');
     drawCar(c.cx,c.cy,c.h,sp,{fill:obstFill,stroke:'#525a66',detail:true,wheels:true,vehicle:obstVeh});
     if(isSel){
       drawSelBox(c.cx,c.cy,sp.len,sp.wid,c.h);
@@ -733,35 +733,45 @@ function drawSolutionPath(){
     pose=pts[pts.length-1];
   }
 
-  // Swept envelope per segment = union of the car rectangle sampled along the
-  // arc. Tracing explicit outer/inner rails is fiddly (the boundary corners flip
-  // with steering sign and direction), so instead we add every sampled rectangle
-  // as a subpath and fill ONCE with nonzero winding: overlaps merge into a single
-  // solid region with no alpha banding and no internal seams. The resulting
-  // boundary is exactly the two end-cap car sides joined by the inner/outer arcs.
+  // Swept envelope per segment as a 6-edge closed polygon:
+  //   trailing edge (car end at start) → outer side at start → outer corner arc
+  //   → leading edge (car end at end) → inner side at end → inner corner arc back.
   // carPoly order: [0]=RR, [1]=FR, [2]=FL, [3]=RL
+  // Outer/inner corner roles depend on travel direction and steer side:
+  //   fwd+right: oT=RL(3) iT=RR(0) oL=FL(2) iL=FR(1)
+  //   fwd+left:  oT=RR(0) iT=RL(3) oL=FR(1) iL=FL(2)
+  //   bwd+right: oT=FL(2) iT=FR(1) oL=RL(3) iL=RR(0)
+  //   bwd+left:  oT=FR(1) iT=FL(2) oL=RR(0) iL=RL(3)
   ctx.save();
   ctx.lineJoin='round';
   for(let si=0;si<segs.length;si++){
     const seg=segs[si], hot=(solSel===si);
     const polys=seg.pts.map(p=>carPoly(p));
     const n=polys.length;
-    ctx.fillStyle=hot?'rgba(255,224,80,0.20)':'rgba(255,200,50,0.10)';
+    // Determine steer side from heading change across first step.
+    // dh>0 (clockwise) = right turn when fwd; left turn when rev.
+    let dh=seg.pts.length>1 ? normAng(seg.pts[1].h-seg.pts[0].h) : 0;
+    const steerRight=Math.abs(dh)<1e-5 ? true : (dh>0)!==seg.rev;
+    // oL/iL = outer/inner corner index at the Leading end (front if fwd, rear if rev)
+    // oT/iT = outer/inner corner index at the Trailing end
+    let oL,iL,oT,iT;
+    if(!seg.rev){ if(steerRight){oL=2;iL=1;oT=3;iT=0;}else{oL=1;iL=2;oT=0;iT=3;} }
+    else        { if(steerRight){oL=3;iL=0;oT=2;iT=1;}else{oL=0;iL=3;oT=1;iT=2;} }
+    const p0=polys[0], pN=polys[n-1];
     ctx.beginPath();
-    for(const poly of polys){
-      ctx.moveTo(poly[0].x,poly[0].y);
-      for(let k=1;k<4;k++) ctx.lineTo(poly[k].x,poly[k].y);
-      ctx.closePath();
-    }
-    ctx.fill();   // single fill → clean union, no banding
-    // Car outline at end position — stroke only, no fill
-    ctx.strokeStyle=hot?'rgba(255,224,80,0.85)':'rgba(255,200,50,0.5)';
-    ctx.lineWidth=hot?0.07:0.05;
-    const last=polys[n-1];
-    ctx.beginPath();
-    ctx.moveTo(last[0].x,last[0].y);
-    for(let k=1;k<4;k++) ctx.lineTo(last[k].x,last[k].y);
-    ctx.closePath(); ctx.stroke();
+    ctx.moveTo(p0[iT].x,p0[iT].y);          // inner-trailing at start
+    ctx.lineTo(p0[oT].x,p0[oT].y);          // trailing edge (straight)
+    ctx.lineTo(p0[oL].x,p0[oL].y);          // outer side at start (straight)
+    for(let i=1;i<n;i++) ctx.lineTo(polys[i][oL].x,polys[i][oL].y); // outer arc
+    ctx.lineTo(pN[iL].x,pN[iL].y);          // leading edge at end (straight)
+    ctx.lineTo(pN[iT].x,pN[iT].y);          // inner side at end (straight)
+    for(let i=n-2;i>=0;i--) ctx.lineTo(polys[i][iT].x,polys[i][iT].y); // inner arc back
+    ctx.closePath();
+    ctx.fillStyle=hot?'rgba(255,224,80,0.18)':'rgba(255,200,50,0.09)';
+    ctx.fill();
+    ctx.strokeStyle=hot?'rgba(255,224,80,0.80)':'rgba(255,200,50,0.42)';
+    ctx.lineWidth=hot?0.06:0.04;
+    ctx.stroke();
   }
   ctx.restore();
 

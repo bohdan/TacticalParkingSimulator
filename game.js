@@ -1463,7 +1463,7 @@ async function renderLbAll(allRows, autoSelectIdx) {
     if (!bestByLevel.has(key)) bestByLevel.set(key, r);
   }
   const playable = LEVELS.flatMap((l, i) =>
-    (!l.draft && l.type !== 'cutscene') ? [{ l, i }] : []);
+    (!l.draft && l.type !== 'cutscene' && l.tier !== 'Tutorial') ? [{ l, i }] : []);
   $('lbTable').innerHTML =
     `<tr class="lb-head"><td class="lb-name">Level</td><td class="lb-name">Record</td>` +
     `<td class="lb-metric">Moves</td><td class="lb-metric">Dist</td><td></td></tr>` +
