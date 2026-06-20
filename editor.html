@@ -139,22 +139,8 @@ button.nav{padding:4px 8px;font-weight:700}
     </div>
     <div class="row"><label>Hint</label><input id="sHint" type="text" placeholder="player hint"></div>
 
-    <h2>Start  <span style="font-size:10px;color:#3d8fbf">(rear axle)</span></h2>
-    <div class="row"><label>x</label><input id="stX" type="number" step="0.05"></div>
-    <div class="row"><label>y</label><input id="stY" type="number" step="0.05"></div>
-    <div class="row"><label>h °</label><input id="stH" type="number" step="5"></div>
-
-    <h2>Goal</h2>
-    <div class="row"><label>cx</label><input id="gCx" type="number" step="0.1"></div>
-    <div class="row"><label>cy</label><input id="gCy" type="number" step="0.1"></div>
-    <div class="row"><label>w</label><input id="gW" type="number" step="0.1" min="0.5"></div>
-    <div class="row"><label>h</label><input id="gH" type="number" step="0.1" min="0.5"></div>
-    <div class="row"><label>ang °</label><input id="gAng" type="number" step="5" placeholder="0"></div>
-    <div class="row"><label>heads</label><input id="gHeads" type="text" placeholder="0  or  0,180"></div>
-    <div class="row"><label>tol °</label><input id="gTol" type="number" step="1" min="1"></div>
-
     <h2>Selected</h2>
-    <div id="selPanel"><p class="sel-hint">Click an object on the canvas.<br>Delete key removes it.</p></div>
+    <div id="selPanel"><p class="sel-hint">Click an object on the canvas — including the <b>start car</b> and <b>goal box</b> — to edit it here.<br>Delete key removes it.</p></div>
 
     <h2>Solution <span style="font-size:10px;color:#3d8fbf">(⚙ Solve to fill)</span></h2>
     <div id="solPanel"></div>
@@ -1061,11 +1047,6 @@ function updateSidebar(){
   val('sW',L.w); val('sH',L.h);
   val('sPar', L.par != null ? L.par : '');
   val('sHint',L.hint||'');
-  val('stX',fmt(L.start.x)); val('stY',fmt(L.start.y)); val('stH',fmt(deg(L.start.h),1));
-  val('gCx',fmt(L.goal.cx)); val('gCy',fmt(L.goal.cy));
-  val('gW',fmt(L.goal.w));   val('gH',fmt(L.goal.h));
-  val('gAng',fmt(deg(L.goal.ang||0),1));
-  val('gHeads',(L.goal.heads||[0]).join(', ')); val('gTol',L.goal.tol);
   updateSelPanel();
   updateSolutionPanel();
 }
@@ -1124,11 +1105,43 @@ function row(label,input){ return `<div class="row"><label>${label}</label>${inp
 
 function updateSelPanel(){
   const panel=document.getElementById('selPanel');
-  if(!sel){ panel.innerHTML='<p class="sel-hint">Click an object.<br>Del removes it.</p>'; return; }
-  if(sel.kind==='start'||sel.kind==='goal'){
-    panel.innerHTML='<p class="sel-hint">Edit in the fields above.</p>'; return;
-  }
+  if(!sel){ panel.innerHTML='<p class="sel-hint">Click an object — including the start car and goal box — to edit it here.<br>Del removes walls / cars / traffic.</p>'; return; }
   let html='';
+  if(sel.kind==='start'){
+    const s=L.start;
+    html+=`<p class="sel-hint" style="margin:0 0 6px">Start pose <span style="color:#3d8fbf">(rear axle)</span></p>`;
+    html+=row('x',  `<input type=number step=.05 id=seStX value="${fmt(s.x)}">`);
+    html+=row('y',  `<input type=number step=.05 id=seStY value="${fmt(s.y)}">`);
+    html+=row('h°', `<input type=number step=5   id=seStH value="${fmt(deg(s.h),1)}">`);
+    panel.innerHTML=html;
+    const liv=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('input',e=>fn(+e.target.value)); };
+    liv('seStX',v=>{s.x=v;markDirty();render();});
+    liv('seStY',v=>{s.y=v;markDirty();render();});
+    liv('seStH',v=>{s.h=rad(v);markDirty();render();});
+    return;
+  }
+  if(sel.kind==='goal'){
+    const g=L.goal;
+    html+=`<p class="sel-hint" style="margin:0 0 6px">Goal box</p>`;
+    html+=row('cx',  `<input type=number step=.1 id=seGCx value="${fmt(g.cx)}">`);
+    html+=row('cy',  `<input type=number step=.1 id=seGCy value="${fmt(g.cy)}">`);
+    html+=row('w',   `<input type=number step=.1 min=.5 id=seGW value="${fmt(g.w)}">`);
+    html+=row('h',   `<input type=number step=.1 min=.5 id=seGH value="${fmt(g.h)}">`);
+    html+=row('ang°',`<input type=number step=5 id=seGAng value="${fmt(deg(g.ang||0),1)}">`);
+    html+=row('heads',`<input type=text id=seGHeads value="${(g.heads||[0]).join(', ')}" placeholder="0  or  0,180">`);
+    html+=row('tol°',`<input type=number step=1 min=1 id=seGTol value="${g.tol}">`);
+    panel.innerHTML=html;
+    const liv=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('input',e=>fn(+e.target.value)); };
+    liv('seGCx',v=>{g.cx=v;markDirty();render();});
+    liv('seGCy',v=>{g.cy=v;markDirty();render();});
+    liv('seGW',v=>{g.w=v;markDirty();render();});
+    liv('seGH',v=>{g.h=v;markDirty();render();});
+    liv('seGAng',v=>{g.ang=rad(v)||0;markDirty();render();});
+    liv('seGTol',v=>{g.tol=v;markDirty();render();});
+    const he=document.getElementById('seGHeads');
+    if(he) he.addEventListener('input',e=>{ g.heads=e.target.value.split(',').map(s=>+s.trim()).filter(n=>!isNaN(n)); markDirty(); render(); });
+    return;
+  }
   if(sel.kind==='wall'){
     const w=L.walls[sel.idx];
     const kOpts=['wall','curb'].map(k=>`<option${w.kind===k?' selected':''}>${k}</option>`).join('');
@@ -1203,16 +1216,6 @@ bind('sW',     e=>{ L.w=+e.target.value||L.w; render(); });
 bind('sH',     e=>{ L.h=+e.target.value||L.h; render(); });
 bind('sPar', e=>{ const v=e.target.value.trim(); if(v==='') delete L.par; else L.par=+v; });
 bind('sHint',  e=>{ L.hint=e.target.value; });
-bind('stX',    e=>{ L.start.x=+e.target.value; render(); });
-bind('stY',    e=>{ L.start.y=+e.target.value; render(); });
-bind('stH',    e=>{ L.start.h=rad(+e.target.value); render(); });
-bind('gCx',    e=>{ L.goal.cx=+e.target.value; render(); });
-bind('gCy',    e=>{ L.goal.cy=+e.target.value; render(); });
-bind('gW',     e=>{ L.goal.w=+e.target.value; render(); });
-bind('gH',     e=>{ L.goal.h=+e.target.value; render(); });
-bind('gAng',   e=>{ L.goal.ang=rad(+e.target.value)||0; render(); });
-bind('gHeads', e=>{ L.goal.heads=e.target.value.split(',').map(s=>+s.trim()).filter(n=>!isNaN(n)); render(); });
-bind('gTol',   e=>{ L.goal.tol=+e.target.value; render(); });
 
 // ── Level set: load / navigate / structural edits ─────────────────────────────
 // Safe parser for the LEVELS array literal — NEVER uses eval / new Function, so
