@@ -490,6 +490,11 @@ function drawCarBody(pose, opts, spec) {
       ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0, 0, fRad * 0.18, 0, 2 * Math.PI); ctx.fill();
       ctx.restore();
     }
+    // front axle beam (rotates with steer)
+    ctx.save(); ctx.translate(spec.wb, 0); ctx.rotate(opts.steer || 0);
+    ctx.fillStyle = '#3a4050';
+    ctx.fillRect(-fLen * 0.5, -fCy, fLen, fCy * 2);
+    ctx.restore();
   } else if (opts.wheels) {
     ctx.fillStyle = '#10131a';
     // Bus rides on a dual rear axle; others have a single rear pair.

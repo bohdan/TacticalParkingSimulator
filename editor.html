@@ -54,6 +54,10 @@ button.danger:hover{background:#6e2424}
 #curSel{background:#1d2330;border:1px solid #2a3040;color:#c8d0dc;border-radius:6px;padding:4px 8px;font-size:12px;max-width:240px}
 #curSel:focus{outline:none;border-color:#3d8fbf}
 button.nav{padding:4px 8px;font-weight:700}
+.add-opt{display:block;width:100%;text-align:left;border:none;border-radius:0;background:transparent;padding:6px 12px;border-bottom:1px solid #2a3040}
+.add-opt:last-child{border-bottom:none}
+.add-opt:hover{background:#1d4f6b}
+.add-key{float:right;color:#5a6a80;font-size:10px;margin-left:12px}
 #solveStatus{font-size:11px;color:#7dc87d;display:none;align-self:center}
 .sol-row{gap:3px}
 .sol-row.sol-hot{background:rgba(255,224,64,.08);border-radius:5px}
@@ -92,10 +96,15 @@ button.nav{padding:4px 8px;font-weight:700}
   <button id="btnDelLevel" class="danger" title="Delete current level">&#128465;</button>
   <div class="sep"></div>
   <button id="toolSelect" class="active" title="Select / move objects  [V]">Select</button>
-  <button id="toolWall"   title="Draw wall  [W]">+ Wall</button>
-  <button id="toolCurb"   title="Draw curb  [C]">+ Curb</button>
-  <button id="toolCar"    title="Place obstacle car  [A]">+ Car</button>
-  <button id="toolTraffic" title="Place traffic car  [T]">+ Traffic</button>
+  <div style="position:relative">
+    <button id="btnAddObj" title="Add object [W/C/A/T]">+ Add ▾</button>
+    <div id="addMenu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:200;background:#171a21;border:1px solid #2a3040;border-radius:6px;overflow:hidden;box-shadow:0 6px 20px #0009;min-width:120px">
+      <button class="add-opt" data-tool="wall">+ Wall <span class="add-key">W</span></button>
+      <button class="add-opt" data-tool="curb">+ Curb <span class="add-key">C</span></button>
+      <button class="add-opt" data-tool="car">+ Car <span class="add-key">A</span></button>
+      <button class="add-opt" data-tool="traffic">+ Traffic <span class="add-key">T</span></button>
+    </div>
+  </div>
   <div class="sep"></div>
   <button id="btnImport">&#8595; Import</button>
   <button id="btnExport">Export ↗</button>
@@ -407,6 +416,10 @@ function drawCar(cx,cy,h,sp,opts){
       ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(0,0,fRad*0.18,0,2*π); ctx.fill();
       ctx.restore();
     }
+    // front axle beam (rotates with steer)
+    ctx.save(); ctx.translate(sp.wb,0); ctx.rotate(steer);
+    ctx.fillStyle='#3a4050'; ctx.fillRect(-fLen*0.5,-fCy,fLen,fCy*2);
+    ctx.restore();
   } else if(wheels){
     ctx.fillStyle='#10131a';
     const axles=vehicle==='bus'
@@ -711,25 +724,26 @@ function drawSolutionPath(){
     pose=pts[pts.length-1];
   }
 
-  // Swept envelope: one filled polygon per segment (overlaps are fine).
-  // Each polygon = trailing-side of start pose + leading-corner trace forward
-  //   + leading-corner trace reversed on the other side + close.
+  // Swept envelope: two overlapping filled polygons per segment (overlaps are fine).
+  // Config A traces front corners (FR/FL), config B traces rear corners (RR/RL).
+  // Together all 4 corner paths are covered, including kinematic rear-corner widening
+  // that occurs on the inside of turns (e.g. a 90° turn).
+  // carPoly order: [0]=RR, [1]=FR, [2]=FL, [3]=RL
   ctx.save();
-  ctx.fillStyle='rgba(255,200,50,0.11)';
-  ctx.strokeStyle='rgba(255,200,50,0.50)';
+  ctx.fillStyle='rgba(255,200,50,0.10)';
+  ctx.strokeStyle='rgba(255,200,50,0.45)';
   ctx.lineWidth=0.05; ctx.lineJoin='round';
   for(const seg of segs){
-    const fwd=!seg.rev;
-    // Forward: leading corners = front (1=FR, 2=FL), trailing = rear (0=RR, 3=RL)
-    // Backward: leading corners = rear  (0=RR, 3=RL), trailing = front (1=FR, 2=FL)
-    const iR=fwd?1:0, iL=fwd?2:3, iTR=fwd?0:1, iTL=fwd?3:2;
     const polys=seg.pts.map(p=>carPoly(p));
-    ctx.beginPath();
-    ctx.moveTo(polys[0][iTR].x,polys[0][iTR].y);
-    for(const q of polys) ctx.lineTo(q[iR].x,q[iR].y);
-    for(let i=polys.length-1;i>=0;i--) ctx.lineTo(polys[i][iL].x,polys[i][iL].y);
-    ctx.lineTo(polys[0][iTL].x,polys[0][iTL].y);
-    ctx.closePath(); ctx.fill(); ctx.stroke();
+    const n=polys.length;
+    for(const [iR,iL,iTR,iTL] of [[1,2,0,3],[0,3,1,2]]){
+      ctx.beginPath();
+      ctx.moveTo(polys[0][iTR].x,polys[0][iTR].y);
+      for(const q of polys) ctx.lineTo(q[iR].x,q[iR].y);
+      for(let i=n-1;i>=0;i--) ctx.lineTo(polys[i][iL].x,polys[i][iL].y);
+      ctx.lineTo(polys[0][iTL].x,polys[0][iTL].y);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
   }
   ctx.restore();
 
@@ -1087,18 +1101,26 @@ function deleteSelected(){
 }
 
 // ── Tool buttons ─────────────────────────────────────────────────────────────
+const ADD_NAMES={wall:'Wall',curb:'Curb',car:'Car',traffic:'Traffic'};
 function setTool(t){
   tool=t;
-  document.querySelectorAll('#toolbar button[id^=tool]').forEach(b=>b.classList.remove('active'));
-  const el=document.getElementById('tool'+t.charAt(0).toUpperCase()+t.slice(1));
-  if(el) el.classList.add('active');
+  document.getElementById('toolSelect').classList.toggle('active',t==='select');
+  const addBtn=document.getElementById('btnAddObj');
+  addBtn.classList.toggle('active',t in ADD_NAMES);
+  addBtn.textContent=t in ADD_NAMES?'+ '+ADD_NAMES[t]+' ▾':'+ Add ▾';
   cv.style.cursor=t==='select'?'default':'crosshair';
+  document.getElementById('addMenu').style.display='none';
 }
 document.getElementById('toolSelect').onclick=()=>setTool('select');
-document.getElementById('toolWall').onclick=()=>setTool('wall');
-document.getElementById('toolCurb').onclick=()=>setTool('curb');
-document.getElementById('toolCar').onclick=()=>setTool('car');
-document.getElementById('toolTraffic').onclick=()=>setTool('traffic');
+{
+  const menu=document.getElementById('addMenu');
+  document.getElementById('btnAddObj').onclick=e=>{
+    e.stopPropagation();
+    menu.style.display=menu.style.display==='none'?'block':'none';
+  };
+  document.querySelectorAll('.add-opt').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
+  document.addEventListener('click',()=>{ menu.style.display='none'; });
+}
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 function val(id,v){ const el=document.getElementById(id); if(el&&document.activeElement!==el) el.value=v; }
