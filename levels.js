@@ -250,7 +250,7 @@ const LEVELS = [
     ],
     cars: [],
     hint: "A 5.8 m corridor — the simple U-turn no longer fits.",
-    solution: [{ steer: 13, dist: -4 }, { steer: -35, dist: -6 }, { steer: 35, dist: 0.7 }, { steer: -35, dist: -0.7 }, { steer: 35, dist: 0.7 }, { steer: -22, dist: -0.7 }, { steer: 35, dist: 1.4 }, { steer: -35, dist: -2.1 }],
+    solution: [{ steer: -23.6, dist: -4.48 }, { steer: 35, dist: 1.26 }, { steer: -35, dist: -1.25 }, { steer: 35, dist: 1.08 }, { steer: -35, dist: -1.02 }, { steer: 35, dist: 4.75 }],
   },
   {
     id: "nb4rua",
