@@ -736,7 +736,7 @@ function drawSolutionPath(){
   // Swept envelope per segment as a 6-edge closed polygon:
   //   trailing edge → outer arc (oT corner start→end) → outer side at end
   //   → leading edge → inner arc back (iL corner end→start) → close.
-  // carPoly order: [0]=RR, [1]=FR, [2]=FL, [3]=RL
+  // carPoly order: [0]=RL, [1]=FL, [2]=FR, [3]=RR
   ctx.save();
   ctx.lineJoin='round';
   for(let si=0;si<segs.length;si++){
@@ -749,14 +749,15 @@ function drawSolutionPath(){
     const steerRight=Math.abs(dh)<1e-5 ? true : (dh>0)!==seg.rev;
     // oL/iL = outer/inner corner index at the Leading end (front if fwd, rear if rev)
     // oT/iT = outer/inner corner index at the Trailing end
-    // Outer arc traces oT (outer-trailing corner sweeps the wide path).
-    // Inner arc traces iL (inner-leading corner sweeps the tight path).
-    //   fwd+right: oT=RR(0) iT=RL(3) oL=FR(1) iL=FL(2)
-    //   fwd+left:  oT=RL(3) iT=RR(0) oL=FL(2) iL=FR(1)
-    //   bwd+right: oT=FL(2) iT=FR(1) oL=RL(3) iL=RR(0)
-    //   bwd+left:  oT=FR(1) iT=FL(2) oL=RR(0) iL=RL(3)
+    // Outer arc traces oT (outer-trailing corner sweeps the outer boundary).
+    // Inner arc traces iL (inner-leading corner sweeps the inner boundary).
+    // carPoly: [0]=RL, [1]=FL, [2]=FR, [3]=RR
+    //   fwd+right: oT=RR(3) iT=RL(0) oL=FR(2) iL=FL(1)
+    //   fwd+left:  oT=RL(0) iT=RR(3) oL=FL(1) iL=FR(2)
+    //   bwd+right: oT=FR(2) iT=FL(1) oL=RR(3) iL=RL(0)
+    //   bwd+left:  oT=FL(1) iT=FR(2) oL=RL(0) iL=RR(3)
     let oL,iL,oT,iT;
-    if(!seg.rev){ if(steerRight){oL=1;iL=2;oT=0;iT=3;}else{oL=2;iL=1;oT=3;iT=0;} }
+    if(!seg.rev){ if(steerRight){oL=2;iL=1;oT=3;iT=0;}else{oL=1;iL=2;oT=0;iT=3;} }
     else        { if(steerRight){oL=3;iL=0;oT=2;iT=1;}else{oL=0;iL=3;oT=1;iT=2;} }
     const p0=polys[0], pN=polys[n-1];
     ctx.beginPath();
