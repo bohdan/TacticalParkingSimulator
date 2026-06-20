@@ -36,8 +36,11 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
     weight = 2.0,        // heuristic weight: higher = greedier/faster, longer plans
     maxExpand = 150000,  // safety cap on state expansions
     timeMs = Infinity,   // wall-clock budget per attempt
-    posCell = 0.2,       // m, visited-grid resolution
-    angCellDeg = 9,      // deg, visited-grid heading resolution
+    posCell = 0.18,      // m, visited-grid resolution
+    angCellDeg = 8,      // deg, visited-grid heading resolution
+    steerFracs = null,   // override steer fractions of maxSteer
+    dists = null,        // override distance candidates
+    step = 0.12,         // collision sampling step for search (coarser = faster)
     yield: doYield = true,
   } = opts;
 
@@ -48,9 +51,9 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
   const ms = CAR.maxSteer;
 
   // Clean candidate values → stored == simulated == replayed (no drift).
-  const fracs = [-1, -0.62, -0.36, -0.16, 0, 0.16, 0.36, 0.62, 1];
+  const fracs = steerFracs || [-1, -0.62, -0.36, -0.16, 0, 0.16, 0.36, 0.62, 1];
   const STEERS_DEG = [...new Set(fracs.map(f => Math.round(f * ms)))];
-  const DISTS = [-9, -6, -4, -2.5, -1.4, -0.7, -0.35,
+  const DISTS = dists || [-9, -6, -4, -2.5, -1.4, -0.7, -0.35,
                   0.35, 0.7, 1.4, 2.5, 4, 6, 9, 13];
 
   const angCell = rad(angCellDeg);
@@ -68,6 +71,25 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
     return d / 9 + he / rad(ms);
   }
 
+  // Fine single-move sweep to land precisely in a tight goal (the grid steps
+  // are too coarse to hit a narrow spot, but the approach search gets close).
+  // Kept cheap and rare: only fired from states already near the goal.
+  const dockReach = Math.max(goal.w, goal.h) / 2 + (opts.dockReach || 2.2);
+  const dockCells = new Set();
+  let dockBudget = opts.dock === false ? 0 : (opts.dockBudget || 4000);
+  function tryDock(pose, baseMoves) {
+    for (let sd = -ms; sd <= ms; sd += 4) {
+      const s = rad(sd);
+      for (let dd = -3.5; dd <= 3.5; dd += 0.2) {
+        if (Math.abs(dd) < 0.05) continue;
+        const d = Math.round(dd * 100) / 100;
+        const sim = simulateMove(pose, s, d, obstacles, step);
+        if (!sim.hit && inGoal(sim.end, goal)) return baseMoves.concat([{ steer: sd, dist: d }]);
+      }
+    }
+    return null;
+  }
+
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const open = [];
   const visited = new Map();
@@ -76,17 +98,38 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
 
   let best = inGoal(start, goal) ? [] : null;
   let expand = 0, lastYield = now();
+  let minDC = Infinity; // diagnostic: closest car-centre approach to goal centre
   const startTime = now();
 
   while (open.length && !best && expand < maxExpand) {
-    if ((expand & 1023) === 0 && now() - startTime > timeMs) break;
+    if ((expand & 63) === 0 && now() - startTime > timeMs) break;
     const cur = _heapPop(open);
     expand++;
+
+    // Close to the goal? Attempt a precise docking move (each region once).
+    {
+      const dc = Math.hypot(cur.pose.x - goal.cx, cur.pose.y - goal.cy);
+      if (dc < minDC) minDC = dc;
+    }
+    if (dockBudget > 0) {
+      const dc = Math.hypot(cur.pose.x - goal.cx, cur.pose.y - goal.cy);
+      if (dc < dockReach) {
+        const dk = Math.round(cur.pose.x / 0.5) + ',' + Math.round(cur.pose.y / 0.5) +
+                   ',' + Math.round(normAng(cur.pose.h) / rad(20));
+        if (!dockCells.has(dk)) {
+          dockCells.add(dk); dockBudget--;
+          if ((expand & 63) === 0 && now() - startTime > timeMs) break;
+          const docked = tryDock(cur.pose, cur.moves);
+          if (docked) { best = docked; progressCb && progressCb({ type: 'solution', depth: docked.length, moves: docked }); break; }
+        }
+      }
+    }
+
     let done = false;
     for (const sd of STEERS_DEG) {
       const s = rad(sd);
       for (const d of DISTS) {
-        const sim = simulateMove(cur.pose, s, d, obstacles);
+        const sim = simulateMove(cur.pose, s, d, obstacles, step);
         if (sim.hit) continue;
         const end = sim.end;
         const moves = cur.moves.concat([{ steer: sd, dist: d }]);
@@ -113,6 +156,7 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
 
   Object.assign(CAR, savedCar);
   CAR.fOver = CAR.len - CAR.wb - CAR.rOver;
+  progressCb && progressCb({ type: 'done', expand, minDC: +minDC.toFixed(2), open: open.length });
   return best;
 }
 

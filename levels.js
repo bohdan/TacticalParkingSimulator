@@ -32,7 +32,7 @@ const LEVELS = [
     walls: [],
     cars: [],
     hint: "The zone is behind you.",
-    solution: [{ steer: 0, dist: -10 }],
+    solution: [{ steer: 0, dist: -9 }],
   },
   {
     id: "p3qylc",
@@ -44,7 +44,7 @@ const LEVELS = [
     ],
     cars: [],
     hint: "Get around the block into the green zone.",
-    solution: [{ steer: 20, dist: 13 }, { steer: -20, dist: 1.2 }],
+    solution: [{ steer: 22, dist: 9 }, { steer: 6, dist: 6 }, { steer: -35, dist: -0.5 }],
   },
   {
     id: "rybjdb",
@@ -59,7 +59,7 @@ const LEVELS = [
       { cx: 13.7, cy: 2.9, h: Math.PI / 2 },
     ],
     hint: "Plenty of room",
-    solution: [{ steer: 12, dist: 7 }, { steer: 35, dist: 3.5 }],
+    solution: [{ steer: 13, dist: 6 }, { steer: 35, dist: 4 }],
   },
   {
     id: "hdbsvd",
@@ -81,7 +81,7 @@ const LEVELS = [
       { x: 10, y: -1.5, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     hint: "So much space... you can do it!",
-    solution: [{ steer: 12, dist: 2 }, { steer: 2, dist: 7 }, { steer: -6, dist: 3.5 }, { steer: -28, dist: 0.6 }],
+    solution: [{ steer: 0, dist: 13 }, { steer: 22, dist: -4 }, { steer: -22, dist: -4 }, { steer: 0, dist: 6 }, { steer: -27, dist: 0.1 }],
   },
   {
     id: "d9lm3k",
@@ -102,7 +102,7 @@ const LEVELS = [
       { x: 21.7, y: 10.7, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     hint: "Angled bays: enter on the diagonal, dead straight.",
-    solution: [{ steer: 20, dist: 1.2 }, { steer: -12, dist: 10 }, { steer: -20, dist: 1.2 }],
+    solution: [{ steer: 0, dist: 9 }, { steer: 35, dist: -1.4 }, { steer: -22, dist: 2.5 }, { steer: -7, dist: 2.7 }],
   },
   {
     id: "uxebvt",
@@ -119,7 +119,7 @@ const LEVELS = [
       { cx: 9.5, cy: 2.55, h: Math.PI },
     ],
     hint: "Swing the nose out toward the lane, then counter-steer and glide away.",
-    solution: [{ steer: -20, dist: 5 }, { steer: 20, dist: 5 }],
+    solution: [{ steer: -22, dist: 2.5 }, { steer: 0, dist: 6 }, { steer: -3, dist: 1.5 }],
   },
   {
     id: "x5xy7q",
@@ -136,7 +136,7 @@ const LEVELS = [
       { cx: 9.5, cy: 2.55, h: Math.PI },
     ],
     hint: "Reverse into the gap at the curb.",
-    solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
+    solution: [{ steer: 6, dist: 4 }, { steer: -6, dist: 9 }, { steer: 6, dist: -6 }, { steer: -35, dist: -1.9 }],
   },
   {
     id: "v82iil",
@@ -171,7 +171,7 @@ const LEVELS = [
       { cx: 16.9, cy: 11.6, h: 0.9308 },
     ],
     hint: "Partk on a curve",
-    solution: [{ steer: 6, dist: 16 }, { steer: -35, dist: 2 }, { steer: 0, dist: -5 }, { steer: -35, dist: -2 }],
+    solution: [{ steer: 6, dist: 13 }, { steer: 0, dist: 4 }, { steer: 35, dist: -2.5 }, { steer: -22, dist: -4 }, { steer: 9, dist: 0.7 }],
   },
   {
     id: "z30oy8",
@@ -192,7 +192,7 @@ const LEVELS = [
       { x: 21.7, y: 10.7, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     hint: "You're not a maniac, you'll just need to leave in a hurry...",
-    solution: [{ steer: 0, dist: 10 }, { steer: -2, dist: 7 }, { steer: -35, dist: -7 }, { steer: 35, dist: 1.2 }, { steer: -20, dist: -2 }],
+    solution: [{ steer: 0, dist: 13 }, { steer: 0, dist: 4 }, { steer: -22, dist: -6 }, { steer: 35, dist: 0.7 }, { steer: -35, dist: -1.4 }, { steer: 35, dist: 1.4 }, { steer: -23, dist: -3.5 }],
   },
   {
     id: "y6o5vf",
@@ -206,7 +206,7 @@ const LEVELS = [
     ],
     cars: [],
     hint: "Turn around to face the way you came.",
-    solution: [{ steer: 35, dist: -3.5 }, { steer: -28, dist: 1.2 }, { steer: 35, dist: -2 }, { steer: -35, dist: 5 }],
+    solution: [{ steer: -35, dist: -4 }, { steer: 35, dist: 1.4 }, { steer: -35, dist: -1.4 }, { steer: 35, dist: 4 }],
   },
   {
     id: "mubpy4",
@@ -223,7 +223,7 @@ const LEVELS = [
       { cx: 16.4, cy: 2.85, h: Math.PI / 2 },
     ],
     hint: "Back into the empty bay (either direction).",
-    solution: [{ steer: 0, dist: 10.6 }, { steer: 35, dist: -6.3 }, { steer: 0, dist: -2.9 }],
+    solution: [{ steer: 22, dist: 4 }, { steer: -35, dist: 6 }, { steer: 13, dist: -6 }, { steer: -11, dist: -1.3 }],
   },
   {
     id: "ooi7yc",
@@ -236,7 +236,7 @@ const LEVELS = [
     ],
     cars: [],
     hint: "Weave under, over, and home — all in forward gear.",
-    solution: [{ steer: 0, dist: 4 }, { steer: -25, dist: 6 }, { steer: 25, dist: 10 }, { steer: -25, dist: 3 }],
+    solution: [{ steer: -6, dist: 4 }, { steer: -13, dist: 9 }, { steer: 35, dist: 6 }, { steer: 0, dist: 6 }, { steer: 35, dist: -2.5 }, { steer: -35, dist: -0.1 }],
   },
   {
     id: "vf4qyz",
@@ -250,7 +250,7 @@ const LEVELS = [
     ],
     cars: [],
     hint: "A 5.8 m corridor — the simple U-turn no longer fits.",
-    solution: [{ steer: 0, dist: 5 }, { steer: -35, dist: 1 }, { steer: 35, dist: -2.5 }, { steer: -35, dist: 0.5 }, { steer: 35, dist: -1 }, { steer: -35, dist: 1 }, { steer: 35, dist: -1 }, { steer: -35, dist: 1 }, { steer: 35, dist: -0.5 }, { steer: -35, dist: 3 }],
+    solution: [{ steer: 13, dist: -4 }, { steer: -35, dist: -6 }, { steer: 35, dist: 0.7 }, { steer: -35, dist: -0.7 }, { steer: 35, dist: 0.7 }, { steer: -22, dist: -0.7 }, { steer: 35, dist: 1.4 }, { steer: -35, dist: -2.1 }],
   },
   {
     id: "nb4rua",
@@ -267,7 +267,7 @@ const LEVELS = [
       { cx: 15.8, cy: 10.5, h: 270 * Math.PI / 180 },
     ],
     hint: "Get in quick",
-    solution: [{ steer: -35, dist: 3 }, { steer: 15, dist: 10 }, { steer: -35, dist: 6 }, { steer: 25, dist: -0.5 }],
+    solution: [],
   },
   {
     type: "cutscene", name: "Bus",
@@ -290,7 +290,7 @@ const LEVELS = [
       { cx: 29.9, cy: 19.1, h: 0 },
     ],
     hint: "12 m of bus — watch the enormous rear swing as you steer in.",
-    solution: [{ steer: -12, dist: 16 }, { steer: 28, dist: -5 }, { steer: -28, dist: 5 }],
+    solution: [{ steer: -7, dist: 13 }, { steer: -45, dist: 4 }, { steer: 45, dist: -2.5 }, { steer: -28, dist: 4 }],
   },
   {
     id: "s23h6e",
@@ -308,7 +308,7 @@ const LEVELS = [
       { cx: 30, cy: 19, h: 0 },
     ],
     hint: "Thread between the pillars before easing the 12 m bus in.",
-    solution: [{ steer: 0, dist: 25 }, { steer: -45, dist: -10 }],
+    solution: [{ steer: 0, dist: 13 }, { steer: -28, dist: 6 }, { steer: 45, dist: -4 }, { steer: -16, dist: 6 }, { steer: -45, dist: 0.7 }],
   },
   {
     type: "cutscene", name: "Cutscene Fineland",
@@ -332,7 +332,7 @@ const LEVELS = [
       { cx: 18.5, cy: 3.8, h: 0 },
     ],
     hint: "Need to nail it",
-    solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
+    solution: [{ steer: 0, dist: 13 }, { steer: 13, dist: -2.5 }, { steer: 35, dist: -1.4 }, { steer: -6, dist: -2.5 }, { steer: -35, dist: -1.4 }, { steer: 22, dist: 0.7 }],
   },
   {
     id: "r0nmos",
@@ -349,7 +349,7 @@ const LEVELS = [
       { cx: 9.5, cy: 2.55, h: Math.PI },
     ],
     hint: "Centimetre gaps — a tiny nudge back opens just enough room.",
-    solution: [{ steer: 0, dist: -0.4 }, { steer: -35, dist: 3 }, { steer: 35, dist: 3 }],
+    solution: [],
   },
   {
     id: "m5zrvk",
@@ -370,7 +370,7 @@ const LEVELS = [
     ],
     par: 25,
     hint: "You were clearly in a rush.. you don't remember why.",
-    solution: [{ steer: 0, dist: -4.4 }, { steer: -35, dist: 6 }],
+    solution: [],
   },
   {
     id: "s2p1ol",
@@ -406,7 +406,7 @@ const LEVELS = [
     ],
     par: 7,
     hint: "Partk on a curve",
-    solution: [{ steer: 0, dist: 12 }, { steer: 35, dist: -3 }, { steer: -35, dist: -4 }],
+    solution: [{ steer: 0, dist: 4 }, { steer: 6, dist: 9 }, { steer: 35, dist: 2.5 }, { steer: -35, dist: -2.5 }, { steer: 22, dist: 0.7 }, { steer: -35, dist: -1.4 }, { steer: 35, dist: 1.4 }, { steer: -35, dist: -1.4 }, { steer: 35, dist: 1.4 }, { steer: -22, dist: -2.5 }, { steer: 13, dist: 0.9 }],
   },
   {
     id: "bg95m2",
@@ -427,7 +427,7 @@ const LEVELS = [
     ],
     par: 3,
     hint: "Need to nail it",
-    solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
+    solution: [{ steer: 0, dist: 6 }, { steer: 13, dist: 1.4 }, { steer: -6, dist: 4 }, { steer: 22, dist: -4 }, { steer: -35, dist: -2.5 }, { steer: 13, dist: 0.7 }, { steer: -22, dist: 0.35 }],
   },
   {
     id: "wktmu5",
@@ -444,7 +444,7 @@ const LEVELS = [
       { cx: 12, cy: 2.55, h: Math.PI },
     ],
     hint: "Nudge back first to gain the extra inch you need.",
-    solution: [{ steer: 12, dist: -1.2 }, { steer: -35, dist: 2 }, { steer: 28, dist: 0.6 }, { steer: 12, dist: 7 }],
+    solution: [{ steer: -22, dist: -0.35 }, { steer: 35, dist: -0.7 }, { steer: -35, dist: 1.4 }, { steer: 6, dist: 6 }, { steer: -23, dist: 2.7 }],
   },
   {
     id: "q0vz36",
@@ -476,7 +476,7 @@ const LEVELS = [
     cars: [],
     par: 8,
     hint: "Only 5.5 m of corridor — a true shuffle marathon.",
-    solution: [{ steer: 35, dist: -3.7 }, { steer: -35, dist: 0.7 }, { steer: 35, dist: -0.8 }, { steer: -35, dist: 0.8 }, { steer: 35, dist: -0.9 }, { steer: -35, dist: 0.9 }, { steer: 35, dist: -0.7 }, { steer: -35, dist: 3.8 }],
+    solution: [],
   },
   {
     type: "cutscene", name: "Cutscene Miata",
@@ -501,7 +501,7 @@ const LEVELS = [
       { x: 21.7, y: 11.3, h: Math.PI, speed: 4, loop: 28, offset: 16 },
     ],
     hint: "The Miata's tight turn radius makes this a 2-move park.",
-    solution: [{ steer: -2, dist: 1.2 }, { steer: -35, dist: 5 }],
+    solution: [{ steer: -25, dist: 2.5 }, { steer: -14, dist: 1.4 }, { steer: -40, dist: 2.5 }, { steer: -16, dist: -0.3 }],
   },
   {
     id: "yg12nu",
@@ -519,6 +519,6 @@ const LEVELS = [
       { cx: 12, cy: 2.5, h: Math.PI },
     ],
     hint: "Only a Miata fits — use its 40° steering lock to squeeze in.",
-    solution: [{ steer: 0, dist: 10 }, { steer: 40, dist: -2.5 }, { steer: -40, dist: -2.5 }],
+    solution: [{ steer: 0, dist: 13 }, { steer: -14, dist: -0.35 }, { steer: 14, dist: -6 }, { steer: -40, dist: -1.4 }, { steer: 25, dist: 0.7 }],
   },
 ];

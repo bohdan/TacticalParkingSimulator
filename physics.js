@@ -131,16 +131,35 @@ function contactPoint(carP, obsP) {
 
 /* ─── Simulation ───────────────────────────────────────────────────────── */
 
-function simulateMove(start, steer, dist, obstacles) {
-  const n = Math.max(2, Math.ceil(Math.abs(dist) / SAMPLE_STEP));
+// Bounding circle of a polygon (centroid + farthest-vertex radius).
+function polyBC(poly) {
+  let cx = 0, cy = 0;
+  for (const v of poly) { cx += v.x; cy += v.y; }
+  cx /= poly.length; cy /= poly.length;
+  let r = 0;
+  for (const v of poly) { const d = Math.hypot(v.x - cx, v.y - cy); if (d > r) r = d; }
+  return { x: cx, y: cy, r };
+}
+
+function simulateMove(start, steer, dist, obstacles, step) {
+  const n = Math.max(2, Math.ceil(Math.abs(dist) / (step || SAMPLE_STEP)));
   const pts = [start];
   let hit = null;
+  // Car bounding circle (constant size, moves with the car) for broad-phase.
+  const rCar = 0.5 * Math.hypot(CAR.len, CAR.wid) + 0.02;
+  const offc = (CAR.wb + CAR.fOver - CAR.rOver) / 2; // body centre ahead of rear axle
   for (let i = 1; i <= n; i++) {
     const p = advance(start, steer, dist * i / n);
-    const poly = carPoly(p);
+    const ccx = p.x + Math.cos(p.h) * offc, ccy = p.y + Math.sin(p.h) * offc;
+    let poly = null;
     for (let oi = 0; oi < obstacles.length; oi++) {
-      if (polysCollide(poly, obstacles[oi].poly)) {
-        hit = { pose: p, point: contactPoint(poly, obstacles[oi].poly) };
+      const o = obstacles[oi];
+      const bc = o.bc || (o.bc = polyBC(o.poly));
+      const dx = ccx - bc.x, dy = ccy - bc.y, rr = rCar + bc.r;
+      if (dx * dx + dy * dy > rr * rr) continue;     // broad-phase reject
+      if (!poly) poly = carPoly(p);
+      if (polysCollide(poly, o.poly)) {
+        hit = { pose: p, point: contactPoint(poly, o.poly) };
         break;
       }
     }

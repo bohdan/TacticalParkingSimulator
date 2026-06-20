@@ -1559,7 +1559,7 @@ document.getElementById('btnSolve').onclick = async () => {
   status.style.display = 'inline';
   status.textContent = '⚙ Starting…';
   try {
-    const solution = await solveParkingLevel(L, { weight: 1.5, maxExpand: 400000 }, ev => {
+    const solution = await solveParkingLevel(L, { weight: 1.5, maxExpand: 3000000, timeMs: 20000 }, ev => {
       if (ev.type === 'solution')
         status.textContent = `⚙ Found ${ev.moves.length}-move solution…`;
       else
