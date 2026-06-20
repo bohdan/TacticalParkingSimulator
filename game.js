@@ -1058,15 +1058,13 @@ function sampleAt(a, trav) {
 }
 
 function parkRejectionReason(pose, goal) {
-  const okHead = goal.heads.some(hd => Math.abs(normAng(pose.h - rad(hd))) <= rad(goal.tol));
-  if (!okHead) {
-    const best = goal.heads.reduce((best, hd) => {
-      const err = Math.abs(normAng(pose.h - rad(hd)));
-      return err < best.err ? { err, hd } : best;
-    }, { err: Infinity, hd: 0 });
-    return `Angle off by ${deg(best.err).toFixed(0)}° — need to be within ${goal.tol}° of the target heading`;
-  }
-  return 'Car is not fully inside the parking zone';
+  const insideZone = carPoly(pose).every(v => pointInPoly(v, goalPoly(goal)));
+  if (!insideZone) return 'Car is not fully inside the parking zone';
+  const best = goal.heads.reduce((best, hd) => {
+    const err = Math.abs(normAng(pose.h - rad(hd)));
+    return err < best.err ? { err, hd } : best;
+  }, { err: Infinity, hd: 0 });
+  return `Angle off by ${deg(best.err).toFixed(0)}° — need to be within ${goal.tol}° of the target heading`;
 }
 
 function finishRun() {
