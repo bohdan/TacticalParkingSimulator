@@ -544,7 +544,7 @@ const LEVELS = [
     cars: [],
     draft: true,
     hint: "Swing the tractor into the barn.",
-    solution: [{ steer: 0, dist: 5.3 }, { steer: 50, dist: 5.8 }, { steer: 3, dist: 1.8 }],
+    solution: [{ steer: 0, dist: 5.3 }, { steer: 50, dist: 5.8 }, { steer: -5.6, dist: 1.65 }],
   },
   {
     id: "vl8wg1",
@@ -575,6 +575,6 @@ const LEVELS = [
     ],
     draft: true,
     hint: "Pull the tractor into the gap at the fence.",
-    solution: [{ steer: 19, dist: 6 }, { steer: -19, dist: 4 }, { steer: -12, dist: -1.1 }],
+    solution: [{ steer: 20.6, dist: 7.05 }, { steer: -52, dist: 2.1 }],
   },
 ];
