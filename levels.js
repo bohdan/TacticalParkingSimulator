@@ -535,6 +535,22 @@ const LEVELS = [
   },
   {
     id: "ouhmic",
+    name: "Out Into The Field", tier: "Medium", mode: "moves", w: 18, h: 11,
+    vehicle: "tractor",
+    start: { x: 1.4, y: 5.8, h: 0 },
+    goal: { cx: 2.6, cy: 1.6, w: 4.4, h: 2.6, heads: [180], tol: 45 },
+    walls: [
+      { x: 0, y: 3.2, w: 14.1, h: 0.4 },
+      { x: 0, y: 7.9, w: 7.4, h: 0.4 },
+      { x: 0, y: 3.6, w: 0.5, h: 4.3 },
+      { x: 13.5, y: 3.6, w: 0.6, h: 2.8 },
+    ],
+    cars: [],
+    hint: "Swing the tractor into the barn.",
+    solution: [{ steer: 0, dist: 7 }, { steer: 26.6, dist: 4.15 }, { steer: -52, dist: 1.7 }, { steer: -52, dist: 2.5 }, { steer: -0.4, dist: 3.25 }, { steer: -52, dist: 2.65 }, { steer: 0, dist: 12.5 }],
+  },
+  {
+    id: "p7ubrv",
     name: "Back to the Barn", tier: "Medium", mode: "moves", w: 18, h: 11,
     vehicle: "tractor",
     start: { x: 1.1, y: 1.6, h: 0 },
