@@ -1101,10 +1101,13 @@ $('moveList').addEventListener('click', e => {
   const chip = e.target.closest('.mv-chip');
   if (!chip) return;
   if (chip.dataset.i === 'new') {
-    if (editIdx !== null) { editIdx = null; setEdit(editSteer, 0); }
-  } else {
-    selectMove(+chip.dataset.i);
+    commitMove();          // bank the in-progress move and start a fresh one
+    return;
   }
+  const i = +chip.dataset.i;
+  if (editIdx === i) { commitMove(); return; } // tapping the active move banks it
+  commitMove();            // bank anything pending, then edit the tapped move
+  selectMove(i);
 });
 
 $('resetBtn').addEventListener('click', () => {
@@ -1118,13 +1121,9 @@ $('resetBtn').addEventListener('click', () => {
 
 $('goBtn').addEventListener('click', () => {
   if (anim) return;
-  // Auto-commit a valid pending move so the player doesn't have to press Add first
-  if (editSim && editSim.pts.length >= 2 && editIdx === null) {
-    moves.push({ steer: rad(editSteer), dist: editDist });
-    editIdx = null;
-    setEdit(editSteer, 0);
-    recomputePlan();
-  }
+  // Auto-commit whatever's pending — a new move OR an unsaved edit to an
+  // existing one — so the last move never needs an explicit Add/Update.
+  commitMove();
   if (!moves.length) { toast('Add some moves first'); return; }
   startRun();
 });
