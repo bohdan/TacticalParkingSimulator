@@ -374,6 +374,27 @@ function saveBest(st, stars) {
   }
 }
 
+// In-progress plan persistence: keyed by stable level id so a half-finished
+// plan survives switching levels (and page reloads). Test-level previews and
+// loaded solutions are never saved as drafts.
+const draftKey = idx => `parking.draft.${levelKey(idx)}`;
+
+function saveDraft() {
+  if (testLevelLoaded || !level || solutionUsed) return;
+  try {
+    if (moves.length) localStorage.setItem(draftKey(levelIdx), movesToString(moves));
+    else localStorage.removeItem(draftKey(levelIdx));
+  } catch (e) {}
+}
+
+function loadDraft(idx) {
+  try {
+    const s = localStorage.getItem(draftKey(idx));
+    const mvs = s ? movesFromString(s) : null;
+    return mvs && mvs.length ? mvs : null;
+  } catch (e) { return null; }
+}
+
 let toastTimer = null;
 function toast(msg) {
   const t = $('toast');
@@ -1112,7 +1133,9 @@ function adjacentUnlocked(dir) {
 }
 
 function setLevel(i) {
-  levelIdx = (i + LEVELS.length) % LEVELS.length;
+  const target = (i + LEVELS.length) % LEVELS.length;
+  if (target !== levelIdx) saveDraft();  // stash the plan for the level we're leaving
+  levelIdx = target;
   const def = LEVELS[levelIdx];
   // Don't persist progress while previewing a test level (shifted indices) or
   // while on a cutscene (so the daily intro never overwrites real progress).
@@ -1122,7 +1145,8 @@ function setLevel(i) {
   $('intro').classList.add('hidden');  // leaving a cutscene
   setVehicle(def.vehicle || 'default');
   level = buildLevel(def);
-  moves = [];
+  const draft = testLevelLoaded ? null : loadDraft(levelIdx);
+  moves = draft ? quantizeMoves(draft) : [];
   planSims = [];
   anim = null;
   editIdx = null;
@@ -1254,6 +1278,7 @@ $('resetBtn').addEventListener('click', () => {
   solutionUsed = false;
   setEdit(0, 0);
   recomputePlan();
+  saveDraft();   // discard the stored plan too (moves is empty → removes the key)
 });
 
 $('goBtn').addEventListener('click', () => {
@@ -1273,6 +1298,9 @@ $('lvSelect').addEventListener('change', e => {
 
 $('lvPrev').addEventListener('click', () => { const t = adjacentUnlocked(-1); if (t >= 0) setLevel(t); });
 $('lvNext').addEventListener('click', () => { const t = adjacentUnlocked(+1); if (t >= 0) setLevel(t); });
+
+// Persist the in-progress plan when the tab is hidden/closed too.
+window.addEventListener('pagehide', saveDraft);
 
 $('menuBtn').addEventListener('click', () => $('menuOverlay').classList.remove('hidden'));
 $('menuClose').addEventListener('click', () => $('menuOverlay').classList.add('hidden'));
@@ -1300,6 +1328,10 @@ $('menuNewGame').addEventListener('click', () => {
     localStorage.removeItem('parking.level');
     localStorage.removeItem('parking.maxUnlocked');
     localStorage.removeItem('parking.introDay');
+    for (let k = localStorage.length - 1; k >= 0; k--) {
+      const key = localStorage.key(k);
+      if (key && key.startsWith('parking.draft.')) localStorage.removeItem(key);
+    }
   } catch (e) {}
   maxUnlocked = -1;
   const firstPlayable = nextPlayable(-1, +1);
