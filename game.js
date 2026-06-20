@@ -132,6 +132,9 @@ const cv = $('cv'), ctx = cv.getContext('2d');
 // A "cutscene" level isn't a parking puzzle — it plays a briefing animation.
 const isCutscene = def => !!def && def.type === 'cutscene';
 
+// Draft levels live in levels.js for editing but are hidden from the game.
+for (let i = LEVELS.length - 1; i >= 0; i--) if (LEVELS[i].draft) LEVELS.splice(i, 1);
+
 let levelIdx = testLevelLoaded
   ? 0  // start on the ★ test level when one was passed in
   : clamp(parseInt(localStorage.getItem('parking.level') || '0', 10) || 0, 0, LEVELS.length - 1);
@@ -419,7 +422,19 @@ function drawCarBody(pose, opts, spec) {
   // wheel box scales with vehicle length; bus wheels are larger
   const wl = Math.min(0.9, len * 0.075), wt = Math.min(0.18, w * 0.10);
 
-  if (opts.wheels) {
+  if (opts.wheels && vtype === 'tractor') {
+    // Tractor: small steered front wheels, big rear drive wheels (poke out).
+    ctx.fillStyle = '#0d0f14';
+    const fl = wl * 0.8, ft = wt * 0.85, rl = wl * 1.5, rt = Math.min(0.34, wt * 1.95);
+    for (const wya of [-wy, wy]) {
+      ctx.save(); ctx.translate(spec.wb, wya); ctx.rotate(opts.steer || 0);
+      ctx.fillRect(-fl / 2, -ft, fl, ft * 2); ctx.restore();
+      ctx.save(); ctx.translate(0, wya);
+      ctx.fillStyle = '#0d0f14'; ctx.fillRect(-rl / 2, -rt, rl, rt * 2);
+      ctx.fillStyle = '#39414d'; ctx.fillRect(-rl * 0.18, -rt * 0.5, rl * 0.36, rt); // hub
+      ctx.restore();
+    }
+  } else if (opts.wheels) {
     ctx.fillStyle = '#10131a';
     // Bus rides on a dual rear axle; others have a single rear pair.
     const axles = vtype === 'bus'
@@ -435,24 +450,50 @@ function drawCarBody(pose, opts, spec) {
       }
   }
 
-  // Body — Miata is always red; bus has squarer corners.
-  const fill = vtype === 'miata' ? '#d23b3b' : opts.fill;
+  // Body — Miata red, tractor green; bus has squarer corners.
+  const fill = vtype === 'miata' ? '#d23b3b' : vtype === 'tractor' ? '#3f7d2f' : opts.fill;
   const corner = vtype === 'bus' ? Math.min(0.18, w * 0.08) : Math.min(0.3, w * 0.17);
   roundRect(x0, -w / 2, len, w, corner);
   ctx.fillStyle = fill;
   ctx.fill();
   if (opts.stroke) {
     ctx.lineWidth = 0.07;
-    ctx.strokeStyle = vtype === 'miata' ? '#7d1f1f' : opts.stroke;
+    ctx.strokeStyle = vtype === 'miata' ? '#7d1f1f' : vtype === 'tractor' ? '#23491a' : opts.stroke;
     ctx.stroke();
   }
 
   if (opts.detail) {
-    if (vtype === 'bus')      drawBusDetail(x0, len, w);
+    if (vtype === 'bus')        drawBusDetail(x0, len, w);
     else if (vtype === 'miata') drawConvertibleDetail(x0, len, w);
-    else                      drawSedanDetail(x0, len, w);
+    else if (vtype === 'tractor') drawTractorDetail(x0, len, w);
+    else                        drawSedanDetail(x0, len, w);
   }
   ctx.restore();
+}
+
+// Top-down tractor: narrow engine hood up front with an exhaust stack, a roomy
+// rear cab with a seat and steering wheel.
+function drawTractorDetail(x0, len, w) {
+  const front = x0 + len;
+  // engine hood (narrower than the body) up front
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  roundRect(x0 + len * 0.5, -w / 2 + 0.34, len * 0.42, w - 0.68, 0.08); ctx.fill();
+  // exhaust stack near the front-left corner of the hood
+  ctx.fillStyle = '#15171c';
+  ctx.beginPath(); ctx.arc(x0 + len * 0.82, -w / 2 + 0.34, 0.12, 0, 2 * Math.PI); ctx.fill();
+  // rear operator platform / cab floor
+  ctx.fillStyle = 'rgba(15,22,14,0.55)';
+  roundRect(x0 + len * 0.06, -w / 2 + 0.22, len * 0.4, w - 0.44, 0.1); ctx.fill();
+  // seat
+  ctx.fillStyle = '#241910';
+  roundRect(x0 + len * 0.12, -0.28, len * 0.16, 0.56, 0.08); ctx.fill();
+  // steering wheel (just ahead of the seat)
+  ctx.strokeStyle = '#0c0e12'; ctx.lineWidth = 0.06;
+  ctx.beginPath(); ctx.arc(x0 + len * 0.36, 0, 0.22, 0, 2 * Math.PI); ctx.stroke();
+  // headlights front
+  ctx.fillStyle = '#ffe9a8';
+  ctx.fillRect(x0 + len - 0.16, -w / 2 + 0.22, 0.1, 0.24);
+  ctx.fillRect(x0 + len - 0.16,  w / 2 - 0.46, 0.1, 0.24);
 }
 
 function drawSedanDetail(x0, len, w) {
@@ -1063,7 +1104,7 @@ function makeRelativeSlider(el, range, sensitivity, getVal, applyVal) {
 
 // Slider step == the input grid: one pixel = one grid step, so the slider can
 // land on every value the readout shows (re-drag, it recentres, for big swings).
-makeRelativeSlider(steerEl, 45, STEER_Q,
+makeRelativeSlider(steerEl, 55, STEER_Q,  // 55° covers the tractor's tight lock
   () => editSteer,
   v  => setEdit(v, editDist));
 

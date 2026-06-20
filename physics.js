@@ -13,6 +13,7 @@ const VEHICLES = {
   default: { len: 4.4,  wid: 1.8,  wb: 2.7,  rOver: 0.85, maxSteer: 35 },
   miata:   { len: 3.97, wid: 1.72, wb: 2.265, rOver: 0.73, maxSteer: 40 },
   bus:     { len: 12.0, wid: 2.55, wb: 6.5,   rOver: 2.5,  maxSteer: 45 },
+  tractor: { len: 3.8,  wid: 1.95, wb: 2.15,  rOver: 0.45, maxSteer: 52 },
 };
 
 function setVehicle(name) {
