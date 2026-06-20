@@ -236,7 +236,7 @@ const LEVELS = [
     ],
     cars: [],
     hint: "Weave under, over, and home — all in forward gear.",
-    solution: [{ steer: -6, dist: 4 }, { steer: -13, dist: 9 }, { steer: 35, dist: 6 }, { steer: 0, dist: 6 }, { steer: 35, dist: -2.5 }, { steer: -35, dist: -0.1 }],
+    solution: [{ steer: -6, dist: 4 }, { steer: -13, dist: 8.2 }, { steer: 34, dist: 6 }, { steer: 0, dist: 6.4 }, { steer: 26.2, dist: -3.45 }],
   },
   {
     id: "vf4qyz",
