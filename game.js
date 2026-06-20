@@ -112,7 +112,8 @@ let _gameHash = null;
 //     player text not null,
 //     level int, level_id text,          -- level_id = stable per-level key
 //     level_name text,
-//     moves int, dist real, time_s real, -- score; stars derived from moves/par
+//     moves int, dist real,              -- score: moves, then dist as tiebreak
+//     time_s real,                        -- retired metric (kept for compat; sent as 0)
 //     solution text,                     -- encoded moves for replay
 //     submitted_at timestamptz default now()
 //   );
@@ -129,32 +130,6 @@ let _gameHash = null;
 //
 const LB_URL = 'https://qvjorkpzlwvswsptkwyn.supabase.co';
 const LB_KEY = 'sb_publishable_geHaaCkSfPilYWV3fYQHQA_KZdYNrpC';
-
-const V_MAX = 3.0;         // m/s top speed
-const ACCEL = 2.0;         // m/s² acceleration / braking
-const STEER_RATE_DS = 60;  // degrees per second
-const DIR_CHANGE_T = 1.5;  // seconds per direction reversal
-
-// Time for one move: trapezoid profile (accel from rest → cruise → brake to rest)
-function moveTime(dist) {
-  const d = Math.abs(dist);
-  const dFull = V_MAX * V_MAX / ACCEL; // dist needed to reach V_MAX and brake
-  if (d >= dFull) return 2 * V_MAX / ACCEL + (d - dFull) / V_MAX;
-  return 2 * Math.sqrt(d / ACCEL);
-}
-
-function planTime(mvs) {
-  let t = 0, prevDeg = 0, prevSign = 0;
-  for (let i = 0; i < mvs.length; i++) {
-    const m = mvs[i];
-    const d = deg(m.steer);
-    t += Math.abs(d - prevDeg) / STEER_RATE_DS;
-    if (i > 0 && Math.sign(m.dist) !== prevSign) t += DIR_CHANGE_T;
-    t += moveTime(m.dist);
-    prevDeg = d; prevSign = Math.sign(m.dist);
-  }
-  return t;
-}
 
 /* ===================== Game state ===================== */
 
@@ -250,7 +225,7 @@ function recomputeEdit() {
 function planStats() {
   let dist = 0;
   for (const m of moves) dist += Math.abs(m.dist);
-  return { moves: moves.length, dist, time: planTime(moves) };
+  return { moves: moves.length, dist };
 }
 
 // Par = target move count. Defaults to the recorded solution's length
@@ -334,7 +309,7 @@ function updateHUD() {
   if (planning) {
     const st = planStats();
     $('stats').innerHTML =
-      `Moves <b>${st.moves}</b> / Par ${levelPar()} · ~${st.time.toFixed(1)}s` +
+      `Moves <b>${st.moves}</b> / Par ${levelPar()} · ${(st.dist * 100).toFixed(0)}cm` +
       (best ? ` · Best <span class="star">${starStr(best.stars)}</span>` : '');
   } else {
     $('stats').innerHTML = escHtml(level.tut || level.hint) +
@@ -386,12 +361,13 @@ function loadBest() {
 function saveBest(st, stars) {
   const prev = loadBest();
   const prevMoves = prev ? (prev.moves ?? 999) : Infinity;
-  // Better = more stars, or same stars with fewer moves (time as tiebreaker).
+  const prevDist = prev ? (prev.dist ?? Infinity) : Infinity;
+  // Better = more stars, or same stars with fewer moves (distance as tiebreaker).
   if (!prev || stars > prev.stars ||
       (stars === prev.stars && st.moves < prevMoves) ||
-      (stars === prev.stars && st.moves === prevMoves && st.time < (prev.time || 999))) {
+      (stars === prev.stars && st.moves === prevMoves && st.dist < prevDist)) {
     localStorage.setItem(`parking.best.${levelIdx}`,
-      JSON.stringify({ moves: st.moves, dist: st.dist, time: st.time, stars }));
+      JSON.stringify({ moves: st.moves, dist: st.dist, stars }));
   }
 }
 
@@ -1096,7 +1072,7 @@ function finishRun() {
     const parLabel = overPar <= 0 ? 'Par' : overPar === 1 ? 'Bogey' : `+${overPar}`;
     $('ovStats').innerHTML =
       `<div class="sc-row"><span class="sc-label">Moves</span><span class="sc-val">${st.moves} <span class="sc-note">/ Par ${par} · ${parLabel}</span></span></div>` +
-      `<div class="sc-row"><span class="sc-label">Time</span><span class="sc-val">${st.time.toFixed(1)} s</span></div>` +
+      `<div class="sc-row"><span class="sc-label">Distance</span><span class="sc-val">${(st.dist * 100).toFixed(0)} cm</span></div>` +
       (best && best.moves < st.moves
         ? `<div class="sub" style="margin-top:6px">Best: ${best.moves} moves &nbsp;·&nbsp; ${starStr(best.stars)}</div>`
         : '');
@@ -1402,7 +1378,8 @@ async function lbPost(levelIdx, player, stars, st, solutionStr) {
   const body = {
     player, level: levelIdx, level_id: levelKey(levelIdx), level_name: level.name,
     moves: st.moves,
-    dist: +st.dist.toFixed(2), time_s: +st.time.toFixed(1),
+    dist: +st.dist.toFixed(2),
+    time_s: 0,  // retired metric; column kept so inserts work on the existing schema
     solution: solutionStr || null,
     submitted_at: new Date().toISOString(),
   };
