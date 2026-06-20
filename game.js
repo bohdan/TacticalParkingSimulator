@@ -133,7 +133,9 @@ const cv = $('cv'), ctx = cv.getContext('2d');
 const isCutscene = def => !!def && def.type === 'cutscene';
 
 // Draft levels live in levels.js for editing but are hidden from the game.
-for (let i = LEVELS.length - 1; i >= 0; i--) if (LEVELS[i].draft) LEVELS.splice(i, 1);
+// The editor's "Try" injects a test level (possibly a draft) — never strip it.
+for (let i = LEVELS.length - 1; i >= 0; i--)
+  if (LEVELS[i].draft && !LEVELS[i]._isTest) LEVELS.splice(i, 1);
 
 let levelIdx = testLevelLoaded
   ? 0  // start on the ★ test level when one was passed in
