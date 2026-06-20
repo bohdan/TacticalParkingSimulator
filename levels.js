@@ -267,7 +267,7 @@ const LEVELS = [
       { cx: 15.8, cy: 10.5, h: 270 * Math.PI / 180 },
     ],
     hint: "Get in quick",
-    solution: [],
+    solution: [{ steer: -34.4, dist: 10.65 }, { steer: 2.8, dist: -19.15 }, { steer: 33.2, dist: 6.05 }],
   },
   {
     type: "cutscene", name: "Bus",
