@@ -35,6 +35,7 @@ const LEVELS = [
     solution: [{ steer: 0, dist: -9 }],
   },
   {
+    id: "u92xwz",
     type: "cutscene", name: "Cutscene - Corrections",
     message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "EXPERIMENTAL TACTICAL PARKING", "QUANTUM COMPUTER ENGAGED", "", "RETROACTIVE CORRECTION ENGAGED", "", "SEE TRAINING MANUAL FOR DETAILS"],
   },
@@ -596,11 +597,11 @@ const LEVELS = [
     solution: [{ steer: 19, dist: 0.7 }, { steer: 52, dist: 1.4 }, { steer: -19, dist: 13 }, { steer: -52, dist: -1.9 }],
   },
   {
-    id: "xiiivs",
-    name: "Back to the Barn Backwards", tier: "Expert", mode: "moves", w: 18, h: 11,
+    id: "p7ubrv",
+    name: "Back to the Barn", tier: "Hard", mode: "moves", w: 18, h: 11,
     vehicle: "tractor",
     start: { x: 1.1, y: 1.6, h: 0 },
-    goal: { cx: 2.8, cy: 5.7, w: 4.3, h: 3.7, heads: [0], tol: 45 },
+    goal: { cx: 2.8, cy: 5.7, w: 4.3, h: 3.7, heads: [180], tol: 45 },
     walls: [
       { x: 0, y: 3.2, w: 14.1, h: 0.4 },
       { x: 0, y: 7.9, w: 7.4, h: 0.4 },
@@ -608,8 +609,8 @@ const LEVELS = [
       { x: 13.5, y: 3.6, w: 0.6, h: 2.8 },
     ],
     cars: [],
-    hint: "Will this make it easier to get out?",
-    solution: [{ steer: 0, dist: 12.35 }, { steer: 47.2, dist: 2.65 }, { steer: 20, dist: 3.6 }, { steer: 52, dist: 2.35 }, { steer: -31, dist: 2.8 }, { steer: 31.4, dist: -3.65 }, { steer: -26.6, dist: 3.1 }, { steer: 3, dist: -4.35 }, { steer: -0.2, dist: 4.85 }, { steer: 52, dist: -0.65 }, { steer: 3.2, dist: -12.1 }],
+    hint: "Park it!",
+    solution: [{ steer: 0, dist: 12.5 }, { steer: 52, dist: 2.65 }, { steer: 0.4, dist: 3.25 }, { steer: 52, dist: 2.5 }, { steer: 52, dist: 1.7 }, { steer: -26.6, dist: 4.15 }, { steer: 1.2, dist: 4.2 }],
   },
   {
     id: "cp7s7n",
@@ -626,15 +627,15 @@ const LEVELS = [
     cars: [
       { cx: 2.8, cy: 9.7, h: Math.PI, type: "tractor" },
     ],
-    hint: "This isn't getting any easier...",
+    hint: "How do I get out now?",
     solution: [{ steer: -13.2, dist: -8.05 }, { steer: 52, dist: 1.15 }, { steer: -52, dist: -2.65 }, { steer: 0, dist: 3.7 }, { steer: -35.6, dist: 4.35 }, { steer: -16, dist: 3.6 }, { steer: -5.6, dist: -7.1 }, { steer: 0.6, dist: 7.1 }, { steer: 52, dist: -0.9 }, { steer: -24, dist: 4.85 }, { steer: -0.2, dist: 8.6 }],
   },
   {
-    id: "p7ubrv",
-    name: "Back to the Barn", tier: "Hard", mode: "moves", w: 18, h: 11,
+    id: "xiiivs",
+    name: "Back to the Barn Backwards", tier: "Expert", mode: "moves", w: 18, h: 11,
     vehicle: "tractor",
     start: { x: 1.1, y: 1.6, h: 0 },
-    goal: { cx: 2.8, cy: 5.7, w: 4.3, h: 3.7, heads: [180], tol: 45 },
+    goal: { cx: 2.8, cy: 5.7, w: 4.3, h: 3.7, heads: [0], tol: 45 },
     walls: [
       { x: 0, y: 3.2, w: 14.1, h: 0.4 },
       { x: 0, y: 7.9, w: 7.4, h: 0.4 },
@@ -642,8 +643,8 @@ const LEVELS = [
       { x: 13.5, y: 3.6, w: 0.6, h: 2.8 },
     ],
     cars: [],
-    hint: "Should have done this the first time!",
-    solution: [{ steer: 0, dist: 12.5 }, { steer: 52, dist: 2.65 }, { steer: 0.4, dist: 3.25 }, { steer: 52, dist: 2.5 }, { steer: 52, dist: 1.7 }, { steer: -26.6, dist: 4.15 }, { steer: 1.2, dist: 4.2 }],
+    hint: "Let's try to park it this way around?",
+    solution: [{ steer: 0, dist: 12.35 }, { steer: 47.2, dist: 2.65 }, { steer: 20, dist: 3.6 }, { steer: 52, dist: 2.35 }, { steer: -31, dist: 2.8 }, { steer: 31.4, dist: -3.65 }, { steer: -26.6, dist: 3.1 }, { steer: 3, dist: -4.35 }, { steer: -0.2, dist: 4.85 }, { steer: 52, dist: -0.65 }, { steer: 3.2, dist: -12.1 }],
   },
   {
     id: "rum24d",
