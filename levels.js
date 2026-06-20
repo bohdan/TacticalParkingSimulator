@@ -285,10 +285,11 @@ const LEVELS = [
     ],
     cars: [
       { cx: 12, cy: 6, h: Math.PI / 2, type: "bus" },
-      { cx: 8, cy: 19, h: 0 },
-      { cx: 18, cy: 19, h: 0 },
+      { cx: 8.1, cy: 19.2, h: 0 },
+      { cx: 18.3, cy: 19.2, h: 0 },
       { cx: 29.8, cy: 6.1, h: Math.PI / 2, type: "bus" },
-      { cx: 29.9, cy: 19.1, h: 0 },
+      { cx: 33.3, cy: 19.2, h: 0 },
+      { cx: 23.6, cy: 19.2, h: -3.1406 },
     ],
     hint: "12 m of bus — watch the enormous rear swing as you steer in.",
     solution: [{ steer: -12, dist: 16 }, { steer: 28, dist: -5 }, { steer: -28, dist: 5 }],
@@ -305,7 +306,7 @@ const LEVELS = [
       { x: 25, y: 0, w: 0.8, h: 6.5 },
     ],
     cars: [
-      { cx: 10, cy: 6, h: Math.PI / 2, type: "bus" },
+      { cx: 2.1, cy: 6.1, h: Math.PI / 2, type: "bus" },
       { cx: 30, cy: 19, h: 0 },
     ],
     hint: "Thread between the pillars before easing the 12 m bus in.",
@@ -323,8 +324,9 @@ const LEVELS = [
       { x: 25, y: 0, w: 0.8, h: 6.5 },
     ],
     cars: [
-      { cx: 32.6, cy: 6.2, h: Math.PI / 2, type: "bus" },
-      { cx: 27.8, cy: 6.2, h: Math.PI / 2, type: "bus" },
+      { cx: 5.3, cy: 6.1, h: Math.PI / 2, type: "bus" },
+      { cx: 2.1, cy: 6.1, h: Math.PI / 2, type: "bus" },
+      { cx: 34.5, cy: 6.2, h: Math.PI / 2, type: "bus" },
     ],
     traffic: [
       { x: 2.3, y: 19.7, h: 0, speed: 3, loop: 30, offset: 20 },
