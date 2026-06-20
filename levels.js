@@ -44,7 +44,7 @@ const LEVELS = [
     ],
     cars: [],
     hint: "Get around the block into the green zone.",
-    solution: [{ steer: 22, dist: 9 }, { steer: 6, dist: 6 }, { steer: -35, dist: -0.5 }],
+    solution: [{ steer: 20, dist: 13 }, { steer: -20, dist: 1.2 }],
   },
   {
     id: "rybjdb",
@@ -81,7 +81,7 @@ const LEVELS = [
       { x: 10, y: -1.5, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     hint: "So much space... you can do it!",
-    solution: [{ steer: 0, dist: 13 }, { steer: 22, dist: -4 }, { steer: -22, dist: -4 }, { steer: 0, dist: 6 }, { steer: -27, dist: 0.1 }],
+    solution: [{ steer: 12, dist: 2 }, { steer: 2, dist: 7 }, { steer: -6, dist: 3.5 }, { steer: -28, dist: 0.6 }],
   },
   {
     id: "d9lm3k",
@@ -102,7 +102,7 @@ const LEVELS = [
       { x: 21.7, y: 10.7, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     hint: "Angled bays: enter on the diagonal, dead straight.",
-    solution: [{ steer: 0, dist: 9 }, { steer: 35, dist: -1.4 }, { steer: -22, dist: 2.5 }, { steer: -7, dist: 2.7 }],
+    solution: [{ steer: 20, dist: 1.2 }, { steer: -12, dist: 10 }, { steer: -20, dist: 1.2 }],
   },
   {
     id: "uxebvt",
@@ -119,7 +119,7 @@ const LEVELS = [
       { cx: 9.5, cy: 2.55, h: Math.PI },
     ],
     hint: "Swing the nose out toward the lane, then counter-steer and glide away.",
-    solution: [{ steer: -22, dist: 2.5 }, { steer: 0, dist: 6 }, { steer: -3, dist: 1.5 }],
+    solution: [{ steer: -20, dist: 5 }, { steer: 20, dist: 5 }],
   },
   {
     id: "x5xy7q",
@@ -136,7 +136,7 @@ const LEVELS = [
       { cx: 9.5, cy: 2.55, h: Math.PI },
     ],
     hint: "Reverse into the gap at the curb.",
-    solution: [{ steer: 6, dist: 4 }, { steer: -6, dist: 9 }, { steer: 6, dist: -6 }, { steer: -35, dist: -1.9 }],
+    solution: [{ steer: 0, dist: 10.75 }, { steer: 35, dist: -3 }, { steer: -35, dist: -3 }],
   },
   {
     id: "v82iil",
@@ -171,7 +171,7 @@ const LEVELS = [
       { cx: 16.9, cy: 11.6, h: 0.9308 },
     ],
     hint: "Partk on a curve",
-    solution: [{ steer: 6, dist: 13 }, { steer: 0, dist: 4 }, { steer: 35, dist: -2.5 }, { steer: -22, dist: -4 }, { steer: 9, dist: 0.7 }],
+    solution: [{ steer: 6, dist: 16 }, { steer: -35, dist: 2 }, { steer: 0, dist: -5 }, { steer: -35, dist: -2 }],
   },
   {
     id: "z30oy8",
@@ -192,7 +192,7 @@ const LEVELS = [
       { x: 21.7, y: 10.7, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     hint: "You're not a maniac, you'll just need to leave in a hurry...",
-    solution: [{ steer: 0, dist: 13 }, { steer: 0, dist: 4 }, { steer: -22, dist: -6 }, { steer: 35, dist: 0.7 }, { steer: -35, dist: -1.4 }, { steer: 35, dist: 1.4 }, { steer: -23, dist: -3.5 }],
+    solution: [{ steer: 0, dist: 10 }, { steer: -2, dist: 7 }, { steer: -35, dist: -7 }, { steer: 35, dist: 1.2 }, { steer: -20, dist: -2 }],
   },
   {
     id: "y6o5vf",
@@ -223,7 +223,7 @@ const LEVELS = [
       { cx: 16.4, cy: 2.85, h: Math.PI / 2 },
     ],
     hint: "Back into the empty bay (either direction).",
-    solution: [{ steer: 22, dist: 4 }, { steer: -35, dist: 6 }, { steer: 13, dist: -6 }, { steer: -11, dist: -1.3 }],
+    solution: [{ steer: 0, dist: 10.6 }, { steer: 35, dist: -6.3 }, { steer: 0, dist: -2.9 }],
   },
   {
     id: "ooi7yc",
@@ -290,7 +290,7 @@ const LEVELS = [
       { cx: 29.9, cy: 19.1, h: 0 },
     ],
     hint: "12 m of bus — watch the enormous rear swing as you steer in.",
-    solution: [{ steer: -7, dist: 13 }, { steer: -45, dist: 4 }, { steer: 45, dist: -2.5 }, { steer: -28, dist: 4 }],
+    solution: [{ steer: -12, dist: 16 }, { steer: 28, dist: -5 }, { steer: -28, dist: 5 }],
   },
   {
     id: "s23h6e",
@@ -444,7 +444,7 @@ const LEVELS = [
       { cx: 12, cy: 2.55, h: Math.PI },
     ],
     hint: "Nudge back first to gain the extra inch you need.",
-    solution: [{ steer: -22, dist: -0.35 }, { steer: 35, dist: -0.7 }, { steer: -35, dist: 1.4 }, { steer: 6, dist: 6 }, { steer: -23, dist: 2.7 }],
+    solution: [{ steer: 12, dist: -1.2 }, { steer: -35, dist: 2 }, { steer: 28, dist: 0.6 }, { steer: 12, dist: 7 }],
   },
   {
     id: "q0vz36",
@@ -501,7 +501,7 @@ const LEVELS = [
       { x: 21.7, y: 11.3, h: Math.PI, speed: 4, loop: 28, offset: 16 },
     ],
     hint: "The Miata's tight turn radius makes this a 2-move park.",
-    solution: [{ steer: -25, dist: 2.5 }, { steer: -14, dist: 1.4 }, { steer: -40, dist: 2.5 }, { steer: -16, dist: -0.3 }],
+    solution: [{ steer: -2, dist: 1.2 }, { steer: -35, dist: 5 }],
   },
   {
     id: "yg12nu",
