@@ -515,9 +515,10 @@ function drawCarBody(pose, opts, spec) {
   if (vtype === 'tractor') {
     const jx = x0 + len * 0.54;
     const cabW = w * 0.80, hoodW = w * 0.44;
-    ctx.fillStyle = '#d46020'; ctx.lineWidth = 0.07; ctx.strokeStyle = '#7a3500';
-    roundRect(x0, -cabW / 2, jx - x0, cabW, 0.12); ctx.fill(); if (opts.stroke) ctx.stroke();
-    roundRect(jx, -hoodW / 2, x0 + len - jx, hoodW, 0.10); ctx.fill(); if (opts.stroke) ctx.stroke();
+    const tFill = opts.fill || '#d46020', tStroke = opts.fill ? opts.stroke : '#7a3500';
+    ctx.fillStyle = tFill; ctx.lineWidth = 0.07; ctx.strokeStyle = tStroke;
+    roundRect(x0, -cabW / 2, jx - x0, cabW, 0.12); ctx.fill(); if (tStroke) ctx.stroke();
+    roundRect(jx, -hoodW / 2, x0 + len - jx, hoodW, 0.10); ctx.fill(); if (tStroke) ctx.stroke();
   } else {
     const fill = vtype === 'miata' ? '#d23b3b' : opts.fill;
     const corner = vtype === 'bus' ? Math.min(0.18, w * 0.08) : Math.min(0.3, w * 0.17);
@@ -891,11 +892,14 @@ function draw(now) {
   for (const o of level.obstacles) {
     if (o.kind === 'car') {
       const sp = o.carSpec || SEDAN;
+      const obstVeh = o.pose.type || 'default';
+      const sameAsTractor = obstVeh === 'tractor' && (level.vehicle || 'default') === 'tractor';
+      const obstFill = sameAsTractor ? '#737d8c' : undefined;
       drawCarBody({ x: o.pose.cx - Math.cos(o.pose.h) * (sp.len / 2 - sp.rOver),
                     y: o.pose.cy - Math.sin(o.pose.h) * (sp.len / 2 - sp.rOver),
                     h: o.pose.h },
-                  { fill: '#737d8c', stroke: '#525a66', detail: true, wheels: true,
-                    vehicle: o.pose.type || 'default' }, sp);
+                  { fill: obstFill, stroke: '#525a66', detail: true, wheels: true,
+                    vehicle: obstVeh }, sp);
     } else {
       drawPoly(o.poly);
       ctx.fillStyle = o.kind === 'curb' ? '#3a4148' : '#39404e';
