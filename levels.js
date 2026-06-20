@@ -702,7 +702,7 @@ const LEVELS = [
       { x: 13.5, y: 3.6, w: 0.6, h: 2.8 },
     ],
     cars: [],
-    hint: "The boss comes and demans that you re-part the tractor.",
+    hint: "The boss comes and demans that you re-park the tractor",
     solution: [{ steer: 5.8, dist: 10.9 }, { steer: 51, dist: -3.65 }, { steer: -1, dist: 1.6 }, { steer: -52, dist: 2.4 }, { steer: 0.4, dist: 3.6 }],
   },
   {
