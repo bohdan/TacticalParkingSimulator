@@ -528,7 +528,7 @@ const LEVELS = [
     id: "q8angu",
     draft: true,
     type: "cutscene", name: "Cutscene Tractor",
-    message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "SUSPECT DR M. T. POTATO FARM", "DEVELOPING SUPERVIRUS.", "", "INFILTRATE. NEUTRALIZE. DO NOT STAND OUT."],
+    message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "SUSPECT DR M. T. DEVELOPING", "BIOWEAPONIZED CHICKENS", "", "INFILTRATE NEUTRALIZE", "", "P.S. CONGRATULATION ON YOUR NEW", "LAMBORGHINI"],
   },
   {
     id: "ouhmic",
