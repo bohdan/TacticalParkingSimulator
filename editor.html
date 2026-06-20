@@ -1116,10 +1116,32 @@ document.getElementById('toolSelect').onclick=()=>setTool('select');
   const menu=document.getElementById('addMenu');
   document.getElementById('btnAddObj').onclick=e=>{
     e.stopPropagation();
+    if(sel && (sel.kind==='wall'||sel.kind==='car'||sel.kind==='traffic')){
+      cloneSelected(); return;
+    }
     menu.style.display=menu.style.display==='none'?'block':'none';
   };
   document.querySelectorAll('.add-opt').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
   document.addEventListener('click',()=>{ menu.style.display='none'; });
+}
+
+function cloneSelected(){
+  if(!sel) return;
+  const OFF=0.5;
+  if(sel.kind==='car'){
+    const src=L.cars[sel.idx];
+    L.cars.push({...src,cx:src.cx+OFF,cy:src.cy+OFF});
+    sel={kind:'car',idx:L.cars.length-1};
+  } else if(sel.kind==='traffic'){
+    const src=L.traffic[sel.idx];
+    L.traffic.push({...src,x:src.x+OFF,y:src.y+OFF});
+    sel={kind:'traffic',idx:L.traffic.length-1};
+  } else if(sel.kind==='wall'){
+    const src=L.walls[sel.idx];
+    L.walls.push({...src,x:src.x+OFF,y:src.y+OFF});
+    sel={kind:'wall',idx:L.walls.length-1};
+  }
+  markDirty(); updateSidebar(); render();
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -1221,6 +1243,14 @@ function row(label,input){ return `<div class="row"><label>${label}</label>${inp
 
 function updateSelPanel(){
   const panel=document.getElementById('selPanel');
+  const canClone=sel&&(sel.kind==='wall'||sel.kind==='car'||sel.kind==='traffic');
+  const addBtn=document.getElementById('btnAddObj');
+  if(canClone){
+    addBtn.textContent='⊕ Clone';
+  } else {
+    const cur=tool in ADD_NAMES?'+ '+ADD_NAMES[tool]+' ▾':'+ Add ▾';
+    addBtn.textContent=cur;
+  }
   if(!sel){ panel.innerHTML='<p class="sel-hint">Click an object — including the start car and goal box — to edit it here.<br>Del removes walls / cars / traffic.</p>'; return; }
   let html='';
   if(sel.kind==='start'){
