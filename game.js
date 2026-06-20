@@ -961,6 +961,15 @@ const STEER_Q = 0.2;  // degrees
 const DIST_Q  = 0.05; // metres
 const snapTo = (v, q) => Math.round(v / q) * q;
 
+// Snap a loaded plan (steer in radians) onto the same input grid, so loaded
+// solutions are reproducible/editable exactly like hand-entered ones.
+function quantizeMoves(mvs) {
+  return mvs.map(m => ({
+    steer: rad(+snapTo(deg(m.steer), STEER_Q).toFixed(1)),
+    dist:  +snapTo(m.dist, DIST_Q).toFixed(2),
+  }));
+}
+
 function setEdit(steerDeg, dist) {
   const s = Math.abs(steerDeg) < 0.1 ? 0 : snapTo(steerDeg, STEER_Q);
   editSteer = +clamp(s, -CAR.maxSteer, CAR.maxSteer).toFixed(1);
@@ -1258,7 +1267,7 @@ $('lbTable').addEventListener('click', e => {
   const mvs = movesFromString(btn.dataset.sol);
   if (!mvs) { toast('Could not decode solution'); return; }
   $('lbOverlay').classList.add('hidden');
-  moves = mvs;
+  moves = quantizeMoves(mvs);
   solutionUsed = true;
   editIdx = null;
   setEdit(0, 0);
@@ -1287,7 +1296,7 @@ function showSolution() {
   if (anim) return;
   editIdx = null;
   solutionUsed = true;
-  moves = level.solution.map(m => ({ steer: rad(m.steer), dist: m.dist }));
+  moves = quantizeMoves(level.solution.map(m => ({ steer: rad(m.steer), dist: m.dist })));
   setEdit(0, 0);
   recomputePlan();
   toast('Solution loaded — leaderboard disabled until Reset');
@@ -1742,7 +1751,7 @@ if (!testLevelLoaded && !_solHash && introIdx >= 0 && !introShownToday()) {
 
 // Apply a shared solution from #sol= URL hash (set moves before first draw)
 if (_solHash && level) {
-  moves = _solHash;
+  moves = quantizeMoves(_solHash);
   _solHash = null;
   recomputePlan();
   toast('Shared solution loaded');
