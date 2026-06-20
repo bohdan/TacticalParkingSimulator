@@ -1473,7 +1473,7 @@ async function renderLbAll(allRows, autoSelectIdx) {
       const name = locked ? '???' : escHtml(l.name);
       const player = (!locked && r) ? escHtml(r.player) : '—';
       const movesStr = (!locked && r) ? r.moves : '—';
-      const distStr = (!locked && r && r.dist != null) ? r.dist.toFixed(0) + 'm' : '—';
+      const distStr = (!locked && r && r.dist != null) ? (r.dist * 100).toFixed(0) + 'cm' : '—';
       const playBtn = (!locked && r?.solution)
         ? `<button class="lb-sol-btn" data-sol="${escHtml(r.solution)}" data-level-idx="${i}">&#9654;</button>` : '';
       const sel = i === autoSelectIdx ? ' lb-row-sel' : '';
@@ -1509,7 +1509,7 @@ function renderLbDetail(idx, allRows) {
         ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}" data-level-idx="${idx}">&#9654;</button></td>`
         : '<td></td>';
       const when = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '';
-      const dist = r.dist != null ? r.dist.toFixed(0) + 'm' : '—';
+      const dist = r.dist != null ? (r.dist * 100).toFixed(0) + 'cm' : '—';
       return `<tr class="${cls}" title="${when}"><td class="lb-rank">${i+1}</td>` +
         `<td class="lb-name">${escHtml(r.player)}</td>` +
         `<td class="lb-stars">${stars}</td><td class="lb-metric">${r.moves}</td>` +
