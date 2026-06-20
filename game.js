@@ -991,8 +991,11 @@ function draw(now) {
     carSteer = anim.samples[i].steer;
     if (trav >= anim.total) finishRun();
   }
-  drawCarBody(carPose, { fill: '#4fc3f7', stroke: '#1c5f80', detail: true,
-                         wheels: true, steer: carSteer, vehicle: level.vehicle || 'default' });
+  const pveh = level.vehicle || 'default';
+  // Tractor keeps its natural orange body; other vehicles use the blue player color.
+  drawCarBody(carPose, { fill: pveh === 'tractor' ? undefined : '#4fc3f7',
+                         stroke: '#1c5f80', detail: true,
+                         wheels: true, steer: carSteer, vehicle: pveh });
 
   // move numbers (screen space so text stays crisp)
   screenTransform();
