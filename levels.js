@@ -276,7 +276,7 @@ const LEVELS = [
   },
   {
     id: "x62bx2",
-    name: "Bus Depot", tier: "Hard", mode: "moves", w: 36, h: 21,
+    name: "Bus Depot", tier: "Medium", mode: "moves", w: 36, h: 21,
     vehicle: "bus",
     start: { x: 3.1, y: 15.8, h: 0 },
     goal: { cx: 17.6, cy: 6.7, w: 5.3, h: 13.2, heads: [90, -90], tol: 45 },
@@ -295,7 +295,7 @@ const LEVELS = [
   },
   {
     id: "s23h6e",
-    name: "Bus Terminal", tier: "Expert", mode: "moves", w: 36, h: 21,
+    name: "Bus Terminal", tier: "Medium", mode: "moves", w: 36, h: 21,
     vehicle: "bus",
     start: { x: 3, y: 16, h: 0 },
     goal: { cx: 22, cy: 7.2, w: 5, h: 14, heads: [90, -90], tol: 45 },
@@ -310,6 +310,27 @@ const LEVELS = [
     ],
     hint: "Thread between the pillars before easing the 12 m bus in.",
     solution: [{ steer: -4.4, dist: 23.81 }, { steer: 45, dist: -6.85 }, { steer: -18, dist: 6.3 }],
+  },
+  {
+    id: "ahbt26",
+    name: "South Central Station", tier: "Expert", mode: "moves", w: 36, h: 21,
+    vehicle: "bus",
+    start: { x: 3, y: 16, h: 0 },
+    goal: { cx: 22, cy: 7.2, w: 5, h: 14, heads: [90, -90], tol: 45 },
+    walls: [
+      { x: 0, y: 17.7, w: 36, h: 0.5, kind: "curb" },
+      { x: 18, y: 0, w: 0.8, h: 6.5 },
+      { x: 25, y: 0, w: 0.8, h: 6.5 },
+    ],
+    cars: [
+      { cx: 32.6, cy: 6.2, h: Math.PI / 2, type: "bus" },
+      { cx: 27.8, cy: 6.2, h: Math.PI / 2, type: "bus" },
+    ],
+    traffic: [
+      { x: 2.3, y: 19.7, h: 0, speed: 3, loop: 30, offset: 20 },
+    ],
+    hint: "Who designed this?",
+    solution: [{ steer: -13.6, dist: 14.92 }, { steer: 16.4, dist: -2.1 }, { steer: -25, dist: 4.55 }, { steer: 2.8, dist: -5.35 }, { steer: 45, dist: 1.85 }, { steer: -30.6, dist: 4.61 }, { steer: 4.6, dist: -4.85 }, { steer: 45, dist: 1.55 }, { steer: -45, dist: 2.5 }, { steer: 0.2, dist: -4.4 }, { steer: 45, dist: 2 }, { steer: -45, dist: 3.1 }, { steer: 0, dist: -5.15 }, { steer: 23.8, dist: 4.2 }, { steer: -15.4, dist: 0.9 }, { steer: 45, dist: -2.05 }, { steer: 2.8, dist: -2.7 }, { steer: 24, dist: 4.5 }, { steer: 45, dist: -1.6 }],
   },
   {
     id: "h518uw",
