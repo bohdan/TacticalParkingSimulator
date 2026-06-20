@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Tactical Parking Simulator — Level Editor</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0e1117;color:#c8d0dc;font:13px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+body{background:#0e1117;color:#c8d0dc;font:13px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
 #toolbar{background:#171a21;border-bottom:1px solid #2a3040;padding:7px 12px;display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap}
 #toolbar h1{font-size:14px;font-weight:700;color:#e7ecf3;margin-right:4px}
 .sep{width:1px;background:#2a3040;height:22px;margin:0 2px}
@@ -33,15 +34,15 @@ button.danger:hover{background:#6e2424}
 .sel-hint{font-size:11px;color:#506080;font-style:italic;margin-top:6px}
 #overlay,#importOverlay,#ghOverlay,#saveOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99;justify-content:center;align-items:center}
 #overlay.show,#importOverlay.show,#ghOverlay.show,#saveOverlay.show{display:flex}
-#exportBox{background:#13161e;border:1px solid #2a3040;border-radius:10px;padding:16px;width:660px;max-height:82vh;display:flex;flex-direction:column;gap:10px}
+#exportBox{background:#13161e;border:1px solid #2a3040;border-radius:10px;padding:16px;width:min(660px,94vw);max-height:82vh;display:flex;flex-direction:column;gap:10px}
 #exportBox h3{font-size:14px;color:#e7ecf3}
 #exportText{flex:1;background:#080a0e;color:#7dc87d;font:12px/1.65 Menlo,Consolas,monospace;border:1px solid #2a3040;border-radius:6px;padding:10px;resize:none;min-height:280px;overflow:auto;white-space:pre;tab-size:2}
 .str-row{display:flex;gap:6px;align-items:center}
 .str-row input{flex:1;background:#080a0e;color:#80d0ff;font:11px/1.4 Menlo,Consolas,monospace;border:1px solid #2a3040;border-radius:6px;padding:6px 8px;min-width:0}
-#importBox{background:#13161e;border:1px solid #2a3040;border-radius:10px;padding:16px;width:560px;display:flex;flex-direction:column;gap:10px}
+#importBox{background:#13161e;border:1px solid #2a3040;border-radius:10px;padding:16px;width:min(560px,94vw);display:flex;flex-direction:column;gap:10px}
 #importBox h3{font-size:14px;color:#e7ecf3}
 #importText{background:#080a0e;color:#80d0ff;font:11px/1.5 Menlo,Consolas,monospace;border:1px solid #2a3040;border-radius:6px;padding:10px;resize:vertical;height:90px;width:100%}
-#ghBox,#saveBox{background:#13161e;border:1px solid #2a3040;border-radius:10px;padding:16px;width:400px;display:flex;flex-direction:column;gap:10px}
+#ghBox,#saveBox{background:#13161e;border:1px solid #2a3040;border-radius:10px;padding:16px;width:min(400px,94vw);display:flex;flex-direction:column;gap:10px}
 #ghBox h3,#saveBox h3{font-size:14px;color:#e7ecf3}
 .save-choice{display:flex;flex-direction:column;gap:6px;font-size:12px}
 .save-choice label{display:flex;align-items:center;gap:6px;cursor:pointer}
@@ -60,6 +61,18 @@ button.nav{padding:4px 8px;font-weight:700}
 .sol-row input{flex:1;min-width:0}
 .sol-u{flex:0 0 auto;font-size:10px;color:#5a6a80}
 .sol-del{flex:0 0 auto;padding:2px 6px;background:#3a2030;border-color:#6e2424;color:#e09090}
+/* Phone / narrow: stack the sidebar below the canvas, fatten touch targets. */
+@media (max-width:760px){
+  #main{flex-direction:column}
+  #cvWrap{flex:1 1 auto;min-height:0}
+  #sidebar{width:auto;max-height:44vh;border-left:none;border-top:1px solid #2a3040}
+  #toolbar{padding:6px 8px;gap:6px}
+  #toolbar h1{font-size:13px}
+  #curSel{max-width:42vw}
+  button{padding:7px 11px}
+  .row input,.row select{padding:6px 7px}
+  .sol-del{padding:5px 9px}
+}
 </style>
 <script src="physics.js"></script>
 <script src="solver.js"></script>
@@ -766,13 +779,33 @@ function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
 // Snap to 0.1m grid when near a grid line
 function snapW(v){ return Math.round(v*10)/10; }
 
-// ── Mouse events ─────────────────────────────────────────────────────────────
-cv.addEventListener('mousedown', e=>{
+// ── Pointer events (mouse + touch) ───────────────────────────────────────────
+// Active pointers, keyed by pointerId — drives two-finger pan/zoom on touch.
+const pointers=new Map();
+let gesture=null;   // {dist, cx, cy} centroid+spread while pinching
+
+function gestureState(){
+  const ps=[...pointers.values()];
+  const r=cv.getBoundingClientRect();
+  let sx=0,sy=0; for(const p of ps){ sx+=p.x; sy+=p.y; }
+  const cx=sx/ps.length-r.left, cy=sy/ps.length-r.top;
+  const dist=ps.length>1?Math.hypot(ps[0].x-ps[1].x, ps[0].y-ps[1].y):0;
+  return {cx,cy,dist};
+}
+
+cv.addEventListener('pointerdown', e=>{
   e.preventDefault();
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  // Second finger down → switch to pan/zoom gesture, abandon any single-touch edit.
+  if(pointers.size>=2){
+    drag=null; drawRect=null; panning=false;
+    gesture=gestureState(); render(); return;
+  }
+  cv.setPointerCapture(e.pointerId);
   if(isCutscene(L)) return;   // no geometry on a cutscene card
   const mw=mouseWorld(e);
 
-  // Pan: middle button or right button
+  // Pan: middle button or right button (mouse only)
   if(e.button===1||e.button===2){
     panning=true; panOrigin={mx:e.clientX,my:e.clientY,ox:V.ox,oy:V.oy}; return;
   }
@@ -817,7 +850,23 @@ cv.addEventListener('mousedown', e=>{
   }
 });
 
-cv.addEventListener('mousemove', e=>{
+cv.addEventListener('pointermove', e=>{
+  if(pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  // Two-finger pinch/pan
+  if(gesture && pointers.size>=2){
+    const g=gestureState();
+    // pan by centroid movement
+    V.ox+=g.cx-gesture.cx; V.oy+=g.cy-gesture.cy;
+    // zoom by spread change, anchored at the centroid
+    if(gesture.dist>0 && g.dist>0){
+      const f=Math.min(3,Math.max(.33,g.dist/gesture.dist));
+      const ns=Math.min(200,Math.max(5,V.scale*f));
+      const af=ns/V.scale;
+      V.ox=g.cx-(g.cx-V.ox)*af; V.oy=g.cy-(g.cy-V.oy)*af;
+      V.scale=ns;
+    }
+    gesture=g; render(); return;
+  }
   if(panning){
     const dx=e.clientX-panOrigin.mx, dy=e.clientY-panOrigin.my;
     V.ox=panOrigin.ox+dx; V.oy=panOrigin.oy+dy; render(); return;
@@ -911,7 +960,15 @@ cv.addEventListener('mousemove', e=>{
   updateSidebar(); render();
 });
 
-cv.addEventListener('mouseup', e=>{
+function endPointer(e){
+  pointers.delete(e.pointerId);
+  if(pointers.size<2) gesture=null;
+  if(pointers.size>0) return true;   // gesture still settling — skip edit-finalize
+  return false;
+}
+
+cv.addEventListener('pointerup', e=>{
+  if(endPointer(e)) return;
   if(panning){panning=false; panOrigin=null; return;}
   if(drawRect){
     const {ax,ay,bx,by}=drawRect;
@@ -926,6 +983,12 @@ cv.addEventListener('mouseup', e=>{
   }
   if(drag) markDirty();
   drag=null;
+});
+
+cv.addEventListener('pointercancel', e=>{
+  pointers.delete(e.pointerId);
+  if(pointers.size<2) gesture=null;
+  if(pointers.size===0){ drag=null; drawRect=null; panning=false; }
 });
 
 cv.addEventListener('contextmenu', e=>e.preventDefault());
