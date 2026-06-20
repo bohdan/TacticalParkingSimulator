@@ -557,6 +557,24 @@ const LEVELS = [
     message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "SUSPECT DR M. T. DEVELOPING", "BIOWEAPONIZED CHICKENS", "", "INFILTRATE NEUTRALIZE", "", "P.S. CONGRATULATION ON YOUR NEW", "LAMBORGHINI"],
   },
   {
+    id: "ogubjs",
+    name: "Optimized?", tier: "Expert", mode: "moves", w: 18, h: 11,
+    vehicle: "tractor",
+    start: { x: 4.2, y: 5.7, h: Math.PI },
+    goal: { cx: 2.6, cy: 1.6, w: 4.4, h: 2.6, heads: [0], tol: 45 },
+    walls: [
+      { x: 0, y: 3.2, w: 14.1, h: 0.4 },
+      { x: 0.4, y: 7.9, w: 7.7, h: 0.4 },
+      { x: 0, y: 3.6, w: 0.4, h: 7.4 },
+      { x: 13.5, y: 3.6, w: 0.6, h: 2.8 },
+    ],
+    cars: [
+      { cx: 2.7, cy: 9.7, h: Math.PI, type: "tractor" },
+    ],
+    hint: "I'll just reverse out from now on!",
+    solution: [],
+  },
+  {
     id: "ouhmic",
     name: "Out Into The Field", tier: "Expert", mode: "moves", w: 18, h: 11,
     vehicle: "tractor",
@@ -569,9 +587,9 @@ const LEVELS = [
       { x: 13.5, y: 3.6, w: 0.6, h: 2.8 },
     ],
     cars: [
-      { cx: 2.8, cy: 9.7, h: 0, type: "tractor" },
+      { cx: 2.8, cy: 9.7, h: Math.PI, type: "tractor" },
     ],
-    hint: "Rise and shine!",
+    hint: "It's your first day! Rise and shine!",
     solution: [{ steer: 5, dist: 11.81 }, { steer: -49.4, dist: 2.9 }, { steer: -24, dist: 4.39 }, { steer: -7.8, dist: -7.15 }, { steer: -1.4, dist: 7 }, { steer: 52, dist: -0.65 }, { steer: -31.6, dist: 3.95 }, { steer: 1.2, dist: 9.5 }],
   },
   {
