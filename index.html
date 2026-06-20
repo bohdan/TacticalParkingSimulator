@@ -60,6 +60,10 @@
     <div class="row" id="ovSubmitRow" style="margin-top:8px;display:none;">
       <button id="ovSubmit" class="lb">Submit to leaderboard</button>
     </div>
+    <div id="ovIneligRow" style="display:none;margin-top:8px;text-align:center;">
+      <div class="sub" style="margin-bottom:6px;">Solution loaded — not eligible for leaderboard</div>
+      <button id="ovResetSol">Reset &amp; try yourself</button>
+    </div>
     <div class="row" style="margin-top:8px;">
       <button id="ovShare">&#128279; Share solution</button>
     </div>
@@ -115,12 +119,13 @@
 </div>
 
 <div id="lbOverlay" class="hidden">
-  <div class="card" style="max-height:80vh;overflow-y:auto;">
-    <div id="lbTitle" style="text-align:center;font-size:17px;font-weight:700;margin-bottom:10px;"></div>
-    <div style="text-align:center;margin-bottom:12px;">
-      <select id="lbLevelSel" style="background:#222837;color:#e7ecf3;border:1px solid #313a4b;border-radius:8px;padding:5px 10px;font-size:13px;max-width:260px;"></select>
-    </div>
+  <div class="card" style="max-height:80vh;overflow-y:auto;min-width:min(360px,90vw);">
+    <div id="lbTitle" style="text-align:center;font-size:17px;font-weight:700;margin-bottom:10px;">Leaderboard</div>
     <table id="lbTable" class="lb-table"></table>
+    <div id="lbDetail" style="display:none;margin-top:16px;border-top:1px solid #313a4b;padding-top:12px;">
+      <div id="lbDetailTitle" style="font-size:13px;font-weight:600;color:#a0aab8;margin-bottom:8px;"></div>
+      <table id="lbDetailTable" class="lb-table"></table>
+    </div>
     <div style="text-align:center;margin-top:14px;">
       <button id="lbClose" style="height:44px;padding:0 24px;border-radius:12px;border:1px solid #313a4b;background:#222837;color:#e7ecf3;font-size:14px;font-weight:600;">Close</button>
     </div>

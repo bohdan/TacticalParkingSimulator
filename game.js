@@ -1057,6 +1057,18 @@ function sampleAt(a, trav) {
   return lo;
 }
 
+function parkRejectionReason(pose, goal) {
+  const okHead = goal.heads.some(hd => Math.abs(normAng(pose.h - rad(hd))) <= rad(goal.tol));
+  if (!okHead) {
+    const best = goal.heads.reduce((best, hd) => {
+      const err = Math.abs(normAng(pose.h - rad(hd)));
+      return err < best.err ? { err, hd } : best;
+    }, { err: Infinity, hd: 0 });
+    return `Angle off by ${deg(best.err).toFixed(0)}° — need to be within ${goal.tol}° of the target heading`;
+  }
+  return 'Car is not fully inside the parking zone';
+}
+
 function finishRun() {
   anim = null;
   updateHUD();
@@ -1086,11 +1098,12 @@ function finishRun() {
     $('ovNext').style.display = nextPlayable(levelIdx, +1) >= 0 ? '' : 'none';
     pendingLb = (solutionUsed || !lbAllowed()) ? null : { levelIdx, stars, st: { ...st }, moves: [...moves] };
     $('ovSubmitRow').style.display = (lbAllowed() && !solutionUsed) ? '' : 'none';
+    $('ovIneligRow').style.display = (lbAllowed() && solutionUsed) ? '' : 'none';
     $('ovSubmit').disabled = false;
     $('ovSubmit').textContent = 'Submit to leaderboard';
     $('overlay').classList.remove('hidden');
   } else {
-    toast('Not parked yet — keep planning');
+    toast(parkRejectionReason(end, level.goal));
   }
 }
 
@@ -1338,6 +1351,13 @@ $('ovRetry').addEventListener('click', () => {
   setEdit(0, 0);
   recomputePlan();
 });
+$('ovResetSol').addEventListener('click', () => {
+  $('overlay').classList.add('hidden');
+  moves = [];
+  solutionUsed = false;
+  setEdit(0, 0);
+  recomputePlan();
+});
 $('ovNext').addEventListener('click', () => {
   $('overlay').classList.add('hidden');
   // Step to the very next item: a cutscene there will play, otherwise the
@@ -1428,117 +1448,115 @@ async function lbGetAll() {
   return r.json();
 }
 
-function lbPopulateSel(selIdx) {
-  const sel = $('lbLevelSel');
-  sel.innerHTML = '<option value="all">All levels</option>' +
-    LEVELS.flatMap((l, i) =>
-      l.draft || l.type === 'cutscene' ? [] :
-      [`<option value="${i}">${escHtml(l.name)}</option>`]
-    ).join('');
-  sel.value = selIdx == null ? 'all' : String(selIdx);
+async function renderLbAll(allRows, autoSelectIdx) {
+  // Build best-per-level map from already-fetched rows (sorted best-first)
+  const bestByLevel = new Map();
+  for (const r of allRows) {
+    const key = r.level_id ?? '';
+    if (!bestByLevel.has(key)) bestByLevel.set(key, r);
+  }
+  const playable = LEVELS.flatMap((l, i) =>
+    (!l.draft && l.type !== 'cutscene') ? [{ l, i }] : []);
+  $('lbTable').innerHTML =
+    `<tr class="lb-head"><td class="lb-name">Level</td><td class="lb-name">Record</td>` +
+    `<td class="lb-metric">Moves</td><td class="lb-metric">Dist</td><td></td></tr>` +
+    playable.map(({ l, i }) => {
+      const r = bestByLevel.get(l.id || l.name);
+      const locked = !isUnlocked(i);
+      const name = locked ? '???' : escHtml(l.name);
+      const player = (!locked && r) ? escHtml(r.player) : '—';
+      const movesStr = (!locked && r) ? r.moves : '—';
+      const distStr = (!locked && r && r.dist != null) ? r.dist.toFixed(0) + 'm' : '—';
+      const playBtn = (!locked && r?.solution)
+        ? `<button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button>` : '';
+      const sel = i === autoSelectIdx ? ' lb-row-sel' : '';
+      return `<tr class="lb-row${sel}" data-idx="${i}" style="cursor:pointer">` +
+        `<td class="lb-name">${name}</td><td class="lb-name">${player}</td>` +
+        `<td class="lb-metric">${movesStr}</td><td class="lb-metric">${distStr}</td>` +
+        `<td>${playBtn}</td></tr>`;
+    }).join('');
 }
 
-async function renderLbAll() {
+async function renderLbDetail(idx, allRows) {
+  const l = LEVELS[idx];
+  const par = l.par ?? (l.solution ? l.solution.length : 4);
+  $('lbDetailTitle').textContent = `${l.name} · Top scores`;
+  $('lbDetail').style.display = '';
+  const tbl = $('lbDetailTable');
+
+  // Filter allRows to this level, dedupe by player
+  const key = l.id || l.name;
+  const seen = new Set();
+  const top = allRows
+    .filter(r => (r.level_id ?? '') === key && !seen.has(r.player) && seen.add(r.player))
+    .slice(0, 10);
+
+  if (!top.length) {
+    tbl.innerHTML = '<tr><td colspan="5" class="lb-empty">No entries yet — be first!</td></tr>';
+    return;
+  }
+  tbl.innerHTML =
+    `<tr class="lb-head"><td></td><td class="lb-name">Player</td><td class="lb-stars">★</td>` +
+    `<td class="lb-metric">Moves</td><td class="lb-metric">Dist</td><td></td></tr>` +
+    top.map((r, i) => {
+      const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
+      const sc = starsForMoves(r.moves, par);
+      const stars = '★'.repeat(sc) + `<span class="lb-dim">★</span>`.repeat(3 - sc);
+      const playBtn = r.solution
+        ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button></td>`
+        : '<td></td>';
+      const when = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '';
+      const dist = r.dist != null ? r.dist.toFixed(0) + 'm' : '—';
+      return `<tr class="${cls}" title="${when}"><td class="lb-rank">${i+1}</td>` +
+        `<td class="lb-name">${escHtml(r.player)}</td>` +
+        `<td class="lb-stars">${stars}</td><td class="lb-metric">${r.moves}</td>` +
+        `<td class="lb-metric">${dist}</td>${playBtn}</tr>`;
+    }).join('');
+}
+
+let _lbAllRows = [];
+
+async function openLeaderboard(idx) {
+  $('lbDetail').style.display = 'none';
   $('lbTable').innerHTML = '<tr><td colspan="5" class="lb-empty">Loading…</td></tr>';
+  $('lbOverlay').classList.remove('hidden');
   try {
-    const rows = await lbGetAll();
-    // Keep best entry per level_id (rows already sorted best-first)
-    const bestByLevel = new Map();
-    for (const r of rows) {
-      const key = r.level_id ?? '';
-      if (!bestByLevel.has(key)) bestByLevel.set(key, r);
-    }
-    // Show one row per level in LEVELS order, skipping levels with no entries
-    const display = LEVELS
-      .filter(l => !l.draft && l.type !== 'cutscene')
-      .flatMap(l => {
-        const r = bestByLevel.get(l.id || l.name);
-        return r ? [{ l, r }] : [];
-      });
-    if (!display.length) {
-      $('lbTable').innerHTML = '<tr><td colspan="5" class="lb-empty">No entries yet.</td></tr>';
-      return;
-    }
-    $('lbTable').innerHTML =
-      `<tr class="lb-head"><td class="lb-name">Level</td><td class="lb-name">Player</td>` +
-      `<td class="lb-metric">Moves</td><td class="lb-metric">Dist</td><td></td></tr>` +
-      display.map(({ l, r }) => {
-        const playBtn = r.solution
-          ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button></td>`
-          : '<td></td>';
-        const when = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '';
-        const dist = r.dist != null ? r.dist.toFixed(0) + 'm' : '—';
-        return `<tr title="${when}">` +
-          `<td class="lb-name">${escHtml(l.name)}</td>` +
-          `<td class="lb-name">${escHtml(r.player)}</td>` +
-          `<td class="lb-metric">${r.moves}</td><td class="lb-metric">${dist}</td>${playBtn}</tr>`;
-      }).join('');
+    _lbAllRows = await lbGetAll();
+    await renderLbAll(_lbAllRows, idx);
+    if (idx != null && isUnlocked(idx)) await renderLbDetail(idx, _lbAllRows);
   } catch (e) {
     $('lbTable').innerHTML = `<tr><td colspan="5" class="lb-empty" style="color:#ff7070">Error: ${escHtml(e.message)}</td></tr>`;
   }
 }
 
-async function renderLbLevel(idx) {
-  $('lbTable').innerHTML = '<tr><td colspan="6" class="lb-empty">Loading…</td></tr>';
-  try {
-    const rows = await lbGet(idx);
-    const seen = new Set();
-    const top = rows.filter(r => {
-      if (seen.has(r.player)) return false; seen.add(r.player); return true;
-    }).slice(0, 10);
-    if (!top.length) {
-      $('lbTable').innerHTML = '<tr><td colspan="6" class="lb-empty">No entries yet — be first!</td></tr>';
-      return;
-    }
-    const par = LEVELS[idx].par ?? (LEVELS[idx].solution ? LEVELS[idx].solution.length : 4);
-    $('lbTable').innerHTML =
-      `<tr class="lb-head"><td></td><td class="lb-name">Player</td><td class="lb-stars">★</td>` +
-      `<td class="lb-metric">Moves</td><td class="lb-metric">Dist</td><td></td></tr>` +
-      top.map((r, i) => {
-        const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
-        const sc = starsForMoves(r.moves, par);
-        const stars = '★'.repeat(sc) + `<span class="lb-dim">★</span>`.repeat(3 - sc);
-        const playBtn = r.solution
-          ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}">&#9654;</button></td>`
-          : '<td></td>';
-        const when = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '';
-        const dist = r.dist != null ? r.dist.toFixed(0) + 'm' : '—';
-        return `<tr class="${cls}" title="${when}"><td class="lb-rank">${i+1}</td>` +
-          `<td class="lb-name">${escHtml(r.player)}</td>` +
-          `<td class="lb-stars">${stars}</td><td class="lb-metric">${r.moves}</td>` +
-          `<td class="lb-metric">${dist}</td>${playBtn}</tr>`;
-      }).join('');
-  } catch (e) {
-    $('lbTable').innerHTML = `<tr><td colspan="6" class="lb-empty" style="color:#ff7070">Error: ${escHtml(e.message)}</td></tr>`;
+$('lbTable').addEventListener('click', async e => {
+  // Row click → expand detail for that level
+  const row = e.target.closest('tr[data-idx]');
+  if (row && !e.target.closest('.lb-sol-btn')) {
+    const idx = parseInt(row.dataset.idx, 10);
+    if (!isUnlocked(idx)) return;
+    // Highlight selected row
+    $('lbTable').querySelectorAll('.lb-row-sel').forEach(r => r.classList.remove('lb-row-sel'));
+    row.classList.add('lb-row-sel');
+    await renderLbDetail(idx, _lbAllRows);
+    $('lbDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
   }
-}
-
-async function openLeaderboard(idx) {
-  $('lbTitle').textContent = 'Leaderboard';
-  lbPopulateSel(idx);
-  $('lbOverlay').classList.remove('hidden');
-  if (idx == null) {
-    await renderLbAll();
-  } else {
-    await renderLbLevel(idx);
-  }
-}
-
-$('lbLevelSel').addEventListener('change', async () => {
-  const v = $('lbLevelSel').value;
-  if (v === 'all') {
-    $('lbTitle').textContent = 'Leaderboard';
-    await renderLbAll();
-  } else {
-    const idx = parseInt(v, 10);
-    const par = LEVELS[idx].par ?? (LEVELS[idx].solution ? LEVELS[idx].solution.length : null);
-    $('lbTitle').textContent = `${LEVELS[idx].name}${par != null ? ` · Par ${par}` : ''}`;
-    await renderLbLevel(idx);
-  }
+  // Solution play button
+  const btn = e.target.closest('.lb-sol-btn');
+  if (!btn) return;
+  const mvs = movesFromAny(btn.dataset.sol);
+  if (!mvs) { toast('Could not decode solution'); return; }
+  $('lbOverlay').classList.add('hidden');
+  moves = quantizeMoves(mvs);
+  solutionUsed = true;
+  editIdx = null;
+  setEdit(0, 0);
+  recomputePlan();
+  toast('Solution loaded — leaderboard disabled until Reset');
 });
 
-// Load a LB entry's solution when its play button is clicked
-$('lbTable').addEventListener('click', e => {
+$('lbDetailTable').addEventListener('click', e => {
   const btn = e.target.closest('.lb-sol-btn');
   if (!btn) return;
   const mvs = movesFromAny(btn.dataset.sol);
