@@ -72,6 +72,38 @@ let _solHash = null;
   if (m) _solHash = movesFromString(m[1]);
 })();
 
+// Compact human-readable move format: "steer1:dist1,steer2:dist2,…"
+// Used for the live URL hash and leaderboard storage.
+function movesToCompact(mvs) {
+  return mvs.map(m => +deg(m.steer).toFixed(1) + ':' + +m.dist.toFixed(2)).join(',');
+}
+function movesFromCompact(str) {
+  if (!str) return [];
+  return str.split(',').map(p => {
+    const i = p.indexOf(':');
+    return { steer: rad(+p.slice(0, i)), dist: +p.slice(i + 1) };
+  });
+}
+// Decode either compact ("35:-4.9,…") or legacy base64 format.
+function movesFromAny(str) {
+  if (!str) return null;
+  try {
+    if (str.includes(':')) return movesFromCompact(str);
+    return movesFromString(str);
+  } catch { return null; }
+}
+
+// New-format game state in URL: #<level_id>  or  #<level_id>/<moves>
+// Distinct from #sol= (old) and #try= (editor test) which contain "=".
+let _gameHash = null;
+(()=>{
+  if (location.hash.includes('=')) return;  // old #sol= / #try= — handled elsewhere
+  const m = location.hash.match(/^#([a-z0-9]{6})(\/(.*))?$/i);
+  if (!m) return;
+  try { _gameHash = { id: m[1], moves: m[3] ? movesFromCompact(m[3]) : [] }; }
+  catch {}
+})();
+
 // ── Leaderboard (Supabase) ─────────────────────────────────────────────────
 // Schema setup — run once in the Supabase SQL editor:
 //
@@ -171,6 +203,12 @@ function driveLimit(pose, steer, dir) {
   return Math.floor((sim.pts.length - 1) / n * cap * 10) / 10;
 }
 
+function updateHash() {
+  if (!level || !level.id) return;
+  const compact = movesToCompact(moves);
+  history.replaceState(null, '', location.pathname + '#' + level.id + (compact ? '/' + compact : ''));
+}
+
 function recomputePlan() {
   planSims = [];
   let pose = level.start;
@@ -181,6 +219,7 @@ function recomputePlan() {
   }
   recomputeEdit();
   updateHUD();
+  updateHash();
 }
 
 function recomputeEdit() {
@@ -1036,7 +1075,7 @@ function setLevel(i) {
   editIdx = null;
   solutionUsed = false;
   setEdit(0, 0);
-  recomputePlan();
+  recomputePlan();   // also calls updateHash()
   rebuildLevelSelect();
 }
 
@@ -1240,8 +1279,7 @@ $('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('name
 
 $('ovImprove').addEventListener('click', () => $('overlay').classList.add('hidden'));
 $('ovShare').addEventListener('click', () => {
-  const str = movesToString(moves);
-  const url = location.origin + location.pathname + '#sol=' + str;
+  const url = location.href;  // hash is already up-to-date via updateHash()
   navigator.clipboard?.writeText(url)
     .then(() => toast('Solution link copied!'))
     .catch(() => prompt('Copy this solution link:', url));
@@ -1372,7 +1410,7 @@ async function openLeaderboard(idx) {
 $('lbTable').addEventListener('click', e => {
   const btn = e.target.closest('.lb-sol-btn');
   if (!btn) return;
-  const mvs = movesFromString(btn.dataset.sol);
+  const mvs = movesFromAny(btn.dataset.sol);
   if (!mvs) { toast('Could not decode solution'); return; }
   $('lbOverlay').classList.add('hidden');
   moves = quantizeMoves(mvs);
@@ -1388,7 +1426,7 @@ async function doLbSubmit(player) {
   $('ovSubmit').disabled = true;
   $('ovSubmit').textContent = '⏳ Submitting…';
   try {
-    await lbPost(li, player, stars, st, movesToString(pendingMoves));
+    await lbPost(li, player, stars, st, movesToCompact(pendingMoves));
     pendingLb = null;
     $('overlay').classList.add('hidden');
     await openLeaderboard(li);
@@ -1849,8 +1887,16 @@ const firstPlayableIdx = nextPlayable(-1, +1);
 if (firstPlayableIdx >= 0) setMaxUnlocked(firstPlayableIdx);
 if (!testLevelLoaded) setMaxUnlocked(resumeIdx);
 
+// Resolve which level to open: new-format hash (#id/moves) > saved progress > intro.
+let _gameHashIdx = -1;
+if (_gameHash) {
+  _gameHashIdx = LEVELS.findIndex(l => l.id === _gameHash.id);
+}
+
 const introIdx = LEVELS.findIndex(isCutscene);
-if (!testLevelLoaded && !_solHash && introIdx >= 0 && !introShownToday()) {
+if (_gameHashIdx >= 0) {
+  setLevel(_gameHashIdx);
+} else if (!testLevelLoaded && !_solHash && introIdx >= 0 && !introShownToday()) {
   markIntroShownToday();
   setLevel(introIdx);     // intro plays, then flows into the first level
 } else {
@@ -1863,6 +1909,15 @@ if (_solHash && level) {
   _solHash = null;
   recomputePlan();
   toast('Shared solution loaded');
+}
+
+// Apply moves from new-format hash (#<level_id>/<moves>)
+if (_gameHash && _gameHashIdx >= 0 && level) {
+  if (_gameHash.moves.length) {
+    moves = quantizeMoves(_gameHash.moves);
+    recomputePlan();
+  }
+  _gameHash = null;
 }
 
 requestAnimationFrame(draw);

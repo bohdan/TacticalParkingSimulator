@@ -224,6 +224,25 @@ let dirty = false; // unsaved changes since last GitHub save
 
 function markDirty(){ dirty = true; }
 
+// Parse the compact game-state move format: "steer:dist,steer:dist,…"
+// Also accepts a full game URL or bare hash (e.g. "#abc123/35:-4.9,-35:3.45")
+function movesFromCompact(str) {
+  str = str.trim();
+  // Strip URL prefix down to the hash content
+  const hm = str.match(/[#]([a-z0-9]{6})\/(.*)/i);
+  if (hm) str = hm[2];
+  else {
+    // Maybe it's just the moves part with no level prefix
+    const pm = str.match(/^[a-z0-9]{6}\/(.+)$/i);
+    if (pm) str = pm[1];
+  }
+  return str.split(',').filter(Boolean).map(p => {
+    const i = p.indexOf(':');
+    if (i < 0) throw new Error('bad move: ' + p);
+    return { steer: +p.slice(0, i), dist: +p.slice(i + 1) };
+  });
+}
+
 // Stable unique level id — assigned once, never changed by rename/reorder.
 // The leaderboard keys off this so scores stay attached to the right level.
 function genLevelId(){
@@ -659,6 +678,28 @@ function drawSolutionPath(){
     segs.push({pts, rev:m.dist<0, end:pts[pts.length-1]});
     pose=pts[pts.length-1];
   }
+
+  // Axis-aligned bounding box of the swept car body — so you can see at a
+  // glance whether walls/cars you're placing would intersect the solution path.
+  {
+    let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+    const allPoses=[{x:L.start.x,y:L.start.y,h:L.start.h}];
+    for(const seg of segs) for(const pt of seg.pts.slice(1)) allPoses.push(pt);
+    for(const pp of allPoses){
+      for(const v of carPoly(pp)){
+        if(v.x<x0)x0=v.x; if(v.x>x1)x1=v.x;
+        if(v.y<y0)y0=v.y; if(v.y>y1)y1=v.y;
+      }
+    }
+    ctx.save();
+    ctx.strokeStyle='rgba(255,200,50,0.4)';
+    ctx.lineWidth=0.06;
+    ctx.setLineDash([0.28,0.18]);
+    ctx.strokeRect(x0,y0,x1-x0,y1-y0);
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   Object.assign(CAR,saved); CAR.fOver=CAR.len-CAR.wb-CAR.rOver;
 
   for(let si=0;si<segs.length;si++){
@@ -1098,6 +1139,26 @@ function updateSolutionPanel(){
   const clearBtn=document.getElementById('solClear');
   if(clearBtn) clearBtn.addEventListener('click',()=>{
     L.solution=[]; solSel=null; markDirty(); updateSolutionPanel(); render();
+  });
+  // Import from a game URL or compact string
+  el.insertAdjacentHTML('beforeend',
+    `<div style="margin-top:10px;border-top:1px solid #1f2636;padding-top:8px">`
+    +`<p class="sel-hint" style="margin-bottom:4px">Paste game URL or <code>steer:dist,…</code></p>`
+    +`<div style="display:flex;gap:5px">`
+    +`<input id="solImportUrl" type="text" placeholder="index.html#abc123/35:-4.9,…" style="flex:1;min-width:0">`
+    +`<button id="solImportBtn">Load</button>`
+    +`</div><p id="solImportErr" style="color:#e06060;font-size:11px;margin-top:3px;display:none"></p>`
+    +`</div>`);
+  document.getElementById('solImportBtn').addEventListener('click',()=>{
+    const raw=document.getElementById('solImportUrl').value;
+    const errEl=document.getElementById('solImportErr');
+    try {
+      const mvs=movesFromCompact(raw);
+      if(!mvs.length) throw new Error('no moves found');
+      L.solution=mvs; markDirty(); updateSolutionPanel(); render();
+    } catch(e) {
+      errEl.textContent='Error: '+e.message; errEl.style.display='';
+    }
   });
 }
 
