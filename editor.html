@@ -416,9 +416,10 @@ function drawCar(cx,cy,h,sp,opts){
       ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(0,0,fRad*0.18,0,2*π); ctx.fill();
       ctx.restore();
     }
-    // front axle beam (rotates with steer)
+    // front axle beam (rotates with steer) — thin pipe
     ctx.save(); ctx.translate(sp.wb,0); ctx.rotate(steer);
-    ctx.fillStyle='#3a4050'; ctx.fillRect(-fLen*0.5,-fCy,fLen,fCy*2);
+    ctx.strokeStyle='#3a4050'; ctx.lineWidth=0.04;
+    ctx.beginPath(); ctx.moveTo(0,-fCy); ctx.lineTo(0,fCy); ctx.stroke();
     ctx.restore();
   } else if(wheels){
     ctx.fillStyle='#10131a';
@@ -732,11 +733,18 @@ function drawSolutionPath(){
     pose=pts[pts.length-1];
   }
 
-  // Swept envelope: one filled polygon per segment tracing all 4 corner rails.
+  // Swept envelope: one filled polygon per segment.
   // carPoly order: [0]=RR, [1]=FR, [2]=FL, [3]=RL
-  // Polygon: RR[0]→FR[0..N-1]→FL[N-1..0]→RL[0..N-1]→RR[N-1..0]→close
-  // This traces start-right-cap, front-right rail, end-front-cap, front-left rail,
-  // start-left-cap, rear-left rail, end-rear-cap, rear-right rail — all in one shape.
+  //
+  // For FORWARD moves, the front corners (FR, FL) lead. The polygon traces:
+  //   RR[0] → FR[0..n-1] (start-right cap + FR rail)
+  //   → FL[n-1..0] (end-front cap + FL backward)
+  //   → RL[0] (start-left cap) → close (RL→RR = start-rear cap)
+  //
+  // For REVERSE moves, the rear corners (RR, RL) lead. Symmetric:
+  //   FR[0] → RR[0..n-1] (start-right cap + RR rail)
+  //   → RL[n-1..0] (end-rear cap + RL backward)
+  //   → FL[0] (start-left cap) → close (FL→FR = start-front cap)
   ctx.save();
   ctx.lineJoin='round';
   for(let si=0;si<segs.length;si++){
@@ -745,17 +753,21 @@ function drawSolutionPath(){
     const n=polys.length;
     ctx.fillStyle=hot?'rgba(255,224,80,0.22)':'rgba(255,200,50,0.11)';
     ctx.beginPath();
-    ctx.moveTo(polys[0][0].x,polys[0][0].y);           // RR[0]
-    ctx.lineTo(polys[0][1].x,polys[0][1].y);           // FR[0] — start right cap
-    for(let i=1;i<n;i++) ctx.lineTo(polys[i][1].x,polys[i][1].y); // FR rail
-    ctx.lineTo(polys[n-1][2].x,polys[n-1][2].y);       // FL[N-1] — end front cap
-    for(let i=n-2;i>=0;i--) ctx.lineTo(polys[i][2].x,polys[i][2].y); // FL backward
-    ctx.lineTo(polys[0][3].x,polys[0][3].y);           // RL[0] — start left cap
-    for(let i=1;i<n;i++) ctx.lineTo(polys[i][3].x,polys[i][3].y); // RL rail
-    ctx.lineTo(polys[n-1][0].x,polys[n-1][0].y);       // RR[N-1] — end rear cap
-    for(let i=n-2;i>=0;i--) ctx.lineTo(polys[i][0].x,polys[i][0].y); // RR backward
+    if(!seg.rev){
+      // Forward: FR and FL are the leading corners
+      ctx.moveTo(polys[0][0].x,polys[0][0].y);              // RR[0]
+      for(let i=0;i<n;i++) ctx.lineTo(polys[i][1].x,polys[i][1].y); // → FR[0..n-1]
+      for(let i=n-1;i>=0;i--) ctx.lineTo(polys[i][2].x,polys[i][2].y); // → FL[n-1..0]
+      ctx.lineTo(polys[0][3].x,polys[0][3].y);              // → RL[0]
+    } else {
+      // Reverse: RR and RL are the leading corners
+      ctx.moveTo(polys[0][1].x,polys[0][1].y);              // FR[0]
+      for(let i=0;i<n;i++) ctx.lineTo(polys[i][0].x,polys[i][0].y); // → RR[0..n-1]
+      for(let i=n-1;i>=0;i--) ctx.lineTo(polys[i][3].x,polys[i][3].y); // → RL[n-1..0]
+      ctx.lineTo(polys[0][2].x,polys[0][2].y);              // → FL[0]
+    }
     ctx.closePath(); ctx.fill();
-    // Car outline at end position (unfilled)
+    // Car outline at end position — stroke only, no fill
     ctx.strokeStyle=hot?'rgba(255,224,80,0.8)':'rgba(255,200,50,0.45)';
     ctx.lineWidth=hot?0.07:0.05;
     const last=polys[n-1];

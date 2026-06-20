@@ -490,10 +490,10 @@ function drawCarBody(pose, opts, spec) {
       ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0, 0, fRad * 0.18, 0, 2 * Math.PI); ctx.fill();
       ctx.restore();
     }
-    // front axle beam (rotates with steer)
+    // front axle beam (rotates with steer) — thin pipe
     ctx.save(); ctx.translate(spec.wb, 0); ctx.rotate(opts.steer || 0);
-    ctx.fillStyle = '#3a4050';
-    ctx.fillRect(-fLen * 0.5, -fCy, fLen, fCy * 2);
+    ctx.strokeStyle = '#3a4050'; ctx.lineWidth = 0.04;
+    ctx.beginPath(); ctx.moveTo(0, -fCy); ctx.lineTo(0, fCy); ctx.stroke();
     ctx.restore();
   } else if (opts.wheels) {
     ctx.fillStyle = '#10131a';
