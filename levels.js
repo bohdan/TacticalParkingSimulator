@@ -111,7 +111,7 @@ const LEVELS = [
       { x: 21.7, y: 10.7, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
     hint: "Angled bays: enter on the diagonal, dead straight.",
-    solution: [{ steer: 20, dist: 1.2 }, { steer: -12, dist: 10 }, { steer: -20, dist: 1.2 }],
+    solution: [{ steer: 0, dist: 5.85 }, { steer: -19.2, dist: 6.85 }],
   },
   {
     id: "uxebvt",
