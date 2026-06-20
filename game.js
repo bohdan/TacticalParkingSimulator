@@ -294,10 +294,31 @@ function updateHUD() {
     $('stats').innerHTML = escHtml(level.tut || level.hint) +
       (best ? ` · <span class="star">${starStr(best.stars)}</span>` : '');
   }
-  $('undoBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
-  $('undoBtn').textContent = editIdx !== null ? 'Cancel' : '↶ Undo';
+  $('delBtn').disabled = (moves.length === 0 && editIdx === null && Math.abs(editDist) < 0.01) || !!anim;
+  $('delBtn').innerHTML = editIdx !== null ? `&#128465; #${editIdx + 1}` : '&#128465; Delete';
   $('resetBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
   $('goBtn').disabled = (moves.length === 0 && (!editSim || editSim.pts.length < 2)) || !!anim;
+  renderMoveList();
+}
+
+// Horizontal strip of move chips; the active (being-edited) one is highlighted,
+// and a trailing ＋ chip composes a new move. Tapping a chip selects it.
+function renderMoveList() {
+  const el = $('moveList');
+  if (!el) return;
+  if (!moves.length) { el.innerHTML = ''; return; }
+  let html = '';
+  for (let i = 0; i < moves.length; i++) {
+    const m = moves[i], s = deg(m.steer);
+    const st = Math.abs(s) < 0.1 ? '0°' : `${Math.abs(s).toFixed(0)}°${s < 0 ? 'L' : 'R'}`;
+    const d = `${m.dist < 0 ? '−' : '+'}${Math.abs(m.dist).toFixed(1)}`;
+    html += `<div class="mv-chip${editIdx === i ? ' active' : ''}" data-i="${i}">` +
+            `<span class="mv-n">${i + 1}</span>${st} ${d}</div>`;
+  }
+  html += `<div class="mv-chip add${editIdx === null ? ' active' : ''}" data-i="new">&#65291;</div>`;
+  el.innerHTML = html;
+  const act = el.querySelector('.active');
+  if (act) act.scrollIntoView({ inline: 'nearest', block: 'nearest' });
 }
 
 function loadBest() {
@@ -850,9 +871,24 @@ function draw(now) {
 
 /* ===================== Run / animate ===================== */
 
+// Distance the car actually covers in a move, given its simulation (a move
+// that hits a wall stops short — simulateMove truncates at the contact point).
+function traveledDist(dist, sim) {
+  const n = Math.max(2, Math.ceil(Math.abs(dist) / SAMPLE_STEP));
+  return dist * (sim.pts.length - 1) / n;
+}
+
 function startRun() {
   if (!moves.length || anim) return;
   editIdx = null;
+  // Bake every move down to the distance actually travelled, so the plan that
+  // runs (and gets saved/shared) is the precise sequence the car performs —
+  // no over-the-limit values that silently truncate on replay.
+  for (let i = 0; i < planSims.length; i++)
+    moves[i].dist = Math.round(traveledDist(moves[i].dist, planSims[i]) * 100) / 100;
+  moves = moves.filter(m => Math.abs(m.dist) >= 0.01); // drop any no-op moves
+  recomputePlan();
+
   const samples = [];
   const cum = [];
   let total = 0;
@@ -961,12 +997,13 @@ const STEER_Q = 0.2;  // degrees
 const DIST_Q  = 0.05; // metres
 const snapTo = (v, q) => Math.round(v / q) * q;
 
-// Snap a loaded plan (steer in radians) onto the same input grid, so loaded
-// solutions are reproducible/editable exactly like hand-entered ones.
+// Normalise a loaded plan to the displayed precision (steer on the input grid,
+// distance to the 2-decimal display resolution). Distances are NOT snapped to
+// the coarse input grid so baked/truncated values survive intact.
 function quantizeMoves(mvs) {
   return mvs.map(m => ({
     steer: rad(+snapTo(deg(m.steer), STEER_Q).toFixed(1)),
-    dist:  +snapTo(m.dist, DIST_Q).toFixed(2),
+    dist:  +m.dist.toFixed(2),
   }));
 }
 
@@ -1031,19 +1068,32 @@ function commitMove() {
 
 $('addBtn').addEventListener('click', commitMove);
 
-$('undoBtn').addEventListener('click', () => {
+// Delete: the selected move (then its successors auto-rebase), else a pending
+// edit, else the last move.
+$('delBtn').addEventListener('click', () => {
   if (anim) return;
   if (editIdx !== null) {
+    moves.splice(editIdx, 1);
     editIdx = null;
     setEdit(0, 0);
-    return;
-  }
-  if (Math.abs(editDist) >= 0.01) {
+    recomputePlan();
+  } else if (Math.abs(editDist) >= 0.01) {
     setEdit(editSteer, 0);
   } else if (moves.length) {
-    const m = moves.pop();
-    setEdit(deg(m.steer), 0);
+    moves.pop();
     recomputePlan();
+  }
+});
+
+// Move chips: tap to edit that move; tap ＋ to compose a new one.
+$('moveList').addEventListener('click', e => {
+  if (anim) return;
+  const chip = e.target.closest('.mv-chip');
+  if (!chip) return;
+  if (chip.dataset.i === 'new') {
+    if (editIdx !== null) { editIdx = null; setEdit(editSteer, 0); }
+  } else {
+    selectMove(+chip.dataset.i);
   }
 });
 

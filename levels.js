@@ -370,7 +370,7 @@ const LEVELS = [
     ],
     par: 25,
     hint: "You were clearly in a rush.. you don't remember why.",
-    solution: [{ steer: -25, dist: 5.55 }, { steer: 35, dist: -3.3 }, { steer: 3.2, dist: 3.3 }, { steer: 35, dist: -3 }, { steer: -35, dist: 1.95 }, { steer: 35, dist: -2.1 }, { steer: -35, dist: 0.75 }, { steer: 35, dist: -7.1 }, { steer: -35, dist: 5.15 }, { steer: -3.8, dist: -2 }, { steer: -22, dist: 2.1 }, { steer: 6.4, dist: -1.7 }, { steer: -35, dist: -1.9 }, { steer: 35, dist: 1.25 }, { steer: -31.8, dist: -3.95 }, { steer: -24.2, dist: 2.75 }, { steer: -35, dist: -2.35 }, { steer: -9, dist: -12.6 }, { steer: -35, dist: 4.85 }, { steer: 35, dist: -4.35 }, { steer: -35, dist: 2.35 }, { steer: 35, dist: -1.85 }, { steer: -23.8, dist: 0.3 }],
+    solution: [{ steer: -25, dist: 5.55 }, { steer: 35, dist: -3.3 }, { steer: 3.2, dist: 3.3 }, { steer: 35, dist: -3 }, { steer: -35, dist: 1.95 }, { steer: 35, dist: -2.1 }, { steer: -35, dist: 0.75 }, { steer: 35, dist: -0.6 }, { steer: -35, dist: 0.66 }, { steer: -3.8, dist: -2 }, { steer: -22, dist: 1.98 }, { steer: 6.4, dist: -1.7 }, { steer: -35, dist: -1.9 }, { steer: 35, dist: 1.25 }, { steer: -31.8, dist: -3.95 }, { steer: -24.2, dist: 2.75 }, { steer: -35, dist: -2.35 }, { steer: -9, dist: -12.6 }, { steer: -35, dist: 4.85 }, { steer: 35, dist: -4.35 }, { steer: -35, dist: 2.35 }, { steer: 35, dist: -1.85 }, { steer: -23.8, dist: 0.3 }],
   },
   {
     id: "s2p1ol",
@@ -476,7 +476,7 @@ const LEVELS = [
     cars: [],
     par: 8,
     hint: "Only 5.5 m of corridor — a true shuffle marathon.",
-    solution: [{ steer: 35, dist: -4.9 }, { steer: -35, dist: 3.45 }, { steer: 35, dist: -5.3 }, { steer: -35, dist: 4.35 }, { steer: 35, dist: -4.35 }, { steer: -35, dist: 3.9 }, { steer: 35, dist: -4.45 }, { steer: -35, dist: 3.65 }],
+    solution: [{ steer: 35, dist: -3.65 }, { steer: -35, dist: 0.71 }, { steer: 35, dist: -0.89 }, { steer: -35, dist: 0.89 }, { steer: 35, dist: -0.83 }, { steer: -35, dist: 0.9 }, { steer: 35, dist: -0.83 }, { steer: -35, dist: 3.65 }],
   },
   {
     type: "cutscene", name: "Cutscene Miata",
