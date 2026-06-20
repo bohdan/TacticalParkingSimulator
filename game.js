@@ -197,8 +197,10 @@ function recomputeEdit() {
   distEl.classList.toggle('hit', hit);
   $('distVal').textContent = editDist === 0 ? '—'
     : `${editDist < 0 ? 'Rev' : 'Fwd'} ${Math.abs(editDist).toFixed(2)} m${hit ? ' ⚠' : ''}`;
-  $('addBtn').disabled = !editSim || editSim.pts.length < 2 || !!anim;
-  $('addBtn').textContent = editIdx !== null ? `Update #${editIdx + 1}` : 'Add move';
+  // While editing a move the change is already live, so the button just closes
+  // the edit; while composing it adds the pending move.
+  $('addBtn').disabled = !!anim || (editIdx === null && (!editSim || editSim.pts.length < 2));
+  $('addBtn').innerHTML = editIdx !== null ? '&#10003; Done' : '&#65291; Add move';
 }
 
 function planStats() {
@@ -1023,8 +1025,15 @@ function setEdit(steerDeg, dist) {
   editDist  = Math.abs(dist) < DIST_Q / 2 ? 0 : +snapTo(dist, DIST_Q).toFixed(2);
   $('steerVal').textContent = editSteer === 0 ? '0°'
     : `${Math.abs(editSteer).toFixed(1)}° ${editSteer < 0 ? 'left' : 'right'}`;
-  recomputeEdit();
-  updateHUD();
+  // Editing an existing move applies live: write it and re-base the rest of the
+  // plan immediately, so no Update step is needed.
+  if (editIdx !== null) {
+    moves[editIdx] = { steer: rad(editSteer), dist: editDist };
+    recomputePlan();   // re-sims all moves (rebases successors) + recomputeEdit + updateHUD
+  } else {
+    recomputeEdit();
+    updateHUD();
+  }
 }
 
 // Relative-drag sliders: dragging accumulates a delta from the value at
@@ -1062,17 +1071,15 @@ makeRelativeSlider(distEl, 25, DIST_Q,
   v  => setEdit(editSteer, v));
 
 function commitMove() {
-  if (!editSim || editSim.pts.length < 2 || anim) return false;
+  if (anim) return false;
   if (editIdx !== null) {
-    moves[editIdx] = { steer: rad(editSteer), dist: editDist };
-    editIdx = null;
-    setEdit(editSteer, 0);
-    recomputePlan();
+    editIdx = null;                 // the edit is already applied live
   } else {
+    if (!editSim || editSim.pts.length < 2) return false;
     moves.push({ steer: rad(editSteer), dist: editDist });
-    setEdit(editSteer, 0); // keep steering, ready for the next move
-    recomputePlan();
   }
+  setEdit(editSteer, 0);            // back to composing; keep the steering angle
+  recomputePlan();
   return true;
 }
 
