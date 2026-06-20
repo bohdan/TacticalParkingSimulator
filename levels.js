@@ -564,11 +564,13 @@ const LEVELS = [
     goal: { cx: 2.6, cy: 1.6, w: 4.4, h: 2.6, heads: [180], tol: 45 },
     walls: [
       { x: 0, y: 3.2, w: 14.1, h: 0.4 },
-      { x: 0, y: 7.9, w: 7.4, h: 0.4 },
-      { x: 0, y: 3.6, w: 0.5, h: 4.3 },
+      { x: 0.4, y: 7.9, w: 7.7, h: 0.4 },
+      { x: 0, y: 3.6, w: 0.4, h: 7.4 },
       { x: 13.5, y: 3.6, w: 0.6, h: 2.8 },
     ],
-    cars: [],
+    cars: [
+      { cx: 2.8, cy: 9.7, h: 0, type: "tractor" },
+    ],
     hint: "Rise and shine!",
     solution: [{ steer: 5, dist: 11.81 }, { steer: -49.4, dist: 2.9 }, { steer: -24, dist: 4.39 }, { steer: -7.8, dist: -7.15 }, { steer: -1.4, dist: 7 }, { steer: 52, dist: -0.65 }, { steer: -31.6, dist: 3.95 }, { steer: 1.2, dist: 9.5 }],
   },
@@ -616,5 +618,21 @@ const LEVELS = [
     cars: [],
     hint: "You parked backwards! Turn around to be ready to go tomorrow morning",
     solution: [{ steer: -18.6, dist: -8.05 }, { steer: 52, dist: 1.9 }, { steer: -47.4, dist: -2.15 }, { steer: -21.4, dist: 5.6 }, { steer: -37.2, dist: -5.2 }, { steer: 52, dist: -1.95 }, { steer: -0.6, dist: -6.8 }],
+  },
+  {
+    id: "rum24d",
+    name: "Wrong Way Again???", tier: "Hard", mode: "moves", w: 18, h: 11,
+    vehicle: "tractor",
+    start: { x: 1.4, y: 5.7, h: 0 },
+    goal: { cx: 2.8, cy: 5.7, w: 4.3, h: 3.7, heads: [180], tol: 45 },
+    walls: [
+      { x: 0, y: 3.2, w: 14.1, h: 0.4 },
+      { x: 0, y: 7.9, w: 7.4, h: 0.4 },
+      { x: 0, y: 3.6, w: 0.5, h: 4.3 },
+      { x: 13.5, y: 3.6, w: 0.6, h: 2.8 },
+    ],
+    cars: [],
+    hint: "You parked backwards! Turn around to be ready to go tomorrow morning",
+    solution: [{ steer: 5.8, dist: 10.9 }, { steer: 51, dist: -3.65 }, { steer: -1, dist: 1.6 }, { steer: -52, dist: 2.4 }, { steer: 0.4, dist: 3.6 }],
   },
 ];
