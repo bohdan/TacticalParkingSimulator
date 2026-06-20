@@ -464,18 +464,30 @@ function drawCarBody(pose, opts, spec) {
   const wl = Math.min(0.9, len * 0.075), wt = Math.min(0.18, w * 0.10);
 
   if (opts.wheels && vtype === 'tractor') {
-    // Rear: large drive wheels — outer edge pinned to body half-width so they
-    // never exceed the collision bounding box.
-    const rRad = 0.22, rLen = spec.wb * 0.32, rCy = w / 2 - rRad;
-    // Front: narrow steered wheels, same outer-edge constraint.
-    const fRad = 0.10, fLen = rLen * 0.48, fCy = w / 2 - fRad;
+    // Rear: large drive wheels with tread and brass hub; outer edge pinned to bounding box.
+    const rRad = 0.24, rLen = 0.65, rCy = w / 2 - rRad;
+    // Front: narrow steered wheels.
+    const fRad = 0.10, fLen = 0.28, fCy = w / 2 - fRad;
     for (const sign of [-1, 1]) {
       ctx.save(); ctx.translate(0, sign * rCy);
       ctx.fillStyle = '#0d0f14'; ctx.fillRect(-rLen / 2, -rRad, rLen, rRad * 2);
-      ctx.fillStyle = '#39414d'; ctx.fillRect(-rLen * 0.20, -rRad * 0.5, rLen * 0.40, rRad); // hub
+      ctx.fillStyle = '#1e2228';
+      for (let g = 0; g < 5; g++) { // tread bands
+        const ty = -rRad + rRad * 2 * (g + 0.25) / 5;
+        ctx.fillRect(-rLen * 0.45, ty, rLen * 0.9, rRad * 0.22);
+      }
+      ctx.fillStyle = '#c8a030'; ctx.beginPath(); ctx.arc(0, 0, rRad * 0.44, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = '#111';    ctx.beginPath(); ctx.arc(0, 0, rRad * 0.20, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = '#c8a030';
+      for (let i = 0; i < 6; i++) { // lug bolts
+        const a = i * Math.PI / 3;
+        ctx.beginPath(); ctx.arc(Math.cos(a) * rRad * 0.32, Math.sin(a) * rRad * 0.32, rRad * 0.07, 0, 2 * Math.PI); ctx.fill();
+      }
       ctx.restore();
       ctx.save(); ctx.translate(spec.wb, sign * fCy); ctx.rotate(opts.steer || 0);
       ctx.fillStyle = '#0d0f14'; ctx.fillRect(-fLen / 2, -fRad, fLen, fRad * 2);
+      ctx.fillStyle = '#888'; ctx.beginPath(); ctx.arc(0, 0, fRad * 0.40, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0, 0, fRad * 0.18, 0, 2 * Math.PI); ctx.fill();
       ctx.restore();
     }
   } else if (opts.wheels) {
@@ -494,19 +506,23 @@ function drawCarBody(pose, opts, spec) {
       }
   }
 
-  // Body — Miata red, tractor green; bus has squarer corners.
-  // Tractor body is drawn narrower than the collision width so the big rear
-  // wheels visually flank the cab (like a real tractor).
-  const fill = vtype === 'miata' ? '#d23b3b' : vtype === 'tractor' ? '#3f7d2f' : opts.fill;
-  const corner = vtype === 'bus' ? Math.min(0.18, w * 0.08) : Math.min(0.3, w * 0.17);
-  const bw = vtype === 'tractor' ? w * 0.74 : w;
-  roundRect(x0, -bw / 2, len, bw, corner);
-  ctx.fillStyle = fill;
-  ctx.fill();
-  if (opts.stroke) {
-    ctx.lineWidth = 0.07;
-    ctx.strokeStyle = vtype === 'miata' ? '#7d1f1f' : vtype === 'tractor' ? '#23491a' : opts.stroke;
-    ctx.stroke();
+  // Body — tractor is Lamborghini orange T-shape; Miata red; bus/sedan normal.
+  if (vtype === 'tractor') {
+    const jx = x0 + len * 0.54;
+    const cabW = w * 0.80, hoodW = w * 0.44;
+    ctx.fillStyle = '#d46020'; ctx.lineWidth = 0.07; ctx.strokeStyle = '#7a3500';
+    roundRect(x0, -cabW / 2, jx - x0, cabW, 0.12); ctx.fill(); if (opts.stroke) ctx.stroke();
+    roundRect(jx, -hoodW / 2, x0 + len - jx, hoodW, 0.10); ctx.fill(); if (opts.stroke) ctx.stroke();
+  } else {
+    const fill = vtype === 'miata' ? '#d23b3b' : opts.fill;
+    const corner = vtype === 'bus' ? Math.min(0.18, w * 0.08) : Math.min(0.3, w * 0.17);
+    roundRect(x0, -w / 2, len, w, corner);
+    ctx.fillStyle = fill; ctx.fill();
+    if (opts.stroke) {
+      ctx.lineWidth = 0.07;
+      ctx.strokeStyle = vtype === 'miata' ? '#7d1f1f' : opts.stroke;
+      ctx.stroke();
+    }
   }
 
   if (opts.detail) {
@@ -518,29 +534,49 @@ function drawCarBody(pose, opts, spec) {
   ctx.restore();
 }
 
-// Top-down tractor: narrow engine hood up front with an exhaust stack, a roomy
-// rear cab with a seat and steering wheel.
+// Top-down Lamborghini R480: open cab with ROPS arch, large rear wheels flanking.
 function drawTractorDetail(x0, len, w) {
   const front = x0 + len;
-  // engine hood (narrower than the body) up front
-  ctx.fillStyle = 'rgba(0,0,0,0.18)';
-  roundRect(x0 + len * 0.5, -w / 2 + 0.34, len * 0.42, w - 0.68, 0.08); ctx.fill();
-  // exhaust stack near the front-left corner of the hood
-  ctx.fillStyle = '#15171c';
-  ctx.beginPath(); ctx.arc(x0 + len * 0.82, -w / 2 + 0.34, 0.12, 0, 2 * Math.PI); ctx.fill();
-  // rear operator platform / cab floor
-  ctx.fillStyle = 'rgba(15,22,14,0.55)';
-  roundRect(x0 + len * 0.06, -w / 2 + 0.22, len * 0.4, w - 0.44, 0.1); ctx.fill();
-  // seat
-  ctx.fillStyle = '#241910';
-  roundRect(x0 + len * 0.12, -0.28, len * 0.16, 0.56, 0.08); ctx.fill();
-  // steering wheel (just ahead of the seat)
-  ctx.strokeStyle = '#0c0e12'; ctx.lineWidth = 0.06;
-  ctx.beginPath(); ctx.arc(x0 + len * 0.36, 0, 0.22, 0, 2 * Math.PI); ctx.stroke();
-  // headlights front
+  const jx = x0 + len * 0.54;
+  const cabW = w * 0.80, hoodW = w * 0.44;
+
+  // ROPS arch — thick bar across cab just behind the hood junction
+  ctx.strokeStyle = '#9aab8a'; ctx.lineWidth = 0.13; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(jx - 0.12, -cabW * 0.44); ctx.lineTo(jx - 0.12, cabW * 0.44); ctx.stroke();
+
+  // Operator platform floor
+  ctx.fillStyle = 'rgba(10,8,5,0.58)';
+  roundRect(x0 + len * 0.06, -cabW / 2 + 0.18, len * 0.44, cabW - 0.36, 0.10); ctx.fill();
+
+  // Seat
+  ctx.fillStyle = '#1a1210';
+  roundRect(x0 + len * 0.10, -0.20, len * 0.14, 0.40, 0.07); ctx.fill();
+
+  // Steering wheel
+  ctx.strokeStyle = '#1a1c20'; ctx.lineWidth = 0.07;
+  ctx.beginPath(); ctx.arc(x0 + len * 0.34, 0, 0.17, 0, 2 * Math.PI); ctx.stroke();
+
+  // Hood vent slats
+  ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 0.04; ctx.lineCap = 'butt';
+  const vS = jx + (front - jx) * 0.12, vE = front - 0.28;
+  for (let v = -1; v <= 1; v++) {
+    ctx.beginPath(); ctx.moveTo(vS, v * hoodW * 0.24); ctx.lineTo(vE, v * hoodW * 0.24); ctx.stroke();
+  }
+
+  // Exhaust stack (right side, mid-hood)
+  const exX = jx + (front - jx) * 0.52, exY = hoodW / 2 - 0.13;
+  ctx.fillStyle = '#111318'; ctx.beginPath(); ctx.arc(exX, exY, 0.09, 0, 2 * Math.PI); ctx.fill();
+  ctx.fillStyle = '#2d2d2d'; ctx.beginPath(); ctx.arc(exX, exY, 0.055, 0, 2 * Math.PI); ctx.fill();
+
+  // Headlights at front
   ctx.fillStyle = '#ffe9a8';
-  ctx.fillRect(x0 + len - 0.16, -w / 2 + 0.22, 0.1, 0.24);
-  ctx.fillRect(x0 + len - 0.16,  w / 2 - 0.46, 0.1, 0.24);
+  ctx.fillRect(front - 0.13, -hoodW / 2 + 0.06, 0.09, 0.16);
+  ctx.fillRect(front - 0.13,  hoodW / 2 - 0.22, 0.09, 0.16);
+
+  // Taillights at rear cab corners
+  ctx.fillStyle = '#cc2020';
+  ctx.fillRect(x0, -cabW / 2 + 0.06, 0.09, 0.14);
+  ctx.fillRect(x0,  cabW / 2 - 0.20, 0.09, 0.14);
 }
 
 function drawSedanDetail(x0, len, w) {

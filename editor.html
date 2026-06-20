@@ -109,6 +109,7 @@ button.nav{padding:4px 8px;font-weight:700}
 <div id="main">
   <div id="cvWrap"><canvas id="cv"></canvas></div>
   <div id="sidebar">
+   <div class="row"><label>Draft</label><label style="flex:1;display:flex;align-items:center;gap:6px;color:#e0b050;font-size:12px"><input id="sDraft" type="checkbox" style="flex:0 0 auto;width:auto"> hidden from the game (editor only)</label></div>
    <div id="cutscenePanel" style="display:none">
     <h2>Cutscene 🎬</h2>
     <div class="row"><label>Name</label><input id="csName" type="text"></div>
@@ -119,7 +120,6 @@ button.nav{padding:4px 8px;font-weight:700}
    <div id="geomPanel">
     <h2>Level</h2>
     <div class="row"><label>ID</label><input id="sId" type="text" readonly title="Stable leaderboard id — auto-assigned, do not change" style="color:#80d0ff;font-family:Menlo,Consolas,monospace;font-size:11px"></div>
-    <div class="row"><label>Draft</label><label style="flex:1;display:flex;align-items:center;gap:6px;color:#e0b050;font-size:12px"><input id="sDraft" type="checkbox" style="flex:0 0 auto;width:auto"> hidden from the game (editor only)</label></div>
     <div class="row"><label>Name</label><input id="sName" type="text"></div>
     <div class="row"><label>Tier</label>
       <select id="sTier"><option>Tutorial</option><option>Easy</option><option>Medium</option><option>Hard</option><option>Expert</option></select>
@@ -388,15 +388,22 @@ function drawCar(cx,cy,h,sp,opts){
   const x0=-sp.rOver, len=sp.len, w=sp.wid;
   const wy=w/2-0.16, wl=Math.min(0.9,len*0.075), wt=Math.min(0.18,w*0.10);
   if(wheels && vehicle==='tractor'){
-    const rRad=0.22, rLen=sp.wb*0.32, rCy=w/2-rRad;
-    const fRad=0.10, fLen=rLen*0.48,  fCy=w/2-fRad;
+    const rRad=0.24, rLen=0.65, rCy=w/2-rRad;
+    const fRad=0.10, fLen=0.28, fCy=w/2-fRad;
     for(const sign of [-1,1]){
       ctx.save(); ctx.translate(0,sign*rCy);
       ctx.fillStyle='#0d0f14'; ctx.fillRect(-rLen/2,-rRad,rLen,rRad*2);
-      ctx.fillStyle='#39414d'; ctx.fillRect(-rLen*0.20,-rRad*0.5,rLen*0.40,rRad);
+      ctx.fillStyle='#1e2228';
+      for(let g=0;g<5;g++){ const ty=-rRad+rRad*2*(g+0.25)/5; ctx.fillRect(-rLen*0.45,ty,rLen*0.9,rRad*0.22); }
+      ctx.fillStyle='#c8a030'; ctx.beginPath(); ctx.arc(0,0,rRad*0.44,0,2*π); ctx.fill();
+      ctx.fillStyle='#111';    ctx.beginPath(); ctx.arc(0,0,rRad*0.20,0,2*π); ctx.fill();
+      ctx.fillStyle='#c8a030';
+      for(let i=0;i<6;i++){ const a=i*π/3; ctx.beginPath(); ctx.arc(Math.cos(a)*rRad*0.32,Math.sin(a)*rRad*0.32,rRad*0.07,0,2*π); ctx.fill(); }
       ctx.restore();
       ctx.save(); ctx.translate(sp.wb,sign*fCy); ctx.rotate(steer);
       ctx.fillStyle='#0d0f14'; ctx.fillRect(-fLen/2,-fRad,fLen,fRad*2);
+      ctx.fillStyle='#888'; ctx.beginPath(); ctx.arc(0,0,fRad*0.40,0,2*π); ctx.fill();
+      ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(0,0,fRad*0.18,0,2*π); ctx.fill();
       ctx.restore();
     }
   } else if(wheels){
@@ -408,12 +415,18 @@ function drawCar(cx,cy,h,sp,opts){
       ctx.save(); ctx.translate(wx,wya); ctx.rotate(a); ctx.fillRect(-wl/2,-wt,wl,wt*2); ctx.restore();
     }
   }
-  const bodyFill=vehicle==='miata'?'#d23b3b':vehicle==='tractor'?'#3f7d2f':fill;
-  const corner=vehicle==='bus'?Math.min(0.18,w*0.08):Math.min(0.3,w*0.17);
-  const bw=vehicle==='tractor'?w*0.74:w;
-  rrect(x0,-bw/2,len,bw,corner);
-  ctx.fillStyle=bodyFill; ctx.fill();
-  if(stroke){ ctx.lineWidth=0.07; ctx.strokeStyle=vehicle==='miata'?'#7d1f1f':vehicle==='tractor'?'#23491a':stroke; ctx.stroke(); }
+  if(vehicle==='tractor'){
+    const jx=x0+len*0.54, cabW=w*0.80, hoodW=w*0.44;
+    ctx.fillStyle='#d46020'; ctx.lineWidth=0.07; ctx.strokeStyle='#7a3500';
+    rrect(x0,-cabW/2,jx-x0,cabW,0.12); ctx.fill(); if(stroke) ctx.stroke();
+    rrect(jx,-hoodW/2,x0+len-jx,hoodW,0.10); ctx.fill(); if(stroke) ctx.stroke();
+  } else {
+    const bodyFill=vehicle==='miata'?'#d23b3b':fill;
+    const corner=vehicle==='bus'?Math.min(0.18,w*0.08):Math.min(0.3,w*0.17);
+    rrect(x0,-w/2,len,w,corner);
+    ctx.fillStyle=bodyFill; ctx.fill();
+    if(stroke){ ctx.lineWidth=0.07; ctx.strokeStyle=vehicle==='miata'?'#7d1f1f':stroke; ctx.stroke(); }
+  }
   if(detail){
     if(vehicle==='bus') drawBusDetailEd(x0,len,w);
     else if(vehicle==='miata') drawConvDetailEd(x0,len,w);
@@ -423,19 +436,34 @@ function drawCar(cx,cy,h,sp,opts){
   ctx.restore();
 }
 function drawTractorDetailEd(x0,len,w){
-  ctx.fillStyle='rgba(0,0,0,0.18)';
-  rrect(x0+len*0.5,-w/2+0.34,len*0.42,w-0.68,0.08); ctx.fill();
-  ctx.fillStyle='#15171c';
-  ctx.beginPath(); ctx.arc(x0+len*0.82,-w/2+0.34,0.12,0,2*π); ctx.fill();
-  ctx.fillStyle='rgba(15,22,14,0.55)';
-  rrect(x0+len*0.06,-w/2+0.22,len*0.4,w-0.44,0.1); ctx.fill();
-  ctx.fillStyle='#241910';
-  rrect(x0+len*0.12,-0.28,len*0.16,0.56,0.08); ctx.fill();
-  ctx.strokeStyle='#0c0e12'; ctx.lineWidth=0.06;
-  ctx.beginPath(); ctx.arc(x0+len*0.36,0,0.22,0,2*π); ctx.stroke();
+  const front=x0+len, jx=x0+len*0.54, cabW=w*0.80, hoodW=w*0.44;
+  // ROPS arch
+  ctx.strokeStyle='#9aab8a'; ctx.lineWidth=0.13; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(jx-0.12,-cabW*0.44); ctx.lineTo(jx-0.12,cabW*0.44); ctx.stroke();
+  // Platform floor
+  ctx.fillStyle='rgba(10,8,5,0.58)';
+  rrect(x0+len*0.06,-cabW/2+0.18,len*0.44,cabW-0.36,0.10); ctx.fill();
+  // Seat
+  ctx.fillStyle='#1a1210'; rrect(x0+len*0.10,-0.20,len*0.14,0.40,0.07); ctx.fill();
+  // Steering wheel
+  ctx.strokeStyle='#1a1c20'; ctx.lineWidth=0.07;
+  ctx.beginPath(); ctx.arc(x0+len*0.34,0,0.17,0,2*π); ctx.stroke();
+  // Hood vents
+  ctx.strokeStyle='rgba(0,0,0,0.28)'; ctx.lineWidth=0.04; ctx.lineCap='butt';
+  const vS=jx+(front-jx)*0.12, vE=front-0.28;
+  for(let v=-1;v<=1;v++){ ctx.beginPath(); ctx.moveTo(vS,v*hoodW*0.24); ctx.lineTo(vE,v*hoodW*0.24); ctx.stroke(); }
+  // Exhaust stack
+  const exX=jx+(front-jx)*0.52, exY=hoodW/2-0.13;
+  ctx.fillStyle='#111318'; ctx.beginPath(); ctx.arc(exX,exY,0.09,0,2*π); ctx.fill();
+  ctx.fillStyle='#2d2d2d'; ctx.beginPath(); ctx.arc(exX,exY,0.055,0,2*π); ctx.fill();
+  // Headlights
   ctx.fillStyle='#ffe9a8';
-  ctx.fillRect(x0+len-0.16,-w/2+0.22,0.1,0.24);
-  ctx.fillRect(x0+len-0.16,w/2-0.46,0.1,0.24);
+  ctx.fillRect(front-0.13,-hoodW/2+0.06,0.09,0.16);
+  ctx.fillRect(front-0.13, hoodW/2-0.22,0.09,0.16);
+  // Taillights
+  ctx.fillStyle='#cc2020';
+  ctx.fillRect(x0,-cabW/2+0.06,0.09,0.14);
+  ctx.fillRect(x0, cabW/2-0.20,0.09,0.14);
 }
 function drawSedanDetailEd(x0,len,w){
   const wsX=x0+len*0.30, rwX=x0+len*0.09, glH=w-0.44;
@@ -664,6 +692,16 @@ function render(){
   }
 }
 
+function convexHull(pts){
+  if(pts.length<3) return pts;
+  pts=pts.slice().sort((a,b)=>a.x!==b.x?a.x-b.x:a.y-b.y);
+  const cross=(O,A,B)=>(A.x-O.x)*(B.y-O.y)-(A.y-O.y)*(B.x-O.x);
+  const lo=[],hi=[];
+  for(const p of pts){ while(lo.length>=2&&cross(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); }
+  for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; while(hi.length>=2&&cross(hi[hi.length-2],hi[hi.length-1],p)<=0) hi.pop(); hi.push(p); }
+  lo.pop(); hi.pop(); return lo.concat(hi);
+}
+
 // Trace the solution as a schematic curve: forward arcs cyan (solid),
 // reverse arcs orange (dashed), white dots at each move boundary, and a
 // numbered label per move. Uses the shared physics engine (advance()).
@@ -682,26 +720,23 @@ function drawSolutionPath(){
     pose=pts[pts.length-1];
   }
 
-  // Swept car envelope: draw the car bounding box at every sample pose.
-  // Overlapping semi-transparent fills trace the exact area the vehicle sweeps,
-  // so you can see at a glance whether a wall or parked car would collide.
+  // Swept envelope: convex hull of all car corner positions → single clean outline.
   {
     const allPoses=[{x:L.start.x,y:L.start.y,h:L.start.h}];
     for(const seg of segs) for(const pt of seg.pts.slice(1)) allPoses.push(pt);
-    ctx.save();
-    ctx.fillStyle='rgba(255,200,50,0.07)';
-    ctx.strokeStyle='rgba(255,200,50,0.18)';
-    ctx.lineWidth=0.04;
-    for(const pp of allPoses){
-      const poly=carPoly(pp);
-      ctx.beginPath();
-      ctx.moveTo(poly[0].x,poly[0].y);
-      for(let i=1;i<poly.length;i++) ctx.lineTo(poly[i].x,poly[i].y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+    const corners=[];
+    for(const pp of allPoses) for(const pt of carPoly(pp)) corners.push(pt);
+    const hull=convexHull(corners);
+    if(hull.length>=3){
+      ctx.save();
+      ctx.fillStyle='rgba(255,200,50,0.10)';
+      ctx.strokeStyle='rgba(255,200,50,0.55)';
+      ctx.lineWidth=0.07; ctx.lineJoin='round';
+      ctx.beginPath(); ctx.moveTo(hull[0].x,hull[0].y);
+      for(let i=1;i<hull.length;i++) ctx.lineTo(hull[i].x,hull[i].y);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
     }
-    ctx.restore();
   }
 
   Object.assign(CAR,saved); CAR.fOver=CAR.len-CAR.wb-CAR.rOver;
@@ -1079,6 +1114,7 @@ function updateSidebar(){
   const cs=isCutscene(L);
   document.getElementById('cutscenePanel').style.display=cs?'':'none';
   document.getElementById('geomPanel').style.display=cs?'none':'';
+  document.getElementById('sDraft').checked = !!L.draft;
   if(cs){
     val('csName',L.name);
     const ta=document.getElementById('csMsg');
@@ -1086,7 +1122,6 @@ function updateSidebar(){
     return;
   }
   val('sId',L.id||'(none)');
-  document.getElementById('sDraft').checked = !!L.draft;
   val('sName',L.name); val('sTier',L.tier); val('sMode',L.mode);
   val('sVehicle',L.vehicle||'default');
   val('sW',L.w); val('sH',L.h);
@@ -1436,6 +1471,7 @@ function setCurrent(i){
   fitLevel();
   updateSidebar();
   render();
+  if(L.id) history.replaceState(null,'',location.pathname+location.search+'#sel='+L.id);
 }
 
 async function loadAllLevels(){
@@ -1827,10 +1863,17 @@ window.addEventListener('beforeunload', e=>{
 document.getElementById('sidebar').addEventListener('input', markDirty);
 updateSaveBtn();
 (async ()=>{
+  const initialHash=location.hash;
   await loadAllLevels();
+  // Restore the previously selected level by ID (#sel=<id>).
+  const selM=initialHash.match(/[#&]sel=([a-z0-9]+)/);
+  if(selM){
+    const idx=levels.findIndex(l=>l.id===selM[1]);
+    if(idx>=0) setCurrent(idx);
+  }
   // Auto-import a level shared via the URL hash (#lvl=...) as a new entry,
   // then immediately clear the hash so a refresh can't re-import a duplicate.
-  const m=location.hash.match(/[#&]lvl=([A-Za-z0-9\-_]+)/);
+  const m=initialHash.match(/[#&]lvl=([A-Za-z0-9\-_]+)/);
   if(m){
     history.replaceState(null,'',location.pathname+location.search);
     try{
