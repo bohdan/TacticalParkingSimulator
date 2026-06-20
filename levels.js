@@ -671,7 +671,7 @@ const LEVELS = [
   },
   {
     id: "ogubjs",
-    name: "Optimized?", tier: "Expert", mode: "moves", w: 18, h: 11,
+    name: "Optimized?", tier: "Hard", mode: "moves", w: 18, h: 11,
     vehicle: "tractor",
     start: { x: 4.2, y: 5.7, h: Math.PI },
     goal: { cx: 2.6, cy: 1.6, w: 4.4, h: 2.6, heads: [0], tol: 45 },
