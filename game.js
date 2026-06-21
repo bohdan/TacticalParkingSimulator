@@ -2478,7 +2478,8 @@ function show3DView() {
     } else if (o.kind === 'car') {
       const sp = o.carSpec || SEDAN;
       const vt = o.pose.type || 'default';
-      const carGrp = _car3D(sp, 0x737d8c, vt);
+      const obstColor = vt === 'miata' ? 0xd23b3b : 0x737d8c;
+      const carGrp = _car3D(sp, obstColor, vt);
       carGrp.position.set(o.pose.cx, 0, o.pose.cy);
       carGrp.rotation.y = -o.pose.h;
       scene.add(carGrp);
