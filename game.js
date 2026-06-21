@@ -307,20 +307,16 @@ function rebuildLevelSelect() {
 
 function updateHUD() {
   const planning = moves.length > 0 || Math.abs(editDist) > 0.01;
-  const best = loadBest();
   const desc = level.tut || level.hint || '';
-  let html;
+
+  $('objective').innerHTML = desc ? escHtml(desc) : '';
+
   if (planning) {
     const st = planStats();
-    html = `Moves <b>${st.moves}</b> / Par ${levelPar()} · ${(st.dist * 100).toFixed(0)}cm`;
-    if (best) html += ` · <span class="star">${starStr(best.stars)}</span>`;
-    if (desc) html += ` · ${escHtml(desc)}`;
+    $('parInfo').innerHTML = `Moves <b>${st.moves}</b> / Par ${levelPar()} · ${(st.dist * 100).toFixed(0)}cm`;
   } else {
-    html = `Par ${levelPar()}`;
-    if (best) html += ` · <span class="star">${starStr(best.stars)}</span>`;
-    if (desc) html += ` · ${escHtml(desc)}`;
+    $('parInfo').textContent = `Par ${levelPar()}`;
   }
-  $('objective').innerHTML = html;
   $('stats').innerHTML = '';
   $('delBtn').disabled = (moves.length === 0 && editIdx === null && Math.abs(editDist) < 0.01) || !!anim;
   $('delBtn').innerHTML = editIdx !== null ? `&#128465; #${editIdx + 1}` : '&#128465; Delete';
