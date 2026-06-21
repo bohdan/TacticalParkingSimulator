@@ -80,7 +80,7 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
   const ms = CAR.maxSteer;
 
   // Steering candidates on the 0.2-deg grid (denser near full lock for tight work).
-  const fracs = [-1, -0.7, -0.45, -0.26, -0.12, 0, 0.12, 0.26, 0.45, 0.7, 1];
+  const fracs = [-1, -0.7, -0.45, -0.29, -0.245, -0.12, 0, 0.12, 0.245, 0.29, 0.45, 0.7, 1];
   const STEERS = (steerSet || [...new Set(fracs.map(f => snap(f * ms, STEER_Q)))])
     .slice().sort((a, b) => a - b);
   const STEP = Math.max(DIST_Q, snap(step, DIST_Q));

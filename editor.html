@@ -1263,27 +1263,43 @@ function updateSolutionPanel(){
       +`</div>`;
   }
   // Saved alternative plans (from ⚙ Solve): pick which one the player sees.
-  if(L.solutions && L.solutions.length){
-    const shownIdx=L.solutions.findIndex(s=>sameMoves(s,L.solution));
-    const cands=L.solutions.map((s,i)=>{
-      const on=i===shownIdx, d=s.reduce((a,m)=>a+Math.abs(m.dist),0);
-      return `<div class="row sol-cand${on?' sol-cand-on':''}" data-ci="${i}">`
-        +`<span class="sol-n">${s.length}t</span>`
-        +`<span class="sol-cand-d">${d.toFixed(1)} m${on?' · shown':''}</span>`
-        +`<button class="sol-show" data-ci="${i}" title="Show this plan to the player"${on?' disabled':''}>${on?'✓':'Show'}</button>`
-        +`<button class="sol-cand-del" data-ci="${i}" title="Remove this option">✕</button>`
+  const hasSol=!!(L.solution&&L.solution.length);
+  const hasOpts=!!(L.solutions&&L.solutions.length);
+  if(hasSol||hasOpts){
+    const shownIdx=hasOpts?L.solutions.findIndex(s=>sameMoves(s,L.solution)):-1;
+    let cands='';
+    if(hasSol&&shownIdx===-1){
+      const d=L.solution.reduce((a,m)=>a+Math.abs(m.dist),0);
+      cands+=`<div class="row sol-cand sol-cand-on">`
+        +`<span class="sol-n">${L.solution.length}t</span>`
+        +`<span class="sol-cand-d">${d.toFixed(1)} m · shown</span>`
+        +`<button class="sol-show" disabled title="Currently shown">✓</button>`
+        +`<button class="sol-clear-current" title="Clear this solution">✕</button>`
         +`</div>`;
-    }).join('');
+    }
+    if(hasOpts){
+      cands+=L.solutions.map((s,i)=>{
+        const on=i===shownIdx, d=s.reduce((a,m)=>a+Math.abs(m.dist),0);
+        return `<div class="row sol-cand${on?' sol-cand-on':''}" data-ci="${i}">`
+          +`<span class="sol-n">${s.length}t</span>`
+          +`<span class="sol-cand-d">${d.toFixed(1)} m${on?' · shown':''}</span>`
+          +`<button class="sol-show" data-ci="${i}" title="Show this plan to the player"${on?' disabled':''}>${on?'✓':'Show'}</button>`
+          +`<button class="sol-cand-del" data-ci="${i}" title="Remove this option">✕</button>`
+          +`</div>`;
+      }).join('');
+    }
     el.insertAdjacentHTML('afterbegin',
-      `<p class="sel-hint" style="margin:0 0 4px">${L.solutions.length} option${L.solutions.length!==1?'s':''} — fewest turns first:</p>`
+      (hasOpts?`<p class="sel-hint" style="margin:0 0 4px">${L.solutions.length} option${L.solutions.length!==1?'s':''} — fewest turns first:</p>`:'')
       +`<div class="sol-cands">${cands}</div>`
       +`<div style="border-top:1px solid #1f2636;margin:8px 0 6px"></div>`);
-    el.querySelectorAll('.sol-show').forEach(b=>b.addEventListener('click',()=>{
+    el.querySelectorAll('.sol-show[data-ci]').forEach(b=>b.addEventListener('click',()=>{
       L.solution=L.solutions[+b.dataset.ci].map(m=>({...m})); solSel=null; markDirty(); updateSolutionPanel(); render();
     }));
     el.querySelectorAll('.sol-cand-del').forEach(b=>b.addEventListener('click',()=>{
       L.solutions.splice(+b.dataset.ci,1); markDirty(); updateSolutionPanel(); render();
     }));
+    const cc=el.querySelector('.sol-clear-current');
+    if(cc) cc.addEventListener('click',()=>{ L.solution=[]; solSel=null; markDirty(); updateSolutionPanel(); render(); });
   }
   // wire row inputs
   el.querySelectorAll('.sol-row').forEach(rowEl=>{
