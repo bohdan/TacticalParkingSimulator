@@ -49,6 +49,7 @@ button.danger:hover{background:#6e2424}
 #saveStatus{font-size:12px;padding:7px 10px;border-radius:6px;background:#0e1520;border:1px solid #2a3040}
 #saveStatus.ok{border-color:#27a35e;color:#4dd884}
 #saveStatus.err{border-color:#8b3030;color:#e06060}
+#saveStatus.warn{border-color:#7a5c1a;color:#d4a84b}
 #btnSave{background:#1d4f6b;border-color:#2d7396}
 #btnSave.ready{background:#1a4e7a;border-color:#2a78b0;color:#80c8ff}
 #curSel{background:#1d2330;border:1px solid #2a3040;color:#c8d0dc;border-radius:6px;padding:4px 8px;font-size:12px;max-width:240px}
@@ -83,8 +84,11 @@ button.nav{padding:4px 8px;font-weight:700}
   button{padding:7px 11px}
   .row input,.row select{padding:6px 7px}
   .sol-del{padding:5px 9px}
+  /* Hide authoring-only buttons so the toolbar stays compact on mobile. */
+  .edit-only{display:none!important}
 }
 </style>
+<script src="levels.js"></script>
 <script src="physics.js"></script>
 <script src="solver.js"></script>
 </head>
@@ -95,15 +99,15 @@ button.nav{padding:4px 8px;font-weight:700}
   <button id="btnPrev" class="nav" title="Previous level">&#8249;</button>
   <select id="curSel" title="Current level"></select>
   <button id="btnNext" class="nav" title="Next level">&#8250;</button>
-  <button id="btnNew" title="New level (inserted after current)">&#65291; New</button>
-  <button id="btnNewCutscene" title="New cutscene (inserted after current)">&#65291; 🎬</button>
-  <button id="btnDupLevel" title="Duplicate current level (new ID)">⧉ Dup</button>
-  <button id="btnMoveUp" class="nav" title="Move current level earlier">&#9650;</button>
-  <button id="btnMoveDn" class="nav" title="Move current level later">&#9660;</button>
-  <button id="btnDelLevel" class="danger" title="Delete current level">&#128465;</button>
-  <div class="sep"></div>
-  <button id="toolSelect" class="active" title="Select / move objects  [V]">Select</button>
-  <div style="position:relative">
+  <button id="btnNew" class="edit-only" title="New level (inserted after current)">&#65291; New</button>
+  <button id="btnNewCutscene" class="edit-only" title="New cutscene (inserted after current)">&#65291; 🎬</button>
+  <button id="btnDupLevel" class="edit-only" title="Duplicate current level (new ID)">⧉ Dup</button>
+  <button id="btnMoveUp" class="nav edit-only" title="Move current level earlier">&#9650;</button>
+  <button id="btnMoveDn" class="nav edit-only" title="Move current level later">&#9660;</button>
+  <button id="btnDelLevel" class="danger edit-only" title="Delete current level">&#128465;</button>
+  <div class="sep edit-only"></div>
+  <button id="toolSelect" class="active edit-only" title="Select / move objects  [V]">Select</button>
+  <div class="edit-only" style="position:relative">
     <button id="btnAddObj" title="Add object [W/C/A/T]">+ Add ▾</button>
     <div id="addMenu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:200;background:#171a21;border:1px solid #2a3040;border-radius:6px;overflow:hidden;box-shadow:0 6px 20px #0009;min-width:120px">
       <button class="add-opt" data-tool="wall">+ Wall <span class="add-key">W</span></button>
@@ -112,8 +116,8 @@ button.nav{padding:4px 8px;font-weight:700}
       <button class="add-opt" data-tool="traffic">+ Traffic <span class="add-key">T</span></button>
     </div>
   </div>
-  <div class="sep"></div>
-  <button id="btnImport">&#8595; Import</button>
+  <div class="sep edit-only"></div>
+  <button id="btnImport" class="edit-only">&#8595; Import</button>
   <button id="btnExport">Export ↗</button>
   <button id="btnTry">&#9654; Try</button>
   <button id="btnSolve" title="Find fewest-turn solutions (streams improvements as it runs)">&#9881; Solve</button>
@@ -1251,9 +1255,9 @@ function updateSolutionPanel(){
     el.innerHTML=sol.map((m,i)=>
       `<div class="row sol-row${solSel===i?' sol-hot':''}" data-i="${i}">`
       +`<span class="sol-n">${i+1}</span>`
-      +`<input class="sol-steer" type="number" step="1" value="${+(+m.steer).toFixed(1)}" title="steer °">`
+      +`<input class="sol-steer" type="number" step="1" inputmode="decimal" value="${+(+m.steer).toFixed(1)}" title="steer °">`
       +`<span class="sol-u">°</span>`
-      +`<input class="sol-dist" type="number" step="0.1" value="${+(+m.dist).toFixed(2)}" title="distance m">`
+      +`<input class="sol-dist" type="number" step="0.1" inputmode="decimal" value="${+(+m.dist).toFixed(2)}" title="distance m">`
       +`<span class="sol-u">m</span>`
       +`<button class="sol-del" title="Delete move">✕</button>`
       +`</div>`).join('')
@@ -1634,12 +1638,13 @@ async function loadAllLevels(){
     levels=fetched.map(normalizeLevel);
     if(!levels.length) levels=[newLevel()];
   }catch(err){
-    levels=[newLevel()];
     if(err.message==='NO_GH'){
-      // Reading levels requires the GitHub API (PAT). Prompt for it.
-      alert('Add a GitHub token to load levels from the API (⚙ GitHub).');
-      setTimeout(()=>document.getElementById('btnGH').click(),50);
+      // No PAT: fall back to the bundled levels.js (read-only, solver still works).
+      levels=(typeof LEVELS!=='undefined'?[...LEVELS]:[]).map(normalizeLevel);
+      if(!levels.length) levels=[newLevel()];
+      setSaveStatus('Read-only — no GitHub token (⚙ GitHub to enable saving)','warn');
     } else {
+      levels=[newLevel()];
       alert('Failed to load levels from GitHub:\n'+err.message);
     }
   }
@@ -1937,37 +1942,38 @@ document.getElementById('btnSolve').onclick = async () => {
   stopBtn.style.display = '';
   status.style.display = 'inline';
   status.textContent = '⚙ Starting…';
-  // turns -> best (lowest-distance) plan found at that turn count
-  const byTurns = new Map();
+  // Diverse solution set keyed by solver-assigned id.
+  // Solver emits each accepted plan with id + replaces (id of plan it superseded).
+  const allSols = new Map();  // id → { turns, dist, moves }
   const hadSolution = !!(L.solution && L.solution.length);
   const applyBest = () => {
-    let ks = [...byTurns.keys()].sort((a, b) => a - b);
-    if (ks.length) ks = ks.filter(k => k <= ks[0] + 2);   // K* .. K*+2 options only
-    L.solutions = ks.map(k => byTurns.get(k).map(m => ({ ...m })));
-    // Don't clobber the author's shown plan; only fill it if none exists yet.
+    let sols = [...allSols.values()].sort((a, b) =>
+      a.turns !== b.turns ? a.turns - b.turns : a.dist - b.dist);
+    if (sols.length) { const minT = sols[0].turns; sols = sols.filter(s => s.turns <= minT + 2); }
+    L.solutions = sols.map(s => s.moves.map(m => ({ ...m })));
     if (!hadSolution)
       L.solution = L.solutions.length ? L.solutions[0].map(m => ({ ...m })) : (L.solution || []);
   };
   try {
-    const solution = await solveParkingLevel(L, { timeMs: 60000, idleMs: 6000, shouldStop: () => solveCancel }, ev => {
+    await solveParkingLevel(L, { timeMs: 60000, idleMs: 6000, shouldStop: () => solveCancel }, ev => {
       if (ev.type === 'solution') {
-        const cur = byTurns.get(ev.turns);
-        if (!cur || planDist(ev.moves) < planDist(cur) - 1e-9) byTurns.set(ev.turns, ev.moves);
+        if (ev.replaces != null) allSols.delete(ev.replaces);
+        allSols.set(ev.id, { turns: ev.turns, dist: ev.dist, moves: ev.moves });
         applyBest();
         dirty = true;
-        const best = Math.min(...byTurns.keys());
-        status.textContent = `⚙ ${best} turn${best !== 1 ? 's' : ''} · ${byTurns.size} option${byTurns.size !== 1 ? 's' : ''}…`;
+        const minT = Math.min(...allSols.values().map ? [...allSols.values()].map(s => s.turns) : [Infinity]);
+        status.textContent = `⚙ ${minT} turn${minT !== 1 ? 's' : ''} · ${allSols.size} option${allSols.size !== 1 ? 's' : ''}…`;
         updateSidebar();
         render();
       } else if (ev.type === 'depth') {
-        if (!byTurns.size) status.textContent = `⚙ Searching… (${ev.depth} expanded)`;
+        if (!allSols.size) status.textContent = `⚙ Searching… (${ev.depth} expanded)`;
       }
     });
     applyBest();
-    if (byTurns.size) {
-      const best = Math.min(...byTurns.keys());
+    if (allSols.size) {
+      const minT = Math.min(...[...allSols.values()].map(s => s.turns));
       const n = L.solutions.length;
-      status.textContent = `✓ ${best} turn${best !== 1 ? 's' : ''}, ${n} option${n !== 1 ? 's' : ''}${solveCancel ? ' (stopped)' : ''}` +
+      status.textContent = `✓ ${minT} turn${minT !== 1 ? 's' : ''}, ${n} option${n !== 1 ? 's' : ''}${solveCancel ? ' (stopped)' : ''}` +
         (hadSolution ? ' — pick one to show' : ' — save to persist');
     } else {
       status.textContent = solveCancel ? '■ Stopped — no solution yet' : '✗ No solution found';

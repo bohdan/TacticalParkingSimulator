@@ -68,6 +68,8 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
     maxArc = null,         // override max single-turn arc length (m)
     shouldStop = null,     // ()=>bool cooperative cancel (Stop button)
     yield: doYield = true,
+    diverseN = 3,          // max diverse solutions to keep per turn count
+    diverseThresh = 1.5,   // m, min trajectory distance to count as a distinct solution
   } = opts;
 
   const snap = (v, q) => Math.round(v / q) * q;
@@ -169,18 +171,83 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
     !(shouldStop && shouldStop()) && expand < maxExpand && now() - startTime <= timeMs &&
     (!solvedAt || now() - lastImprove <= idleMs);
 
-  // Anytime incumbents: best distance + plan at each turn count.
+  // Trajectory signature: rear-axle (x,y) at each turn endpoint, for diversity comparison.
+  function planSig(moves) {
+    let p = start;
+    return moves.map(m => { p = advance(p, rad(m.steer), m.dist); return { x: p.x, y: p.y }; });
+  }
+  function sigDist(sa, sb) {
+    if (sa.length !== sb.length) return Infinity;
+    let mx = 0;
+    for (let i = 0; i < sa.length; i++) {
+      const d = Math.hypot(sa[i].x - sb[i].x, sa[i].y - sb[i].y);
+      if (d > mx) mx = d;
+    }
+    return mx;
+  }
+
+  // Anytime incumbents: up to diverseN distinct-trajectory plans per turn count.
+  // Each entry: { dist, moves, sig, id }. Streamed events carry id + replaces.
   let bestTurns = Infinity;
-  const bestDist = new Map(), bestPlan = new Map();
+  const solSets = new Map();   // turns → Entry[]
+  let _nextId = 0;
   function offer(moves) {
     if (!moves) return;
-    const tn = moves.length, nd = moves.reduce((a, m) => a + Math.abs(m.dist), 0);
-    const cur = bestDist.get(tn);
-    if (cur !== undefined && cur <= nd + 1e-9) return;
-    bestDist.set(tn, nd); bestPlan.set(tn, moves);
-    if (tn < bestTurns) bestTurns = tn;
-    lastImprove = now(); if (!solvedAt) solvedAt = now();
-    progressCb && progressCb({ type: 'solution', moves, turns: tn, dist: round2(nd) });
+    const tn = moves.length;
+    const nd = moves.reduce((a, m) => a + Math.abs(m.dist), 0);
+    const sig = planSig(moves);
+
+    if (!solSets.has(tn)) solSets.set(tn, []);
+    const set = solSets.get(tn);
+
+    // Find most-similar existing entry.
+    let minD = Infinity, minI = -1;
+    for (let i = 0; i < set.length; i++) {
+      const d = sigDist(sig, set[i].sig);
+      if (d < minD) { minD = d; minI = i; }
+    }
+
+    const emit = (entry, replaces) => {
+      if (tn < bestTurns) bestTurns = tn;
+      lastImprove = now(); if (!solvedAt) solvedAt = now();
+      progressCb && progressCb({ type: 'solution', moves: entry.moves, turns: tn,
+        dist: round2(entry.dist), id: entry.id, replaces });
+    };
+
+    if (minI >= 0 && minD < diverseThresh) {
+      // Similar to existing: replace only if shorter distance.
+      if (nd < set[minI].dist - 1e-9) {
+        const old = set[minI];
+        set[minI] = { dist: nd, moves, sig, id: _nextId++ };
+        emit(set[minI], old.id);
+      }
+      return;
+    }
+
+    // Genuinely diverse path.
+    const entry = { dist: nd, moves, sig, id: _nextId++ };
+    if (set.length < diverseN) {
+      set.push(entry);
+      emit(entry, null);
+      return;
+    }
+
+    // Set full: find the entry whose nearest neighbor is closest (least unique)
+    // and swap it out only if the new plan would increase the min pairwise distance.
+    let worstNear = Infinity, worstI = -1;
+    for (let i = 0; i < set.length; i++) {
+      let nearD = Infinity;
+      for (let j = 0; j < set.length; j++) {
+        if (i !== j) { const d = sigDist(set[i].sig, set[j].sig); if (d < nearD) nearD = d; }
+      }
+      if (nearD < worstNear) { worstNear = nearD; worstI = i; }
+    }
+    const newNear = Math.min(...set.map(e => sigDist(sig, e.sig)));
+    if (newNear > worstNear) {
+      const old = set[worstI];
+      set[worstI] = entry;
+      emit(entry, old.id);
+    }
   }
 
   if (inGoal(start, goal)) offer([]);
@@ -244,10 +311,12 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
   }
 
   restore();
-  const result = bestPlan.has(bestTurns) ? bestPlan.get(bestTurns) : null;
-  progressCb && progressCb({ type: 'done', expand, turns: result ? bestTurns : null,
-    dist: result ? round2(bestDist.get(bestTurns)) : null });
-  return result;
+  const bestSet = solSets.has(bestTurns) ? solSets.get(bestTurns) : [];
+  const bestEntry = bestSet.length ? bestSet.reduce((a, e) => e.dist < a.dist ? e : a) : null;
+  progressCb && progressCb({ type: 'done', expand,
+    turns: bestEntry ? bestTurns : null,
+    dist:  bestEntry ? round2(bestEntry.dist) : null });
+  return bestEntry ? bestEntry.moves : null;
 }
 
 if (typeof module !== 'undefined' && module.exports) module.exports = { solveParkingLevel };
