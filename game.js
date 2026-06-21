@@ -2129,7 +2129,7 @@ function show3DView() {
   // ── scene + lights ────────────────────────────────────────────────────────
   const scene = new THREE.Scene();
   const diag = Math.hypot(level.w, level.h);
-  scene.fog = new THREE.Fog(0x171a21, diag * 1.6, diag * 3.8);
+  scene.fog = new THREE.Fog(0x171a21, diag * 2.5, diag * 6.0);
 
   scene.add(new THREE.AmbientLight(0xcce0ff, 0.55));
   const sun = new THREE.DirectionalLight(0xfff8ee, 1.1);
@@ -2262,11 +2262,14 @@ function show3DView() {
   }
 
   // ── camera ────────────────────────────────────────────────────────────────
+  // 2D map: X right, Y down. 3D mapping: levelY → Z. So the camera sits on
+  // the high-Z (south) side looking toward low-Z (north = top of 2D map),
+  // which matches the 2D orientation when the camera morphs from top-down.
   const camFocus = new THREE.Vector3(level.w / 2, 0, level.h / 2);
-  const camA = new THREE.Vector3(level.w / 2, diag * 2.0,  level.h / 2);
-  const camB = new THREE.Vector3(level.w / 2, diag * 0.54, level.h / 2 - diag * 0.52);
+  const camA = new THREE.Vector3(level.w / 2, diag * 3.0,  level.h / 2);            // top-down
+  const camB = new THREE.Vector3(level.w / 2, diag * 1.2,  level.h / 2 + diag * 1.1); // raised, from south
 
-  const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, diag * 12);
+  const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, diag * 15);
   camera.position.copy(camA);
   camera.lookAt(camFocus);
 
