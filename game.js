@@ -1284,40 +1284,38 @@ $('resetBtn').addEventListener('click', () => {
 });
 
 let view3dActive = false;   // true while the 3-D visualisation is showing
+let _3dSuppressClick = false; // long-press 2D run fired; eat the subsequent click
 
+// Click → 3D view
 $('goBtn').addEventListener('click', () => {
-  if (view3dActive) return;   // long-press already opened 3D; eat this click
+  if (view3dActive) return;
+  if (_3dSuppressClick) { _3dSuppressClick = false; return; }
   if (anim) return;
-  // Auto-commit whatever's pending — a new move OR an unsaved edit to an
-  // existing one — so the last move never needs an explicit Add/Update.
   commitMove();
   if (!moves.length) { toast('Add some moves first'); return; }
-  startRun();
+  editIdx = null;
+  for (let i = 0; i < planSims.length; i++)
+    moves[i].dist = Math.round(traveledDist(moves[i].dist, planSims[i]) * 100) / 100;
+  moves = moves.filter(m => Math.abs(m.dist) >= 0.01);
+  recomputePlan();
+  view3dActive = true;
+  show3DView();
 });
 
-// Long-press the Run button to open the 3-D scene preview.
+// Long-press → 2D animated run
 { let _3dT = null;
   $('goBtn').addEventListener('pointerdown', () => {
     _3dT = setTimeout(() => {
       _3dT = null;
-      if (view3dActive) return;
-      // Same pre-flight as the normal Run button: commit pending edit, validate.
+      if (view3dActive || anim) return;
+      _3dSuppressClick = true;
       commitMove();
-      if (!moves.length) { toast('Add some moves first'); return; }
-      // Bake distances to actual travelled (mirrors startRun's first pass).
-      editIdx = null;
-      for (let i = 0; i < planSims.length; i++)
-        moves[i].dist = Math.round(traveledDist(moves[i].dist, planSims[i]) * 100) / 100;
-      moves = moves.filter(m => Math.abs(m.dist) >= 0.01);
-      recomputePlan();
-      view3dActive = true;
-      show3DView();
+      if (!moves.length) { _3dSuppressClick = false; toast('Add some moves first'); return; }
+      startRun();
     }, 650);
   });
-  // Cancel only on genuine release/cancel — NOT pointerleave, which fires spuriously on mobile.
   $('goBtn').addEventListener('pointerup',     () => { clearTimeout(_3dT); _3dT = null; });
   $('goBtn').addEventListener('pointercancel', () => { clearTimeout(_3dT); _3dT = null; });
-  // Suppress the browser long-press context menu so it doesn't interrupt.
   $('goBtn').addEventListener('contextmenu', e => e.preventDefault());
 }
 
@@ -2532,6 +2530,7 @@ function show3DView() {
     if (!_alive) return;
     _alive = false; view3dActive = false;
     v3d.classList.add('hidden'); renderer.dispose();
+    if (level && inGoal(planEnd(), level.goal)) finishRun();
   }
   $('v3dClose').onclick = () => startExit(true);
   cv3.addEventListener('pointerdown', e => { if (e.isPrimary) startExit(true); }, { once: true });
