@@ -2108,6 +2108,170 @@ requestAnimationFrame(draw);
    3-D visualisation  —  long-press the Run button to open
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* Build a compound car mesh matching the 2D silhouettes.
+   Group origin = body centre, ground at y=0, car faces +X at rotation.y=0. */
+function _car3D(spec, bodyColorHex, vehicleType) {
+  const grp = new THREE.Group();
+  const { len, wid, rOver, wb } = spec;
+  const fOver   = spec.fOver != null ? spec.fOver : len - wb - rOver;
+  const halfLen = len / 2;
+  const isBus     = vehicleType === 'bus';
+  const isTractor = vehicleType === 'tractor';
+  const isMiata   = vehicleType === 'miata';
+
+  const wheelR   = Math.min(0.36, wid * 0.20);
+  const wheelThk = Math.min(0.24, wid * 0.14);
+  const bodyH    = 0.40;
+  const Y0       = wheelR;   // bottom-of-body sits on top of wheel radius
+
+  const bodyMat  = new THREE.MeshLambertMaterial({ color: bodyColorHex });
+  const glassMat = new THREE.MeshLambertMaterial({ color: 0x0e1d2c, transparent: true, opacity: 0.88 });
+  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x141414 });
+  const rimMat   = new THREE.MeshLambertMaterial({ color: 0x8899bb });
+  const hlMat    = new THREE.MeshBasicMaterial({ color: 0xffffcc });
+  const tlMat    = new THREE.MeshBasicMaterial({ color: 0xdd1f1f });
+
+  const add = m => grp.add(m);
+  const box = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+
+  // ── tractor — T-shaped body ───────────────────────────────────────────────
+  if (isTractor) {
+    const jx    = -halfLen + len * 0.54;   // cab/hood junction in local X
+    const cabW  = wid * 0.82, hoodW = wid * 0.46;
+    const cabH  = bodyH + len * 0.10;
+    const hoodH = bodyH * 0.55;
+    const cabLen  = jx + halfLen;
+    const hoodLen = halfLen - jx;
+
+    const cab  = box(cabLen,  cabH,  cabW,  bodyMat);
+    cab.position.set(-halfLen + cabLen / 2, Y0 + cabH / 2, 0);  add(cab);
+
+    const hood = box(hoodLen, hoodH, hoodW, bodyMat);
+    hood.position.set(jx + hoodLen / 2, Y0 + hoodH / 2, 0);     add(hood);
+
+    // ROPS arch (rollbar)
+    const archMat = new THREE.MeshLambertMaterial({ color: 0x9aab8a });
+    const arch = box(0.13, 0.14, cabW * 0.85, archMat);
+    arch.position.set(jx - 0.10, Y0 + cabH + 0.07, 0);           add(arch);
+
+    // Exhaust stack
+    const exMat = new THREE.MeshLambertMaterial({ color: 0x1c1c1c });
+    const exGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.38, 7);
+    const ex = new THREE.Mesh(exGeo, exMat);
+    ex.position.set(jx + hoodLen * 0.52, Y0 + hoodH + 0.19, hoodW * 0.38); add(ex);
+
+    // Tractor big rear wheels + small front wheels
+    const rR = wid * 0.24, rThk = 0.65;
+    const fR = wid * 0.10, fThk = 0.28;
+    const rAxX = -halfLen + rOver, fAxX = rAxX + wb;
+    const rCy   = wid / 2 - rR;   // wheel centre in Z (inset from body edge)
+    const fCy   = wid / 2 - fR;
+    const rGeo = new THREE.CylinderGeometry(rR, rR, rThk, 14);
+    const fGeo = new THREE.CylinderGeometry(fR, fR, fThk, 12);
+    for (const side of [1, -1]) {
+      for (const [geo, axX, cy, thk] of [[rGeo, rAxX, rCy, rThk], [fGeo, fAxX, fCy, fThk]]) {
+        const wm = new THREE.Mesh(geo, wheelMat); wm.rotation.x = Math.PI / 2;
+        wm.position.set(axX, geo === rGeo ? rR : fR, side * (cy + thk / 2)); add(wm);
+        const rim = new THREE.Mesh(new THREE.CircleGeometry((geo === rGeo ? rR : fR) * 0.55, 8), rimMat);
+        rim.position.set(axX, geo === rGeo ? rR : fR, side * (cy + thk / 2 + 0.01));
+        if (side === -1) rim.rotation.y = Math.PI; add(rim);
+      }
+    }
+    // headlights
+    for (const z of [hoodW * 0.3, -hoodW * 0.3]) {
+      const hl = box(0.07, 0.14, 0.18, hlMat); hl.position.set(halfLen - 0.04, Y0 + hoodH * 0.55, z); add(hl);
+    }
+    // taillights
+    for (const z of [cabW * 0.35, -cabW * 0.35]) {
+      const tl = box(0.07, 0.13, 0.18, tlMat); tl.position.set(-halfLen + 0.04, Y0 + cabH * 0.55, z); add(tl);
+    }
+    return grp;
+  }
+
+  // ── sedan / bus / miata — body slab + cabin ───────────────────────────────
+  const body = box(len, bodyH, wid, bodyMat);
+  body.position.y = Y0 + bodyH / 2; add(body);
+
+  const cabinH  = isBus ? len * 0.145 : len * 0.112;
+  const cabinRX = isBus ? -halfLen + len * 0.04 : -halfLen + len * 0.13;
+  const cabinFX = isBus ?  halfLen - len * 0.04 : -halfLen + len * 0.73;
+  const cabinLen = cabinFX - cabinRX;
+  const cabinCX  = (cabinRX + cabinFX) / 2;
+  const cabinWid = isBus ? wid * 0.96 : wid * 0.85;
+
+  const cabin = box(cabinLen, cabinH, cabinWid, bodyMat);
+  cabin.position.set(cabinCX, Y0 + bodyH + cabinH / 2, 0); add(cabin);
+
+  // Glass panels
+  const gH  = cabinH * 0.65;
+  const gY  = Y0 + bodyH + cabinH * 0.35 + gH / 2;
+  const gT  = 0.045;
+  const gW  = cabinWid * 0.92;
+
+  // windshield (front cabin face)
+  const ws = box(gT, gH, gW, glassMat);
+  ws.position.set(cabinFX + gT / 2, gY, 0); add(ws);
+
+  // rear window (not on miata convertible)
+  if (!isMiata) {
+    const rw = box(gT, gH * 0.78, gW * 0.90, glassMat);
+    rw.position.set(cabinRX - gT / 2, gY - gH * 0.10, 0); add(rw);
+  }
+
+  if (isBus) {
+    // bus: row of small side windows
+    const swH = cabinH * 0.42, swLen = len * 0.062;
+    const swY = Y0 + bodyH + cabinH * 0.52;
+    for (const wz of [cabinWid / 2 + 0.01, -cabinWid / 2 - 0.01]) {
+      for (let i = 0; i < 8; i++) {
+        const sw = box(swLen, swH, gT, glassMat);
+        sw.position.set(-halfLen + len * 0.12 + i * len * 0.096, swY + swH / 2, wz); add(sw);
+      }
+    }
+  } else {
+    // sedan/miata: single continuous side window band
+    const swLen = cabinLen * 0.68, swH = cabinH * 0.60;
+    const swY = Y0 + bodyH + cabinH * 0.40 + swH / 2;
+    for (const wz of [cabinWid / 2 + 0.01, -cabinWid / 2 - 0.01]) {
+      const sw = box(swLen, swH, gT, glassMat);
+      sw.position.set(cabinCX - cabinLen * 0.05, swY, wz); add(sw);
+    }
+  }
+
+  // ── wheels ────────────────────────────────────────────────────────────────
+  const rearAxleX  = -halfLen + rOver;
+  const frontAxleX = rearAxleX + wb;
+  // Bus has a dual rear axle (mirroring the 2D drawCarBody bus case)
+  const axles = isBus
+    ? [[rearAxleX - wb * 0.08, false], [rearAxleX + wb * 0.08, false], [frontAxleX, true]]
+    : [[rearAxleX, false], [frontAxleX, true]];
+
+  const wGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelThk, 14);
+  for (const [axX] of axles) {
+    for (const side of [1, -1]) {
+      const wz = side * (wid / 2 + wheelThk / 2);
+      const wm = new THREE.Mesh(wGeo, wheelMat); wm.rotation.x = Math.PI / 2;
+      wm.position.set(axX, wheelR, wz); add(wm);
+      const rim = new THREE.Mesh(new THREE.CircleGeometry(wheelR * 0.58, 8), rimMat);
+      rim.position.set(axX, wheelR, wz + side * (wheelThk / 2 + 0.005));
+      if (side === -1) rim.rotation.y = Math.PI; add(rim);
+    }
+  }
+
+  // headlights
+  for (const z of [wid * 0.28, -wid * 0.28]) {
+    const hl = box(0.07, 0.14, 0.22, hlMat);
+    hl.position.set(halfLen - 0.04, Y0 + bodyH * 0.55, z); add(hl);
+  }
+  // taillights
+  for (const z of [wid * 0.28, -wid * 0.28]) {
+    const tl = box(0.07, 0.14, 0.22, tlMat);
+    tl.position.set(-halfLen + 0.04, Y0 + bodyH * 0.55, z); add(tl);
+  }
+
+  return grp;
+}
+
 function show3DView() {
   if (!level) { view3dActive = false; return; }
   if (typeof THREE === 'undefined') {
@@ -2131,10 +2295,13 @@ function show3DView() {
   const diag = Math.hypot(level.w, level.h);
   scene.fog = new THREE.Fog(0x171a21, diag * 2.5, diag * 6.0);
 
-  scene.add(new THREE.AmbientLight(0xcce0ff, 0.55));
-  const sun = new THREE.DirectionalLight(0xfff8ee, 1.1);
-  sun.position.set(-level.w * 0.4, level.h, -level.h * 0.3);
+  scene.add(new THREE.AmbientLight(0xcce0ff, 0.60));
+  const sun = new THREE.DirectionalLight(0xfff8ee, 1.0);
+  sun.position.set(level.w * 0.3, level.h * 1.2, -level.h * 0.5);
   scene.add(sun);
+  const fill = new THREE.DirectionalLight(0x8899cc, 0.35);
+  fill.position.set(-level.w, level.h * 0.4, level.h);
+  scene.add(fill);
 
   // ── floor ─────────────────────────────────────────────────────────────────
   const floor = new THREE.Mesh(
@@ -2145,7 +2312,6 @@ function show3DView() {
   floor.position.set(level.w / 2, 0, level.h / 2);
   scene.add(floor);
 
-  // subtle grid
   const gSz = Math.max(Math.ceil(level.w), Math.ceil(level.h));
   const grid = new THREE.GridHelper(gSz, gSz, 0x2a2f3a, 0x2a2f3a);
   grid.position.set(level.w / 2, 0.001, level.h / 2);
@@ -2159,24 +2325,23 @@ function show3DView() {
 
   const goalPl = new THREE.Mesh(
     new THREE.PlaneGeometry(g.w, g.h),
-    new THREE.MeshBasicMaterial({ color: 0xf2c84b, transparent: true, opacity: 0.20,
+    new THREE.MeshBasicMaterial({ color: 0xf2c84b, transparent: true, opacity: 0.18,
                                   depthWrite: false, side: THREE.DoubleSide })
   );
-  goalPl.rotation.x = -Math.PI / 2;
-  goalPl.position.y = 0.005;
+  goalPl.rotation.x = -Math.PI / 2; goalPl.position.y = 0.005;
   goalGrp.add(goalPl);
 
-  const borderPts = [[-g.w/2,-g.h/2],[g.w/2,-g.h/2],[g.w/2,g.h/2],[-g.w/2,g.h/2],[-g.w/2,-g.h/2]]
+  // dashed border approximated with 4 line segments
+  const bPts = [[-g.w/2,-g.h/2],[g.w/2,-g.h/2],[g.w/2,g.h/2],[-g.w/2,g.h/2],[-g.w/2,-g.h/2]]
     .map(([x,z]) => new THREE.Vector3(x, 0.008, z));
-  const goalBorder = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints(borderPts),
-    new THREE.LineBasicMaterial({ color: 0xf2c84b, transparent: true, opacity: 0.75 })
-  );
-  goalGrp.add(goalBorder);
+  goalGrp.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(bPts),
+    new THREE.LineBasicMaterial({ color: 0xf2c84b, opacity: 0.80, transparent: true })
+  ));
   scene.add(goalGrp);
 
   // ── obstacles ─────────────────────────────────────────────────────────────
-  const WALL_H = 1.4, CURB_H = 0.22, OBS_CAR_H = 1.45;
+  const WALL_H = 1.4, CURB_H = 0.22;
 
   for (const o of level.obstacles) {
     if (o.kind === 'border') continue;
@@ -2189,58 +2354,57 @@ function show3DView() {
       let mesh;
       if (r.ang != null) {
         mesh = new THREE.Mesh(new THREE.BoxGeometry(r.w, hgt, r.h), mat);
-        mesh.position.set(r.cx, hgt / 2, r.cy);
-        mesh.rotation.y = -r.ang;
+        mesh.position.set(r.cx, hgt / 2, r.cy); mesh.rotation.y = -r.ang;
       } else {
         mesh = new THREE.Mesh(new THREE.BoxGeometry(r.w, hgt, r.h), mat);
         mesh.position.set(r.x + r.w / 2, hgt / 2, r.y + r.h / 2);
       }
       scene.add(mesh);
-
+      // Lighter cap on top of walls
+      if (o.kind === 'wall') {
+        const capMat = new THREE.MeshLambertMaterial({ color: 0x4e5870 });
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(r.ang != null ? r.w : r.w, 0.05,
+                                                          r.ang != null ? r.h : r.h), capMat);
+        cap.position.copy(mesh.position); cap.position.y = hgt + 0.025;
+        cap.rotation.copy(mesh.rotation); scene.add(cap);
+      }
     } else if (o.kind === 'car') {
       const sp = o.carSpec || SEDAN;
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(sp.len, OBS_CAR_H, sp.wid),
-        new THREE.MeshLambertMaterial({ color: 0x737d8c })
-      );
-      mesh.position.set(o.pose.cx, OBS_CAR_H / 2, o.pose.cy);
-      mesh.rotation.y = -o.pose.h;
-      scene.add(mesh);
+      const vt = o.pose.type || 'default';
+      const carGrp = _car3D(sp, 0x737d8c, vt);
+      carGrp.position.set(o.pose.cx, 0, o.pose.cy);
+      carGrp.rotation.y = -o.pose.h;
+      scene.add(carGrp);
     }
   }
 
   // ── traffic ───────────────────────────────────────────────────────────────
-  const TRAF_H = OBS_CAR_H;
-  const trafficMeshes = [];
+  const trafficObjs = [];
   if (level.traffic) {
     for (const tr of level.traffic) {
-      const clr = new THREE.Color(tr.color || '#4e5a6e');
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(SEDAN.len, TRAF_H, SEDAN.wid),
-        new THREE.MeshLambertMaterial({ color: clr })
-      );
-      mesh.position.set(tr.x, TRAF_H / 2, tr.y);
-      mesh.rotation.y = -tr.h;
-      scene.add(mesh);
-      trafficMeshes.push({ mesh, tr });
+      const clrHex = parseInt((tr.color || '#4e5a6e').replace('#', ''), 16);
+      const tGrp = _car3D(SEDAN, clrHex, 'default');
+      tGrp.position.set(tr.x, 0, tr.y);
+      tGrp.rotation.y = -tr.h;
+      scene.add(tGrp);
+      trafficObjs.push({ grp: tGrp, tr });
     }
   }
 
   // ── player car ────────────────────────────────────────────────────────────
-  const PCAR_H = 1.3;
-  const pCarMat = new THREE.MeshLambertMaterial({ color: 0x45c4ff });
-  const pCarMesh = new THREE.Mesh(new THREE.BoxGeometry(CAR.len, PCAR_H, CAR.wid), pCarMat);
-  const pBodyFwd = CAR.len / 2 - CAR.rOver;   // rear-axle → body-centre offset
+  const vType   = level.vehicle || 'default';
+  const pGrp    = _car3D(CAR, 0x45c4ff, vType);
+  const pBodFwd = CAR.len / 2 - CAR.rOver;   // rear-axle → body-centre offset
 
   function posePcar(pose) {
-    pCarMesh.position.set(
-      pose.x + Math.cos(pose.h) * pBodyFwd, PCAR_H / 2,
-      pose.y + Math.sin(pose.h) * pBodyFwd
+    pGrp.position.set(
+      pose.x + Math.cos(pose.h) * pBodFwd, 0,
+      pose.y + Math.sin(pose.h) * pBodFwd
     );
-    pCarMesh.rotation.y = -pose.h;
+    pGrp.rotation.y = -pose.h;
   }
   posePcar(level.start);
-  scene.add(pCarMesh);
+  scene.add(pGrp);
 
   // ── replay samples from planSims ──────────────────────────────────────────
   let rSamples = null, rCum = null, rTotal = 0, rSpeed = 0;
@@ -2253,8 +2417,7 @@ function show3DView() {
       const step = Math.abs(moves[i].dist) / n;
       for (let j = (i === 0 ? 0 : 1); j < sim.pts.length; j++) {
         if (j > 0) tot += step;
-        samp.push(sim.pts[j]);
-        cum.push(tot);
+        samp.push(sim.pts[j]); cum.push(tot);
       }
     }
     rSamples = samp; rCum = cum; rTotal = tot;
@@ -2262,12 +2425,9 @@ function show3DView() {
   }
 
   // ── camera ────────────────────────────────────────────────────────────────
-  // 2D map: X right, Y down. 3D mapping: levelY → Z. So the camera sits on
-  // the high-Z (south) side looking toward low-Z (north = top of 2D map),
-  // which matches the 2D orientation when the camera morphs from top-down.
   const camFocus = new THREE.Vector3(level.w / 2, 0, level.h / 2);
-  const camA = new THREE.Vector3(level.w / 2, diag * 3.0,  level.h / 2);            // top-down
-  const camB = new THREE.Vector3(level.w / 2, diag * 1.2,  level.h / 2 + diag * 1.1); // raised, from south
+  const camA = new THREE.Vector3(level.w / 2, diag * 3.0, level.h / 2);
+  const camB = new THREE.Vector3(level.w / 2, diag * 1.2, level.h / 2 + diag * 1.1);
 
   const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, diag * 15);
   camera.position.copy(camA);
@@ -2278,12 +2438,9 @@ function show3DView() {
 
   function closeView() {
     if (!_alive) return;
-    _alive = false;
-    view3dActive = false;
-    v3d.classList.add('hidden');
-    renderer.dispose();
+    _alive = false; view3dActive = false;
+    v3d.classList.add('hidden'); renderer.dispose();
   }
-
   $('v3dClose').onclick = closeView;
   cv3.addEventListener('pointerdown', e => { if (e.isPrimary) closeView(); }, { once: true });
 
@@ -2294,16 +2451,12 @@ function show3DView() {
 
   function frame(now) {
     if (!_alive) return;
-
-    // camera morph: top-down → raised isometric
     const mt = Math.min(1, (now - morphT0) / MORPH_MS);
     camera.position.lerpVectors(camA, camB, easeIO(mt));
     camera.lookAt(camFocus);
 
-    // start replay after morph finishes
     if (mt >= 1 && rSamples && !_replayT0) _replayT0 = now;
 
-    // animate player car along plan
     if (_replayT0 && rSamples) {
       const trav = Math.min(rTotal, (now - _replayT0) / 1000 * rSpeed);
       let lo = 0, hi = rCum.length - 1;
@@ -2311,11 +2464,10 @@ function show3DView() {
       posePcar(rSamples[lo]);
     }
 
-    // animate traffic
     const tSec = now / 1000;
-    for (const { mesh, tr } of trafficMeshes) {
+    for (const { grp, tr } of trafficObjs) {
       const d = (tSec * tr.speed + tr.offset) % tr.loop;
-      mesh.position.set(tr.x + Math.cos(tr.h) * d, TRAF_H / 2, tr.y + Math.sin(tr.h) * d);
+      grp.position.set(tr.x + Math.cos(tr.h) * d, 0, tr.y + Math.sin(tr.h) * d);
     }
 
     renderer.render(scene, camera);
