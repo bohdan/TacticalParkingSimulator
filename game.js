@@ -2452,12 +2452,22 @@ function show3DView() {
 
   // ── camera ────────────────────────────────────────────────────────────────
   const camFocus = new THREE.Vector3(level.w / 2, 0, level.h / 2);
-  // Derive top-down height so 1 world-metre = same CSS pixels as the 2D canvas.
-  // view.scale is px/m (updated every frame by fitView); H is the 3D canvas height.
   const FOV_Y  = 55 * Math.PI / 180;
-  const camAH  = H / (view.scale * 2 * Math.tan(FOV_Y / 2));
-  const camA = new THREE.Vector3(level.w / 2, camAH, level.h / 2);
-  const camB = new THREE.Vector3(level.w / 2, diag * 1.2, level.h / 2 + diag * 1.1);
+  const tanHV  = Math.tan(FOV_Y / 2);
+
+  // camA: top-down height matching 2D canvas scale exactly.
+  const camAH  = H / (view.scale * 2 * tanHV);
+  const camA   = new THREE.Vector3(level.w / 2, camAH, level.h / 2);
+
+  // camB: raised camera that keeps the level framed with a small border.
+  // Compute slant distance R so the level just fits (with ~10% border each side)
+  // in both axes given the actual canvas aspect ratio and FOV.
+  const BORDER  = 0.80;                                    // 80 % of frame → 10 % border each side
+  const R_forH  = level.h / (2 * BORDER * tanHV);         // height-driven min slant distance
+  const R_forW  = (level.w / W * H) / (2 * BORDER * tanHV); // width-driven (accounts for aspect ratio)
+  const R       = Math.max(R_forH, R_forW) * 1.15;        // +15 % for near/far perspective spread
+  const elev    = 42 * Math.PI / 180;                      // elevation angle above horizontal
+  const camB    = new THREE.Vector3(level.w / 2, R * Math.sin(elev), level.h / 2 + R * Math.cos(elev));
 
   const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, diag * 15);
   camera.position.copy(camA);
