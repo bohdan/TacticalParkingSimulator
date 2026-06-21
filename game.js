@@ -306,7 +306,7 @@ function rebuildLevelSelect() {
 }
 
 function updateHUD() {
-  $('objective').textContent = `${tierEmoji(level)} ${level.tier} · Par ${levelPar()}`;
+  $('objective').textContent = `Par ${levelPar()}`;
   const planning = moves.length > 0 || Math.abs(editDist) > 0.01;
   const best = loadBest();
   if (planning) {
@@ -1256,13 +1256,20 @@ $('delBtn').addEventListener('click', () => {
     editIdx = null;
     setEdit(0, 0);
     recomputePlan();
+    showDeleteTip();
   } else if (Math.abs(editDist) >= 0.01) {
     setEdit(editSteer, 0);
   } else if (moves.length) {
     moves.pop();
     recomputePlan();
+    showDeleteTip();
   }
 });
+function showDeleteTip() {
+  if (localStorage.getItem('parking.deleteTipSeen')) return;
+  localStorage.setItem('parking.deleteTipSeen', '1');
+  toast('Tip: tap a move chip to edit it in place instead of deleting');
+}
 
 // Move chips: tap to edit that move; tap ＋ to compose a new one.
 $('moveList').addEventListener('click', e => {
