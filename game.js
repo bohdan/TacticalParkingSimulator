@@ -95,10 +95,15 @@ function movesFromAny(str) {
 
 // New-format game state in URL: #<level_id>  or  #<level_id>/<moves>
 // Distinct from #sol= (old) and #try= (editor test) which contain "=".
-let _gameHash = null;
+// A trailing ~ marks a URL written by this session (page reload of own state).
+// Shared / leaderboard URLs won't have it, so we can lock the leaderboard there.
+let _gameHash = null, _gameHashIsOwn = false;
 (()=>{
   if (location.hash.includes('=')) return;  // old #sol= / #try= — handled elsewhere
-  const m = location.hash.match(/^#([a-z0-9]{6})(\/(.*))?$/i);
+  const raw = location.hash;
+  _gameHashIsOwn = raw.endsWith('~');
+  const clean = _gameHashIsOwn ? raw.slice(0, -1) : raw;
+  const m = clean.match(/^#([a-z0-9]{6})(\/(.*))?$/i);
   if (!m) return;
   try { _gameHash = { id: m[1], moves: m[3] ? movesFromCompact(m[3]) : [] }; }
   catch {}
@@ -181,7 +186,7 @@ function driveLimit(pose, steer, dir) {
 function updateHash() {
   if (!level || !level.id) return;
   const compact = movesToCompact(moves);
-  history.replaceState(null, '', location.pathname + '#' + level.id + (compact ? '/' + compact : ''));
+  history.replaceState(null, '', location.pathname + '#' + level.id + (compact ? '/' + compact : '') + '~');
 }
 
 function recomputePlan() {
@@ -1493,7 +1498,7 @@ $('ovReplay3d').addEventListener('click', () => {
   show3DView();
 });
 $('ovShare').addEventListener('click', () => {
-  const url = location.href;  // hash is already up-to-date via updateHash()
+  const url = location.href.replace(/~$/, '');  // strip session marker before sharing
   navigator.clipboard?.writeText(url)
     .then(() => toast('Solution link copied!'))
     .catch(() => prompt('Copy this solution link:', url));
@@ -2197,6 +2202,7 @@ if (_gameHashIdx >= 0) {
 // Apply a shared solution from #sol= URL hash (set moves before first draw)
 if (_solHash && level) {
   moves = quantizeMoves(_solHash);
+  solutionUsed = true;
   _solHash = null;
   recomputePlan();
   toast('Shared solution loaded');
@@ -2206,6 +2212,7 @@ if (_solHash && level) {
 if (_gameHash && _gameHashIdx >= 0 && level) {
   if (_gameHash.moves.length) {
     moves = quantizeMoves(_gameHash.moves);
+    if (!_gameHashIsOwn) solutionUsed = true;
     recomputePlan();
   }
   _gameHash = null;
