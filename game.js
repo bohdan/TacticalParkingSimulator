@@ -350,11 +350,10 @@ function showLevelIntro(text) {
     const dy = (destRect.top  + destRect.height / 2) - (srcRect.top  + srcRect.height / 2);
     const s  = 12 / 20;   // destination font-size / intro font-size
 
-    textEl.style.transition = 'transform 0.5s ease-in-out, opacity 0.4s ease-in-out';
-    textEl.style.transform  = `translate(${dx}px, ${dy}px) scale(${s})`;
-    textEl.style.opacity    = '0';
-    overlay.style.transition       = 'background-color 0.45s ease-in-out';
-    overlay.style.backgroundColor  = 'transparent';
+    textEl.style.transition = 'transform 0.5s ease-in-out, opacity 0.4s ease-in-out, background-color 0.4s ease-in-out';
+    textEl.style.transform       = `translate(${dx}px, ${dy}px) scale(${s})`;
+    textEl.style.opacity         = '0';
+    textEl.style.backgroundColor = 'transparent';
 
     _introTimer = setTimeout(() => {
       _introTimer = null;
