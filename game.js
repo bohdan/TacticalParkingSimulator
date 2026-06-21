@@ -1298,7 +1298,21 @@ $('goBtn').addEventListener('click', () => {
 // Long-press the Run button to open the 3-D scene preview.
 { let _3dT = null;
   $('goBtn').addEventListener('pointerdown', () => {
-    _3dT = setTimeout(() => { _3dT = null; if (!view3dActive) { view3dActive = true; show3DView(); } }, 650);
+    _3dT = setTimeout(() => {
+      _3dT = null;
+      if (view3dActive) return;
+      // Same pre-flight as the normal Run button: commit pending edit, validate.
+      commitMove();
+      if (!moves.length) { toast('Add some moves first'); return; }
+      // Bake distances to actual travelled (mirrors startRun's first pass).
+      editIdx = null;
+      for (let i = 0; i < planSims.length; i++)
+        moves[i].dist = Math.round(traveledDist(moves[i].dist, planSims[i]) * 100) / 100;
+      moves = moves.filter(m => Math.abs(m.dist) >= 0.01);
+      recomputePlan();
+      view3dActive = true;
+      show3DView();
+    }, 650);
   });
   // Cancel only on genuine release/cancel — NOT pointerleave, which fires spuriously on mobile.
   $('goBtn').addEventListener('pointerup',     () => { clearTimeout(_3dT); _3dT = null; });
