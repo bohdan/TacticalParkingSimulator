@@ -1340,6 +1340,24 @@ $('menuHelp').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
   $('helpOverlay').classList.remove('hidden');
 });
+function showConfirm(msg, onYes) {
+  $('confirmMsg').textContent = msg;
+  $('confirmOverlay').classList.remove('hidden');
+  const yes = $('confirmYes'), no = $('confirmNo');
+  const close = () => $('confirmOverlay').classList.add('hidden');
+  yes.onclick = () => { close(); onYes(); };
+  no.onclick  = close;
+}
+function _applyHintMove(solQ) {
+  const n = moves.length;
+  if (n >= solQ.length) { toast('No more hint moves'); return; }
+  moves.push(solQ[n]);
+  solutionUsed = true;
+  editIdx = null;
+  setEdit(0, 0);
+  recomputePlan();
+  toast(`Hint: move ${n + 1} of ${solQ.length}`);
+}
 function applyHint() {
   if (!level.solution || !level.solution.length) { toast('No hint for this level'); return; }
   if (anim) return;
@@ -1356,17 +1374,14 @@ function applyHint() {
   );
 
   if (moves.length > 0 && !onTrack) {
-    if (!confirm('This will reset your current moves and start the hint from move 1. Continue?')) return;
-    moves = []; editIdx = null; recomputePlan();
+    showConfirm('Your moves don\'t follow the hint — reset and start from move 1?', () => {
+      moves = []; editIdx = null; recomputePlan();
+      _applyHintMove(solQ);
+    });
+    return;
   }
 
-  const n = moves.length;
-  if (n >= level.solution.length) { toast('No more hint moves'); return; }
-  moves.push(solQ[n]);
-  solutionUsed = true;
-  setEdit(0, 0);
-  recomputePlan();
-  toast(`Hint: move ${n + 1} of ${level.solution.length}`);
+  _applyHintMove(solQ);
 }
 $('hintBtn').addEventListener('click', applyHint);
 $('menuHint').addEventListener('click', () => { $('menuOverlay').classList.add('hidden'); applyHint(); });
