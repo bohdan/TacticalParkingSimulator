@@ -2218,7 +2218,7 @@ function _car3D(spec, bodyColorHex, vehicleType) {
     return grp;
   }
 
-  // ── sedan / bus / miata — body slab + cabin ───────────────────────────────
+  // ── sedan / bus / miata — body slab ──────────────────────────────────────
   const body = box(len, bodyH, wid, bodyMat);
   body.position.y = Y0 + bodyH / 2; add(body);
 
@@ -2228,50 +2228,63 @@ function _car3D(spec, bodyColorHex, vehicleType) {
   const cabinLen = cabinFX - cabinRX;
   const cabinCX  = (cabinRX + cabinFX) / 2;
   const cabinWid = isBus ? wid * 0.96 : wid * 0.85;
+  const gT = 0.045;
 
-  const cabin = box(cabinLen, cabinH, cabinWid, bodyMat);
-  cabin.position.set(cabinCX, Y0 + bodyH + cabinH / 2, 0); add(cabin);
+  if (isMiata) {
+    // Convertible roadster: no roof — windshield + A-pillar rail + rollover hoop
+    const wsH = cabinH * 0.62;
+    const ws = box(gT * 2, wsH, wid * 0.82, glassMat);
+    ws.position.set(cabinFX + gT, Y0 + bodyH + wsH * 0.55, 0); add(ws);
 
-  // Glass panels
-  const gH  = cabinH * 0.65;
-  const gY  = Y0 + bodyH + cabinH * 0.35 + gH / 2;
-  const gT  = 0.045;
-  const gW  = cabinWid * 0.92;
+    const aRail = box(0.06, 0.05, wid * 0.85, bodyMat);
+    aRail.position.set(cabinFX + gT, Y0 + bodyH + wsH, 0); add(aRail);
 
-  // windshield (front cabin face)
-  const ws = box(gT, gH, gW, glassMat);
-  ws.position.set(cabinFX + gT / 2, gY, 0); add(ws);
+    // Twin roll-hoop posts + crossbar
+    const hoopX = -halfLen + len * 0.44;
+    const hoopH = cabinH * 0.72;
+    for (const side of [1, -1]) {
+      const post = box(0.065, hoopH, 0.07, bodyMat);
+      post.position.set(hoopX, Y0 + bodyH + hoopH / 2, side * wid * 0.30); add(post);
+    }
+    const xbar = box(0.065, 0.065, wid * 0.62, bodyMat);
+    xbar.position.set(hoopX, Y0 + bodyH + hoopH, 0); add(xbar);
+  } else {
+    // Sedan / bus: full cabin box + glass
+    const cabin = box(cabinLen, cabinH, cabinWid, bodyMat);
+    cabin.position.set(cabinCX, Y0 + bodyH + cabinH / 2, 0); add(cabin);
 
-  // rear window (not on miata convertible)
-  if (!isMiata) {
+    const gH = cabinH * 0.65;
+    const gY = Y0 + bodyH + cabinH * 0.35 + gH / 2;
+    const gW = cabinWid * 0.92;
+
+    const ws = box(gT, gH, gW, glassMat);
+    ws.position.set(cabinFX + gT / 2, gY, 0); add(ws);
+
     const rw = box(gT, gH * 0.78, gW * 0.90, glassMat);
     rw.position.set(cabinRX - gT / 2, gY - gH * 0.10, 0); add(rw);
-  }
 
-  if (isBus) {
-    // bus: row of small side windows
-    const swH = cabinH * 0.42, swLen = len * 0.062;
-    const swY = Y0 + bodyH + cabinH * 0.52;
-    for (const wz of [cabinWid / 2 + 0.01, -cabinWid / 2 - 0.01]) {
-      for (let i = 0; i < 8; i++) {
-        const sw = box(swLen, swH, gT, glassMat);
-        sw.position.set(-halfLen + len * 0.12 + i * len * 0.096, swY + swH / 2, wz); add(sw);
+    if (isBus) {
+      const swH = cabinH * 0.42, swLen = len * 0.062;
+      const swY = Y0 + bodyH + cabinH * 0.52;
+      for (const wz of [cabinWid / 2 + 0.01, -cabinWid / 2 - 0.01]) {
+        for (let i = 0; i < 8; i++) {
+          const sw = box(swLen, swH, gT, glassMat);
+          sw.position.set(-halfLen + len * 0.12 + i * len * 0.096, swY + swH / 2, wz); add(sw);
+        }
       }
-    }
-  } else {
-    // sedan/miata: single continuous side window band
-    const swLen = cabinLen * 0.68, swH = cabinH * 0.60;
-    const swY = Y0 + bodyH + cabinH * 0.40 + swH / 2;
-    for (const wz of [cabinWid / 2 + 0.01, -cabinWid / 2 - 0.01]) {
-      const sw = box(swLen, swH, gT, glassMat);
-      sw.position.set(cabinCX - cabinLen * 0.05, swY, wz); add(sw);
+    } else {
+      const swLen = cabinLen * 0.68, swH = cabinH * 0.60;
+      const swY = Y0 + bodyH + cabinH * 0.40 + swH / 2;
+      for (const wz of [cabinWid / 2 + 0.01, -cabinWid / 2 - 0.01]) {
+        const sw = box(swLen, swH, gT, glassMat);
+        sw.position.set(cabinCX - cabinLen * 0.05, swY, wz); add(sw);
+      }
     }
   }
 
   // ── wheels ────────────────────────────────────────────────────────────────
   const rearAxleX  = -halfLen + rOver;
   const frontAxleX = rearAxleX + wb;
-  // Bus has a dual rear axle (mirroring the 2D drawCarBody bus case)
   const axles = isBus
     ? [[rearAxleX - wb * 0.08, false], [rearAxleX + wb * 0.08, false], [frontAxleX, true]]
     : [[rearAxleX, false], [frontAxleX, true]];
@@ -2288,15 +2301,31 @@ function _car3D(spec, bodyColorHex, vehicleType) {
     }
   }
 
-  // headlights
-  for (const z of [wid * 0.28, -wid * 0.28]) {
-    const hl = box(0.07, 0.14, 0.22, hlMat);
-    hl.position.set(halfLen - 0.04, Y0 + bodyH * 0.55, z); add(hl);
-  }
-  // taillights
-  for (const z of [wid * 0.28, -wid * 0.28]) {
-    const tl = box(0.07, 0.14, 0.22, tlMat);
-    tl.position.set(-halfLen + 0.04, Y0 + bodyH * 0.55, z); add(tl);
+  // ── headlights + taillights ───────────────────────────────────────────────
+  if (isMiata) {
+    // Round headlights — Miata's signature circular lenses
+    const hlGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.06, 14);
+    for (const z of [wid * 0.27, -wid * 0.27]) {
+      const hl = new THREE.Mesh(hlGeo, hlMat);
+      hl.rotation.z = Math.PI / 2;
+      hl.position.set(halfLen - 0.04, Y0 + bodyH * 0.58, z); add(hl);
+    }
+    // Round taillights
+    const tlGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.05, 12);
+    for (const z of [wid * 0.28, -wid * 0.28]) {
+      const tl = new THREE.Mesh(tlGeo, tlMat);
+      tl.rotation.z = Math.PI / 2;
+      tl.position.set(-halfLen + 0.04, Y0 + bodyH * 0.55, z); add(tl);
+    }
+  } else {
+    for (const z of [wid * 0.28, -wid * 0.28]) {
+      const hl = box(0.07, 0.14, 0.22, hlMat);
+      hl.position.set(halfLen - 0.04, Y0 + bodyH * 0.55, z); add(hl);
+    }
+    for (const z of [wid * 0.28, -wid * 0.28]) {
+      const tl = box(0.07, 0.14, 0.22, tlMat);
+      tl.position.set(-halfLen + 0.04, Y0 + bodyH * 0.55, z); add(tl);
+    }
   }
 
   return grp;
