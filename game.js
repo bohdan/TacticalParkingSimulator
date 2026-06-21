@@ -868,10 +868,6 @@ function draw(now) {
   ctx.setLineDash([0.4, 0.28]);
   ctx.stroke();
   ctx.setLineDash([]);
-  for (const hd of g.heads) {
-    drawArrow(g.cx, g.cy, rad(hd), Math.min(g.w, g.h) * 0.45,
-              parked ? 'rgba(61,220,132,0.7)' : 'rgba(242,200,75,0.75)');
-  }
 
   // decorative traffic (non-collision, animated sedans outside parking zone)
   if (level.traffic) {
@@ -998,6 +994,12 @@ function draw(now) {
   drawCarBody(carPose, { fill: pveh === 'tractor' ? undefined : '#4fc3f7',
                          stroke: '#1c5f80', detail: true,
                          wheels: true, steer: carSteer, vehicle: pveh });
+
+  // goal arrows drawn after the car so they're always visible
+  for (const hd of g.heads) {
+    drawArrow(g.cx, g.cy, rad(hd), Math.min(g.w, g.h) * 0.45,
+              parked ? 'rgba(61,220,132,0.7)' : 'rgba(242,200,75,0.75)');
+  }
 
   // move numbers (screen space so text stays crisp)
   screenTransform();
