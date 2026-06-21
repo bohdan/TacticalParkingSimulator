@@ -2491,7 +2491,8 @@ function show3DView() {
 
   // ── player car ────────────────────────────────────────────────────────────
   const vType   = level.vehicle || 'default';
-  const pGrp    = _car3D(CAR, 0x45c4ff, vType);
+  const pColor  = vType === 'miata' ? 0xd23b3b : vType === 'tractor' ? 0xe8760a : 0x45c4ff;
+  const pGrp    = _car3D(CAR, pColor, vType);
   const pBodFwd = CAR.len / 2 - CAR.rOver;   // rear-axle → body-centre offset
 
   function posePcar(pose) {
