@@ -70,6 +70,7 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
     yield: doYield = true,
     diverseN = 3,          // max diverse solutions to keep per turn count
     diverseThresh = 1.5,   // m, min trajectory distance to count as a distinct solution
+    diversityBias = 1.5,   // turn-equivalent bonus for paths diverged from all known patterns
   } = opts;
 
   const snap = (v, q) => Math.round(v / q) * q;
@@ -193,6 +194,23 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
     return mx;
   }
 
+  // Diversity bias: paths whose steer-direction pattern has already diverged from
+  // every known solution get a heuristic bonus (lower f → expanded sooner), steering
+  // the search toward genuinely different strategies once some solutions are known.
+  const knownPats = [];
+  function updateKnownPats() {
+    knownPats.length = 0;
+    for (const set of solSets.values()) for (const e of set) knownPats.push(e.sig.pat);
+  }
+  function diverseBonus(partialPat) {
+    if (diversityBias <= 0 || !partialPat || knownPats.length === 0) return 0;
+    for (const kp of knownPats) {
+      // Still potentially converging: partial is a prefix of a known, or known is a prefix of partial
+      if (kp.startsWith(partialPat) || partialPat.startsWith(kp)) return 0;
+    }
+    return diversityBias;   // definitively diverged from all known patterns
+  }
+
   // Anytime incumbents: up to diverseN distinct-trajectory plans per turn count.
   // Each entry: { dist, moves, sig, id }. Streamed events carry id + replaces.
   let bestTurns = Infinity;
@@ -217,6 +235,7 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
     const emit = (entry, replaces) => {
       if (tn < bestTurns) bestTurns = tn;
       lastImprove = now(); if (!solvedAt) solvedAt = now();
+      updateKnownPats();   // refresh diversity bias after each accepted solution
       progressCb && progressCb({ type: 'solution', moves: entry.moves, turns: tn,
         dist: round2(entry.dist), id: entry.id, replaces, poses: entry.sig.poses });
     };
@@ -262,7 +281,7 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
   const open = [];
   const closed = new Map();   // cell -> { turns, dist }  (re-openable)
   const s0 = { pose: start, turns: 0, dist: 0, parent: null, move: null,
-               inSd: null, inDir: 0, cell: key(start), f: weight * hTurns(start) };
+               inSd: null, inDir: 0, cell: key(start), pat: '', f: weight * hTurns(start) };
   _heapPush(open, s0);
   closed.set(s0.cell, { turns: 0, dist: 0 });
 
@@ -287,6 +306,10 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
       for (let d = 0; d < 2; d++) {
         const dir = d === 0 ? 1 : -1;
         if (cur.inSd === sd && cur.inDir === dir) continue;   // would just extend the same turn
+        // Steer-direction symbol for this arc; build the path pattern incrementally.
+        const sym = (sd > 1 ? 'L' : sd < -1 ? 'R' : 'S') + (dir > 0 ? 'f' : 'r');
+        const newPat = cur.pat ? cur.pat + ',' + sym : sym;
+        const dBonus = diverseBonus(newPat);
         let lastCell = cur.cell;
         for (let i = 1; i <= NSTEP; i++) {
           const dist = round2(dir * i * STEP);                // quantised signed distance
@@ -301,8 +324,8 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
           if (pv && (pv.turns < nt || (pv.turns === nt && pv.dist <= nd + 1e-9))) continue;
           closed.set(ck, { turns: nt, dist: nd });
           _heapPush(open, { pose: p, turns: nt, dist: nd, parent: cur,
-            move: { steer: sd, dist }, inSd: sd, inDir: dir, cell: ck,
-            f: nt + weight * hTurns(p) + 1e-4 * (nd + hDist(p)) });
+            move: { steer: sd, dist }, inSd: sd, inDir: dir, cell: ck, pat: newPat,
+            f: nt + weight * hTurns(p) + 1e-4 * (nd + hDist(p)) - dBonus });
         }
       }
     }

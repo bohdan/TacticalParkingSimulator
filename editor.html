@@ -1952,17 +1952,25 @@ document.getElementById('btnSolve').onclick = async () => {
     let sols = [...allSols.values()].sort((a, b) =>
       a.turns !== b.turns ? a.turns - b.turns : a.dist - b.dist);
     if (sols.length) { const minT = sols[0].turns; sols = sols.filter(s => s.turns <= minT + 2); }
-    // Cross-turn refinement filter: drop a longer solution if all of a shorter
-    // solution's turn-endpoints lie close to the longer solution's endpoints.
-    // That means the longer is just the same maneuver with extra correction turns.
+    // Cross-turn refinement filter: drop a longer solution that is just the same
+    // maneuver as a shorter one with extra fine-tuning turns appended.
+    // A longer solution is NOT a refinement if its extra moves change direction
+    // (f→r or r→f) relative to the shorter solution's last move — that indicates
+    // a genuinely different strategy (e.g. reversing into a spot vs driving in forward).
     sols = sols.filter((s, i) => {
       for (let j = 0; j < i; j++) {
         const prev = sols[j];
         if (prev.turns >= s.turns) continue;
-        // Every endpoint of prev must have a nearby match in s
+        const n = prev.moves ? prev.moves.length : 0;
+        if (n === 0) continue;
+        // If extra moves introduce a direction change it's a new strategy, not a refinement
+        const prevLastDir = prev.moves[n - 1].dist >= 0 ? 'f' : 'r';
+        const extraMoves = s.moves ? s.moves.slice(n) : [];
+        if (extraMoves.some(m => (m.dist >= 0 ? 'f' : 'r') !== prevLastDir)) continue;
+        // Every endpoint of prev must have a nearby match in s (same route, just extended)
         if (prev.poses && prev.poses.length && s.poses &&
             prev.poses.every(pp => s.poses.some(sp => Math.hypot(sp.x-pp.x, sp.y-pp.y) < 2.0)))
-          return false;  // s is a refinement of prev
+          return false;  // s is just a refined continuation of prev
       }
       return true;
     });
