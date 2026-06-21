@@ -1342,18 +1342,22 @@ $('menuHelp').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
   $('helpOverlay').classList.remove('hidden');
 });
-$('menuHint').addEventListener('click', () => {
-  $('menuOverlay').classList.add('hidden');
-  if (!level.solution || !level.solution.length) { toast('No hint available for this level'); return; }
+function applyHint() {
+  if (!level.solution || !level.solution.length) { toast('No hint for this level'); return; }
   if (anim) return;
   const n = moves.length;
-  if (n >= level.solution.length) { toast('Already at the end of the hint solution'); return; }
+  if (n >= level.solution.length) { toast('No more hint moves'); return; }
   editIdx = null;
   const m = level.solution[n];
-  moves.push({ steer: rad(m.steer), dist: m.dist });
+  const [q] = quantizeMoves([{ steer: rad(m.steer), dist: m.dist }]);
+  moves.push(q);
+  solutionUsed = true;
   setEdit(0, 0);
   recomputePlan();
-});
+  toast(`Hint: move ${n + 1} of ${level.solution.length}`);
+}
+$('hintBtn').addEventListener('click', applyHint);
+$('menuHint').addEventListener('click', () => { $('menuOverlay').classList.add('hidden'); applyHint(); });
 $('menuSol').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
   showSolution();

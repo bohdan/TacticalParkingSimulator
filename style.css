@@ -208,6 +208,7 @@ input[type="range"]::-moz-range-thumb {
 }
 #btns button.primary { background: #1d4f6b; border-color: #2d7396; flex: 1.4; }
 #btns button.go { background: #1e5c40; border-color: #2e8a61; }
+#btns button.hint { background: #4a3800; border-color: #a07000; color: #ffd45e; }
 #btns button:disabled { opacity: 0.38; }
 button:active:not(:disabled) { filter: brightness(1.25); }
 
