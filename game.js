@@ -101,10 +101,10 @@ let _gameHash = null, _gameHashIsOwn = false;
 (()=>{
   if (location.hash.includes('=')) return;  // old #sol= / #try= — handled elsewhere
   const raw = location.hash;
-  // ~ after the level ID marks a URL written by this session (own reload).
-  const m = raw.match(/^#([a-z0-9]{6})(~)?(\/(.*))?$/i);
+  // /~ prefix on the moves segment marks a URL written by this session (own reload).
+  const m = raw.match(/^#([a-z0-9]{6})(\/(\~?)(.*))?$/i);
   if (!m) return;
-  _gameHashIsOwn = m[2] === '~';
+  _gameHashIsOwn = m[3] === '~';
   try { _gameHash = { id: m[1], moves: m[4] ? movesFromCompact(m[4]) : [] }; }
   catch {}
 })();
@@ -186,7 +186,7 @@ function driveLimit(pose, steer, dir) {
 function updateHash() {
   if (!level || !level.id) return;
   const compact = movesToCompact(moves);
-  history.replaceState(null, '', location.pathname + '#' + level.id + '~' + (compact ? '/' + compact : ''));
+  history.replaceState(null, '', location.pathname + '#' + level.id + (compact ? '/~' + compact : ''));
 }
 
 function recomputePlan() {
@@ -1498,7 +1498,7 @@ $('ovReplay3d').addEventListener('click', () => {
   show3DView();
 });
 $('ovShare').addEventListener('click', () => {
-  const url = location.href.replace(/([a-z0-9]{6})~/, '$1');  // strip session marker before sharing
+  const url = location.href.replace('/~', '/');  // strip session marker before sharing
   navigator.clipboard?.writeText(url)
     .then(() => toast('Solution link copied!'))
     .catch(() => prompt('Copy this solution link:', url));
