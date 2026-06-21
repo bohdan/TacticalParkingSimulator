@@ -1300,8 +1300,11 @@ $('goBtn').addEventListener('click', () => {
   $('goBtn').addEventListener('pointerdown', () => {
     _3dT = setTimeout(() => { _3dT = null; if (!view3dActive) { view3dActive = true; show3DView(); } }, 650);
   });
-  ['pointerup','pointercancel','pointerleave'].forEach(ev =>
-    $('goBtn').addEventListener(ev, () => { clearTimeout(_3dT); _3dT = null; }));
+  // Cancel only on genuine release/cancel — NOT pointerleave, which fires spuriously on mobile.
+  $('goBtn').addEventListener('pointerup',     () => { clearTimeout(_3dT); _3dT = null; });
+  $('goBtn').addEventListener('pointercancel', () => { clearTimeout(_3dT); _3dT = null; });
+  // Suppress the browser long-press context menu so it doesn't interrupt.
+  $('goBtn').addEventListener('contextmenu', e => e.preventDefault());
 }
 
 $('lvSelect').addEventListener('change', e => {
