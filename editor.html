@@ -1297,6 +1297,8 @@ function updateSolutionPanel(){
       +`<div class="sol-cands">${cands}</div>`
       +`<div style="border-top:1px solid #1f2636;margin:8px 0 6px"></div>`);
     el.querySelectorAll('.sol-show[data-ci]').forEach(b=>b.addEventListener('click',()=>{
+      // If the shown plan isn't already in the list, keep it there before replacing.
+      if(hasSol&&shownIdx===-1) L.solutions.push(L.solution.map(m=>({...m})));
       L.solution=L.solutions[+b.dataset.ci].map(m=>({...m})); solSel=null; markDirty(); updateSolutionPanel(); render();
     }));
     el.querySelectorAll('.sol-cand-del').forEach(b=>b.addEventListener('click',()=>{
