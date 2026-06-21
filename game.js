@@ -2440,7 +2440,11 @@ function show3DView() {
 
   // ── camera ────────────────────────────────────────────────────────────────
   const camFocus = new THREE.Vector3(level.w / 2, 0, level.h / 2);
-  const camA = new THREE.Vector3(level.w / 2, diag * 3.0, level.h / 2);
+  // Derive top-down height so 1 world-metre = same CSS pixels as the 2D canvas.
+  // view.scale is px/m (updated every frame by fitView); H is the 3D canvas height.
+  const FOV_Y  = 55 * Math.PI / 180;
+  const camAH  = H / (view.scale * 2 * Math.tan(FOV_Y / 2));
+  const camA = new THREE.Vector3(level.w / 2, camAH, level.h / 2);
   const camB = new THREE.Vector3(level.w / 2, diag * 1.2, level.h / 2 + diag * 1.1);
 
   const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, diag * 15);
