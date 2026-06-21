@@ -1343,12 +1343,26 @@ $('menuHelp').addEventListener('click', () => {
 function applyHint() {
   if (!level.solution || !level.solution.length) { toast('No hint for this level'); return; }
   if (anim) return;
+
+  // Check whether existing moves are a prefix of the solution so we can
+  // continue without resetting; otherwise warn before wiping the plan.
+  const solQ = level.solution.map(m => {
+    const [q] = quantizeMoves([{ steer: rad(m.steer), dist: m.dist }]); return q;
+  });
+  const onTrack = moves.length > 0 && moves.every((m, i) =>
+    i < solQ.length &&
+    Math.abs(m.steer - solQ[i].steer) < 0.001 &&
+    Math.abs(m.dist  - solQ[i].dist)  < 0.001
+  );
+
+  if (moves.length > 0 && !onTrack) {
+    if (!confirm('This will reset your current moves and start the hint from move 1. Continue?')) return;
+    moves = []; editIdx = null; recomputePlan();
+  }
+
   const n = moves.length;
   if (n >= level.solution.length) { toast('No more hint moves'); return; }
-  editIdx = null;
-  const m = level.solution[n];
-  const [q] = quantizeMoves([{ steer: rad(m.steer), dist: m.dist }]);
-  moves.push(q);
+  moves.push(solQ[n]);
   solutionUsed = true;
   setEdit(0, 0);
   recomputePlan();
