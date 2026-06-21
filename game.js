@@ -306,23 +306,63 @@ function rebuildLevelSelect() {
 }
 
 function updateHUD() {
-  $('objective').textContent = `Par ${levelPar()}`;
   const planning = moves.length > 0 || Math.abs(editDist) > 0.01;
   const best = loadBest();
+  const desc = level.tut || level.hint || '';
+  let html;
   if (planning) {
     const st = planStats();
-    $('stats').innerHTML =
-      `Moves <b>${st.moves}</b> / Par ${levelPar()} · ${(st.dist * 100).toFixed(0)}cm` +
-      (best ? ` · Best <span class="star">${starStr(best.stars)}</span>` : '');
+    html = `Moves <b>${st.moves}</b> / Par ${levelPar()} · ${(st.dist * 100).toFixed(0)}cm`;
+    if (best) html += ` · <span class="star">${starStr(best.stars)}</span>`;
+    if (desc) html += ` · ${escHtml(desc)}`;
   } else {
-    $('stats').innerHTML = escHtml(level.tut || level.hint) +
-      (best ? ` · <span class="star">${starStr(best.stars)}</span>` : '');
+    html = `Par ${levelPar()}`;
+    if (best) html += ` · <span class="star">${starStr(best.stars)}</span>`;
+    if (desc) html += ` · ${escHtml(desc)}`;
   }
+  $('objective').innerHTML = html;
+  $('stats').innerHTML = '';
   $('delBtn').disabled = (moves.length === 0 && editIdx === null && Math.abs(editDist) < 0.01) || !!anim;
   $('delBtn').innerHTML = editIdx !== null ? `&#128465; #${editIdx + 1}` : '&#128465; Delete';
   $('resetBtn').disabled = (moves.length === 0 && Math.abs(editDist) < 0.01 && editIdx === null) || !!anim;
   $('goBtn').disabled = (moves.length === 0 && (!editSim || editSim.pts.length < 2)) || !!anim;
   renderMoveList();
+}
+
+let _introTimer = null;
+function showLevelIntro(text) {
+  if (_introTimer) { clearTimeout(_introTimer); _introTimer = null; }
+  const overlay = $('lvIntroOverlay');
+  const textEl  = $('lvIntroText');
+  if (!overlay || !text) return;
+  // Reset any leftover inline styles
+  overlay.style.cssText = '';
+  textEl.style.cssText  = '';
+  textEl.textContent = text;
+  overlay.classList.remove('hidden');
+
+  _introTimer = setTimeout(() => {
+    _introTimer = null;
+    // FLIP: measure where the text sits now (centered in overlay)
+    const srcRect  = textEl.getBoundingClientRect();
+    const destRect = $('objective').getBoundingClientRect();
+    const dx = (destRect.left + destRect.width  / 2) - (srcRect.left + srcRect.width  / 2);
+    const dy = (destRect.top  + destRect.height / 2) - (srcRect.top  + srcRect.height / 2);
+    const s  = 12 / 20;   // destination font-size / intro font-size
+
+    textEl.style.transition = 'transform 0.5s ease-in-out, opacity 0.4s ease-in-out';
+    textEl.style.transform  = `translate(${dx}px, ${dy}px) scale(${s})`;
+    textEl.style.opacity    = '0';
+    overlay.style.transition       = 'background-color 0.45s ease-in-out';
+    overlay.style.backgroundColor  = 'transparent';
+
+    _introTimer = setTimeout(() => {
+      _introTimer = null;
+      overlay.classList.add('hidden');
+      overlay.style.cssText = '';
+      textEl.style.cssText  = '';
+    }, 560);
+  }, 1150);
 }
 
 // Horizontal strip of move chips; the active (being-edited) one is highlighted.
@@ -1156,6 +1196,7 @@ function setLevel(i) {
   setEdit(0, 0);
   recomputePlan();   // also calls updateHash()
   rebuildLevelSelect();
+  showLevelIntro(def.tut || def.hint || def.name || '');
 }
 
 /* ===================== Input ===================== */
