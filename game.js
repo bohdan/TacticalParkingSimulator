@@ -1342,6 +1342,18 @@ $('menuHelp').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
   $('helpOverlay').classList.remove('hidden');
 });
+$('menuHint').addEventListener('click', () => {
+  $('menuOverlay').classList.add('hidden');
+  if (!level.solution || !level.solution.length) { toast('No hint available for this level'); return; }
+  if (anim) return;
+  const n = moves.length;
+  if (n >= level.solution.length) { toast('Already at the end of the hint solution'); return; }
+  editIdx = null;
+  const m = level.solution[n];
+  moves.push({ steer: rad(m.steer), dist: m.dist });
+  setEdit(0, 0);
+  recomputePlan();
+});
 $('menuSol').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
   showSolution();
