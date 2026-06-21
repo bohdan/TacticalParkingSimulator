@@ -1440,6 +1440,15 @@ $('nameOk').addEventListener('click', async () => {
 $('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('nameOk').click(); });
 
 $('ovImprove').addEventListener('click', () => $('overlay').classList.add('hidden'));
+$('ovReplay2d').addEventListener('click', () => {
+  $('overlay').classList.add('hidden');
+  startRun();
+});
+$('ovReplay3d').addEventListener('click', () => {
+  $('overlay').classList.add('hidden');
+  view3dActive = true;
+  show3DView();
+});
 $('ovShare').addEventListener('click', () => {
   const url = location.href;  // hash is already up-to-date via updateHash()
   navigator.clipboard?.writeText(url)
