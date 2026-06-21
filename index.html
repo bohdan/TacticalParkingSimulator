@@ -33,7 +33,10 @@
   <div id="cvWrap"><canvas id="cv"></canvas></div>
 
   <div id="panel">
-    <div id="moveList"></div>
+    <div class="move-row">
+      <div id="moveList"></div>
+      <button id="hintBtn" class="hint-chip">&#128161;</button>
+    </div>
     <div class="sliderRow">
       <span class="icon">&#8634;</span>
       <input id="steer" type="range" min="-35" max="35" step="1" value="0">
@@ -52,9 +55,6 @@
         <button id="resetBtn">&#10005; Reset</button>
         <button id="addBtn" class="primary">&#65291; Add move</button>
         <button id="goBtn" class="go">&#9654; Run</button>
-      </div>
-      <div class="btns-row" style="margin-top:6px;">
-        <button id="hintBtn" class="hint">&#128161; Hint</button>
       </div>
     </div>
   </div>

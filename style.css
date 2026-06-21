@@ -76,14 +76,34 @@ button.nav {
   border-top: 1px solid #2a3140;
 }
 
+.move-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding-bottom: 2px;
+}
 #moveList {
   display: flex;
+  flex: 1;
+  min-width: 0;
   gap: 6px;
   overflow-x: auto;
   padding: 2px 0 6px;
   min-height: 36px;
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
+}
+.hint-chip {
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 10px;
+  margin-top: 2px;
+  border-radius: 8px;
+  border: 1px solid #a07000;
+  background: #4a3800;
+  color: #ffd45e;
+  font-size: 14px;
+  cursor: pointer;
 }
 .mv-chip {
   flex: 0 0 auto;
@@ -208,7 +228,6 @@ input[type="range"]::-moz-range-thumb {
 }
 #btns button.primary { background: #1d4f6b; border-color: #2d7396; flex: 1.4; }
 #btns button.go { background: #1e5c40; border-color: #2e8a61; }
-#btns button.hint { background: #4a3800; border-color: #a07000; color: #ffd45e; }
 #btns button:disabled { opacity: 0.38; }
 button:active:not(:disabled) { filter: brightness(1.25); }
 
