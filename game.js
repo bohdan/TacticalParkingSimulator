@@ -186,7 +186,7 @@ function driveLimit(pose, steer, dir) {
 function updateHash() {
   if (!level || !level.id) return;
   const compact = movesToCompact(moves);
-  history.replaceState(null, '', location.pathname + '#' + level.id + (compact ? '/~' + compact : ''));
+  history.replaceState(null, '', location.pathname + '#' + level.id + (compact ? '/' + (solutionUsed ? '' : '~') + compact : ''));
 }
 
 function recomputePlan() {
