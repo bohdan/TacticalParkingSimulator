@@ -1974,7 +1974,15 @@ document.getElementById('btnSolve').onclick = async () => {
       }
       return true;
     });
-    L.solutions = sols.map(s => s.moves.map(m => ({ ...m })));
+    // Solver candidates for this run (turns/dist sorted, refinements filtered above).
+    const solverSols = sols.map(s => s.moves.map(m => ({ ...m })));
+    // Merge with any manually-pinned entries already in L.solutions that the solver
+    // doesn't cover — this preserves the author's original solution (or any choice
+    // made via "Show") even when applyBest() fires repeatedly while solving.
+    const movePat = ms => ms.map(m=>(m.steer>1?'L':m.steer<-1?'R':'S')+(m.dist>=0?'f':'r')).join(',');
+    const solverPats = new Set(solverSols.map(movePat));
+    const pinnedExtra = (L.solutions || []).filter(s => !solverPats.has(movePat(s)));
+    L.solutions = [...solverSols, ...pinnedExtra];
     if (!hadSolution)
       L.solution = L.solutions.length ? L.solutions[0].map(m => ({ ...m })) : (L.solution || []);
   };
