@@ -171,16 +171,23 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
     !(shouldStop && shouldStop()) && expand < maxExpand && now() - startTime <= timeMs &&
     (!solvedAt || now() - lastImprove <= idleMs);
 
-  // Trajectory signature: rear-axle (x,y) at each turn endpoint, for diversity comparison.
+  // Trajectory signature: steer-direction pattern + rear-axle (x,y) at each turn end.
+  // The pattern (e.g. "Lf,Rr") is the primary discriminator: plans with different
+  // steer-sign sequences represent genuinely different driving strategies and are
+  // always kept as distinct options regardless of positional proximity.
   function planSig(moves) {
     let p = start;
-    return moves.map(m => { p = advance(p, rad(m.steer), m.dist); return { x: p.x, y: p.y }; });
+    const poses = moves.map(m => { p = advance(p, rad(m.steer), m.dist); return { x: p.x, y: p.y }; });
+    const pat = moves.map(m =>
+      (m.steer > 1 ? 'L' : m.steer < -1 ? 'R' : 'S') + (m.dist >= 0 ? 'f' : 'r')
+    ).join(',');
+    return { poses, pat };
   }
   function sigDist(sa, sb) {
-    if (sa.length !== sb.length) return Infinity;
+    if (sa.pat !== sb.pat) return Infinity;   // different strategy → always diverse
     let mx = 0;
-    for (let i = 0; i < sa.length; i++) {
-      const d = Math.hypot(sa[i].x - sb[i].x, sa[i].y - sb[i].y);
+    for (let i = 0; i < sa.poses.length; i++) {
+      const d = Math.hypot(sa.poses[i].x - sb.poses[i].x, sa.poses[i].y - sb.poses[i].y);
       if (d > mx) mx = d;
     }
     return mx;
@@ -211,7 +218,7 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
       if (tn < bestTurns) bestTurns = tn;
       lastImprove = now(); if (!solvedAt) solvedAt = now();
       progressCb && progressCb({ type: 'solution', moves: entry.moves, turns: tn,
-        dist: round2(entry.dist), id: entry.id, replaces });
+        dist: round2(entry.dist), id: entry.id, replaces, poses: entry.sig.poses });
     };
 
     if (minI >= 0 && minD < diverseThresh) {

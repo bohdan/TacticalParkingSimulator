@@ -1946,12 +1946,26 @@ document.getElementById('btnSolve').onclick = async () => {
   status.textContent = '⚙ Starting…';
   // Diverse solution set keyed by solver-assigned id.
   // Solver emits each accepted plan with id + replaces (id of plan it superseded).
-  const allSols = new Map();  // id → { turns, dist, moves }
+  const allSols = new Map();  // id → { turns, dist, moves, poses }
   const hadSolution = !!(L.solution && L.solution.length);
   const applyBest = () => {
     let sols = [...allSols.values()].sort((a, b) =>
       a.turns !== b.turns ? a.turns - b.turns : a.dist - b.dist);
     if (sols.length) { const minT = sols[0].turns; sols = sols.filter(s => s.turns <= minT + 2); }
+    // Cross-turn refinement filter: drop a longer solution if all of a shorter
+    // solution's turn-endpoints lie close to the longer solution's endpoints.
+    // That means the longer is just the same maneuver with extra correction turns.
+    sols = sols.filter((s, i) => {
+      for (let j = 0; j < i; j++) {
+        const prev = sols[j];
+        if (prev.turns >= s.turns) continue;
+        // Every endpoint of prev must have a nearby match in s
+        if (prev.poses && prev.poses.length && s.poses &&
+            prev.poses.every(pp => s.poses.some(sp => Math.hypot(sp.x-pp.x, sp.y-pp.y) < 2.0)))
+          return false;  // s is a refinement of prev
+      }
+      return true;
+    });
     L.solutions = sols.map(s => s.moves.map(m => ({ ...m })));
     if (!hadSolution)
       L.solution = L.solutions.length ? L.solutions[0].map(m => ({ ...m })) : (L.solution || []);
@@ -1960,7 +1974,7 @@ document.getElementById('btnSolve').onclick = async () => {
     await solveParkingLevel(L, { timeMs: 60000, idleMs: 6000, shouldStop: () => solveCancel }, ev => {
       if (ev.type === 'solution') {
         if (ev.replaces != null) allSols.delete(ev.replaces);
-        allSols.set(ev.id, { turns: ev.turns, dist: ev.dist, moves: ev.moves });
+        allSols.set(ev.id, { turns: ev.turns, dist: ev.dist, moves: ev.moves, poses: ev.poses });
         applyBest();
         dirty = true;
         const minT = Math.min(...allSols.values().map ? [...allSols.values()].map(s => s.turns) : [Infinity]);
