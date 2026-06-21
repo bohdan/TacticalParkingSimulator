@@ -2294,15 +2294,27 @@ function show3DView() {
 
   const v3d = $('v3d');
   const cv3 = $('cv3d');
+
+  // Position the 3-D overlay exactly over the 2-D game canvas so the
+  // transition is seamless (same on-screen rectangle, same world scale).
+  const rect = cv.getBoundingClientRect();
+  v3d.style.left   = rect.left + 'px';
+  v3d.style.top    = rect.top + 'px';
+  v3d.style.width  = rect.width + 'px';
+  v3d.style.height = rect.height + 'px';
+  v3d.style.right  = 'auto';
+  v3d.style.bottom = 'auto';
+  v3d.style.background = 'transparent';   // let the live 2-D show through during crossfade
   v3d.classList.remove('hidden');
 
-  const W = window.innerWidth, H = window.innerHeight;
+  const W = rect.width, H = rect.height;
 
   // ── renderer ──────────────────────────────────────────────────────────────
   const renderer = new THREE.WebGLRenderer({ canvas: cv3, antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.setSize(W, H);
   renderer.setClearColor(0x171a21);
+  cv3.style.opacity = '0';   // fade in over the 2-D view
 
   // ── scene + lights ────────────────────────────────────────────────────────
   const scene = new THREE.Scene();
@@ -2463,17 +2475,30 @@ function show3DView() {
   cv3.addEventListener('pointerdown', e => { if (e.isPrimary) closeView(); }, { once: true });
 
   // ── animation loop ────────────────────────────────────────────────────────
-  const MORPH_MS = 1400;
-  const morphT0  = performance.now();
-  const easeIO   = t => t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
+  // Phase 1: crossfade — 3-D fades in over the live 2-D, camera held top-down
+  //          (matching the 2-D view exactly) so the dissolve is seamless.
+  // Phase 2: camera morph — top-down → raised.
+  // Phase 3: replay the plan.
+  const CROSS_MS = 450, MORPH_MS = 1400;
+  const t0 = performance.now();
+  const easeIO = t => t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
 
   function frame(now) {
     if (!_alive) return;
-    const mt = Math.min(1, (now - morphT0) / MORPH_MS);
-    camera.position.lerpVectors(camA, camB, easeIO(mt));
-    camera.lookAt(camFocus);
+    const el = now - t0;
 
-    if (mt >= 1 && rSamples && !_replayT0) _replayT0 = now;
+    if (el < CROSS_MS) {
+      // crossfade: hold the top-down view, ramp canvas opacity 0 → 1
+      cv3.style.opacity = (el / CROSS_MS).toFixed(3);
+      camera.position.copy(camA);
+      camera.lookAt(camFocus);
+    } else {
+      cv3.style.opacity = '1';
+      const mt = Math.min(1, (el - CROSS_MS) / MORPH_MS);
+      camera.position.lerpVectors(camA, camB, easeIO(mt));
+      camera.lookAt(camFocus);
+      if (mt >= 1 && rSamples && !_replayT0) _replayT0 = now;
+    }
 
     if (_replayT0 && rSamples) {
       const trav = Math.min(rTotal, (now - _replayT0) / 1000 * rSpeed);
