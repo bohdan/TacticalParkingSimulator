@@ -2489,23 +2489,27 @@ function show3DView() {
   camera.position.copy(camA);
   camera.lookAt(camFocus);
 
-  // ── close ─────────────────────────────────────────────────────────────────
-  let _alive = true, _replayT0 = null;
+  // ── close / exit ──────────────────────────────────────────────────────────
+  let _alive = true, _replayT0 = null, _exitT0 = null, _exitCamFrom = null;
+  const CROSS_MS = 450, MORPH_MS = 1400;
+  const HOLD_MS = 1500, EXIT_MORPH_MS = 900, EXIT_FADE_MS = 400;
 
+  function startExit(skipHold) {
+    if (_exitT0) return;
+    _exitCamFrom = camera.position.clone();
+    _exitT0 = performance.now() - (skipHold ? HOLD_MS : 0);
+  }
   function closeView() {
     if (!_alive) return;
     _alive = false; view3dActive = false;
     v3d.classList.add('hidden'); renderer.dispose();
   }
-  $('v3dClose').onclick = closeView;
-  cv3.addEventListener('pointerdown', e => { if (e.isPrimary) closeView(); }, { once: true });
+  $('v3dClose').onclick = () => startExit(true);
+  cv3.addEventListener('pointerdown', e => { if (e.isPrimary) startExit(true); }, { once: true });
 
   // ── animation loop ────────────────────────────────────────────────────────
-  // Phase 1: crossfade — 3-D fades in over the live 2-D, camera held top-down
-  //          (matching the 2-D view exactly) so the dissolve is seamless.
-  // Phase 2: camera morph — top-down → raised.
-  // Phase 3: replay the plan.
-  const CROSS_MS = 450, MORPH_MS = 1400;
+  // Entry:  crossfade (2D→3D opacity) → camera top-down→raised → replay
+  // Exit:   hold → camera raised→top-down + fade out → close
   const t0 = performance.now();
   const easeIO = t => t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
 
@@ -2513,24 +2517,39 @@ function show3DView() {
     if (!_alive) return;
     const el = now - t0;
 
-    if (el < CROSS_MS) {
-      // crossfade: hold the top-down view, ramp canvas opacity 0 → 1
-      cv3.style.opacity = (el / CROSS_MS).toFixed(3);
-      camera.position.copy(camA);
-      camera.lookAt(camFocus);
+    if (!_exitT0) {
+      // entry phases
+      if (el < CROSS_MS) {
+        cv3.style.opacity = (el / CROSS_MS).toFixed(3);
+        camera.position.copy(camA);
+        camera.lookAt(camFocus);
+      } else {
+        cv3.style.opacity = '1';
+        const mt = Math.min(1, (el - CROSS_MS) / MORPH_MS);
+        camera.position.lerpVectors(camA, camB, easeIO(mt));
+        camera.lookAt(camFocus);
+        if (mt >= 1 && rSamples && !_replayT0) _replayT0 = now;
+        if (mt >= 1 && !rSamples) startExit(false);
+      }
+      if (_replayT0 && rSamples) {
+        const trav = Math.min(rTotal, (now - _replayT0) / 1000 * rSpeed);
+        let lo = 0, hi = rCum.length - 1;
+        while (lo < hi) { const m = (lo + hi) >> 1; if (rCum[m] < trav) lo = m + 1; else hi = m; }
+        posePcar(rSamples[lo]);
+        if (trav >= rTotal) startExit(false);
+      }
     } else {
-      cv3.style.opacity = '1';
-      const mt = Math.min(1, (el - CROSS_MS) / MORPH_MS);
-      camera.position.lerpVectors(camA, camB, easeIO(mt));
-      camera.lookAt(camFocus);
-      if (mt >= 1 && rSamples && !_replayT0) _replayT0 = now;
-    }
-
-    if (_replayT0 && rSamples) {
-      const trav = Math.min(rTotal, (now - _replayT0) / 1000 * rSpeed);
-      let lo = 0, hi = rCum.length - 1;
-      while (lo < hi) { const m = (lo + hi) >> 1; if (rCum[m] < trav) lo = m + 1; else hi = m; }
-      posePcar(rSamples[lo]);
+      // exit phases: hold → reverse morph + fade out
+      const et = now - _exitT0;
+      if (et >= HOLD_MS) {
+        const p = et - HOLD_MS;
+        const mt = Math.min(1, p / EXIT_MORPH_MS);
+        camera.position.lerpVectors(_exitCamFrom, camA, easeIO(mt));
+        camera.lookAt(camFocus);
+        const fadeEl = Math.max(0, p - EXIT_MORPH_MS * 0.4);
+        cv3.style.opacity = (1 - Math.min(1, fadeEl / EXIT_FADE_MS)).toFixed(3);
+        if (mt >= 1 && fadeEl >= EXIT_FADE_MS) { closeView(); return; }
+      }
     }
 
     const tSec = now / 1000;
