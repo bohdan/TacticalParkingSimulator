@@ -1283,7 +1283,10 @@ $('resetBtn').addEventListener('click', () => {
   saveDraft();   // discard the stored plan too (moves is empty → removes the key)
 });
 
+let view3dActive = false;   // true while the 3-D visualisation is showing
+
 $('goBtn').addEventListener('click', () => {
+  if (view3dActive) return;   // long-press already opened 3D; eat this click
   if (anim) return;
   // Auto-commit whatever's pending — a new move OR an unsaved edit to an
   // existing one — so the last move never needs an explicit Add/Update.
@@ -1291,6 +1294,15 @@ $('goBtn').addEventListener('click', () => {
   if (!moves.length) { toast('Add some moves first'); return; }
   startRun();
 });
+
+// Long-press the Run button to open the 3-D scene preview.
+{ let _3dT = null;
+  $('goBtn').addEventListener('pointerdown', () => {
+    _3dT = setTimeout(() => { _3dT = null; if (!view3dActive) { view3dActive = true; show3DView(); } }, 650);
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev =>
+    $('goBtn').addEventListener(ev, () => { clearTimeout(_3dT); _3dT = null; }));
+}
 
 $('lvSelect').addEventListener('change', e => {
   const t = parseInt(e.target.value, 10);
@@ -2088,3 +2100,221 @@ if (_gameHash && _gameHashIdx >= 0 && level) {
 }
 
 requestAnimationFrame(draw);
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3-D visualisation  —  long-press the Run button to open
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function show3DView() {
+  if (!level) { view3dActive = false; return; }
+  if (typeof THREE === 'undefined') {
+    toast('3D library not loaded'); view3dActive = false; return;
+  }
+
+  const v3d = $('v3d');
+  const cv3 = $('cv3d');
+  v3d.classList.remove('hidden');
+
+  const W = window.innerWidth, H = window.innerHeight;
+
+  // ── renderer ──────────────────────────────────────────────────────────────
+  const renderer = new THREE.WebGLRenderer({ canvas: cv3, antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  renderer.setSize(W, H);
+  renderer.setClearColor(0x171a21);
+
+  // ── scene + lights ────────────────────────────────────────────────────────
+  const scene = new THREE.Scene();
+  const diag = Math.hypot(level.w, level.h);
+  scene.fog = new THREE.Fog(0x171a21, diag * 1.6, diag * 3.8);
+
+  scene.add(new THREE.AmbientLight(0xcce0ff, 0.55));
+  const sun = new THREE.DirectionalLight(0xfff8ee, 1.1);
+  sun.position.set(-level.w * 0.4, level.h, -level.h * 0.3);
+  scene.add(sun);
+
+  // ── floor ─────────────────────────────────────────────────────────────────
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(level.w, level.h),
+    new THREE.MeshLambertMaterial({ color: 0x23272f })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(level.w / 2, 0, level.h / 2);
+  scene.add(floor);
+
+  // subtle grid
+  const gSz = Math.max(Math.ceil(level.w), Math.ceil(level.h));
+  const grid = new THREE.GridHelper(gSz, gSz, 0x2a2f3a, 0x2a2f3a);
+  grid.position.set(level.w / 2, 0.001, level.h / 2);
+  scene.add(grid);
+
+  // ── goal zone ─────────────────────────────────────────────────────────────
+  const g = level.goal;
+  const goalGrp = new THREE.Group();
+  goalGrp.position.set(g.cx, 0, g.cy);
+  if (g.ang) goalGrp.rotation.y = -g.ang;
+
+  const goalPl = new THREE.Mesh(
+    new THREE.PlaneGeometry(g.w, g.h),
+    new THREE.MeshBasicMaterial({ color: 0xf2c84b, transparent: true, opacity: 0.20,
+                                  depthWrite: false, side: THREE.DoubleSide })
+  );
+  goalPl.rotation.x = -Math.PI / 2;
+  goalPl.position.y = 0.005;
+  goalGrp.add(goalPl);
+
+  const borderPts = [[-g.w/2,-g.h/2],[g.w/2,-g.h/2],[g.w/2,g.h/2],[-g.w/2,g.h/2],[-g.w/2,-g.h/2]]
+    .map(([x,z]) => new THREE.Vector3(x, 0.008, z));
+  const goalBorder = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(borderPts),
+    new THREE.LineBasicMaterial({ color: 0xf2c84b, transparent: true, opacity: 0.75 })
+  );
+  goalGrp.add(goalBorder);
+  scene.add(goalGrp);
+
+  // ── obstacles ─────────────────────────────────────────────────────────────
+  const WALL_H = 1.4, CURB_H = 0.22, OBS_CAR_H = 1.45;
+
+  for (const o of level.obstacles) {
+    if (o.kind === 'border') continue;
+
+    if (o.kind === 'wall' || o.kind === 'curb') {
+      const r = o.rect; if (!r) continue;
+      const hgt = o.kind === 'curb' ? CURB_H : WALL_H;
+      const clr = o.kind === 'curb' ? 0x4a5266 : 0x38404f;
+      const mat = new THREE.MeshLambertMaterial({ color: clr });
+      let mesh;
+      if (r.ang != null) {
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(r.w, hgt, r.h), mat);
+        mesh.position.set(r.cx, hgt / 2, r.cy);
+        mesh.rotation.y = -r.ang;
+      } else {
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(r.w, hgt, r.h), mat);
+        mesh.position.set(r.x + r.w / 2, hgt / 2, r.y + r.h / 2);
+      }
+      scene.add(mesh);
+
+    } else if (o.kind === 'car') {
+      const sp = o.carSpec || SEDAN;
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(sp.len, OBS_CAR_H, sp.wid),
+        new THREE.MeshLambertMaterial({ color: 0x737d8c })
+      );
+      mesh.position.set(o.pose.cx, OBS_CAR_H / 2, o.pose.cy);
+      mesh.rotation.y = -o.pose.h;
+      scene.add(mesh);
+    }
+  }
+
+  // ── traffic ───────────────────────────────────────────────────────────────
+  const TRAF_H = OBS_CAR_H;
+  const trafficMeshes = [];
+  if (level.traffic) {
+    for (const tr of level.traffic) {
+      const clr = new THREE.Color(tr.color || '#4e5a6e');
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(SEDAN.len, TRAF_H, SEDAN.wid),
+        new THREE.MeshLambertMaterial({ color: clr })
+      );
+      mesh.position.set(tr.x, TRAF_H / 2, tr.y);
+      mesh.rotation.y = -tr.h;
+      scene.add(mesh);
+      trafficMeshes.push({ mesh, tr });
+    }
+  }
+
+  // ── player car ────────────────────────────────────────────────────────────
+  const PCAR_H = 1.3;
+  const pCarMat = new THREE.MeshLambertMaterial({ color: 0x45c4ff });
+  const pCarMesh = new THREE.Mesh(new THREE.BoxGeometry(CAR.len, PCAR_H, CAR.wid), pCarMat);
+  const pBodyFwd = CAR.len / 2 - CAR.rOver;   // rear-axle → body-centre offset
+
+  function posePcar(pose) {
+    pCarMesh.position.set(
+      pose.x + Math.cos(pose.h) * pBodyFwd, PCAR_H / 2,
+      pose.y + Math.sin(pose.h) * pBodyFwd
+    );
+    pCarMesh.rotation.y = -pose.h;
+  }
+  posePcar(level.start);
+  scene.add(pCarMesh);
+
+  // ── replay samples from planSims ──────────────────────────────────────────
+  let rSamples = null, rCum = null, rTotal = 0, rSpeed = 0;
+  if (moves.length && planSims.length === moves.length) {
+    const samp = [], cum = [];
+    let tot = 0;
+    for (let i = 0; i < planSims.length; i++) {
+      const sim = planSims[i];
+      const n = Math.max(1, sim.pts.length - 1);
+      const step = Math.abs(moves[i].dist) / n;
+      for (let j = (i === 0 ? 0 : 1); j < sim.pts.length; j++) {
+        if (j > 0) tot += step;
+        samp.push(sim.pts[j]);
+        cum.push(tot);
+      }
+    }
+    rSamples = samp; rCum = cum; rTotal = tot;
+    rSpeed = clamp(rTotal / 3, 2.5, 7);
+  }
+
+  // ── camera ────────────────────────────────────────────────────────────────
+  const camFocus = new THREE.Vector3(level.w / 2, 0, level.h / 2);
+  const camA = new THREE.Vector3(level.w / 2, diag * 2.0,  level.h / 2);
+  const camB = new THREE.Vector3(level.w / 2, diag * 0.54, level.h / 2 - diag * 0.52);
+
+  const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, diag * 12);
+  camera.position.copy(camA);
+  camera.lookAt(camFocus);
+
+  // ── close ─────────────────────────────────────────────────────────────────
+  let _alive = true, _replayT0 = null;
+
+  function closeView() {
+    if (!_alive) return;
+    _alive = false;
+    view3dActive = false;
+    v3d.classList.add('hidden');
+    renderer.dispose();
+  }
+
+  $('v3dClose').onclick = closeView;
+  cv3.addEventListener('pointerdown', e => { if (e.isPrimary) closeView(); }, { once: true });
+
+  // ── animation loop ────────────────────────────────────────────────────────
+  const MORPH_MS = 1400;
+  const morphT0  = performance.now();
+  const easeIO   = t => t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
+
+  function frame(now) {
+    if (!_alive) return;
+
+    // camera morph: top-down → raised isometric
+    const mt = Math.min(1, (now - morphT0) / MORPH_MS);
+    camera.position.lerpVectors(camA, camB, easeIO(mt));
+    camera.lookAt(camFocus);
+
+    // start replay after morph finishes
+    if (mt >= 1 && rSamples && !_replayT0) _replayT0 = now;
+
+    // animate player car along plan
+    if (_replayT0 && rSamples) {
+      const trav = Math.min(rTotal, (now - _replayT0) / 1000 * rSpeed);
+      let lo = 0, hi = rCum.length - 1;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (rCum[m] < trav) lo = m + 1; else hi = m; }
+      posePcar(rSamples[lo]);
+    }
+
+    // animate traffic
+    const tSec = now / 1000;
+    for (const { mesh, tr } of trafficMeshes) {
+      const d = (tSec * tr.speed + tr.offset) % tr.loop;
+      mesh.position.set(tr.x + Math.cos(tr.h) * d, TRAF_H / 2, tr.y + Math.sin(tr.h) * d);
+    }
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+}

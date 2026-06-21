@@ -6,6 +6,12 @@
 <meta name="theme-color" content="#171a21">
 <title>Tactical Parking Simulator</title>
 <link rel="stylesheet" href="style.css?v=59ed876">
+<style>
+#v3d{position:fixed;inset:0;z-index:300;background:#000;touch-action:none;}
+#v3d canvas{display:block;width:100%;height:100%;}
+#v3dClose{position:absolute;top:max(16px,env(safe-area-inset-top));right:16px;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.18);color:#e7ecf3;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+#v3dHint{position:absolute;bottom:max(24px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);color:rgba(231,236,243,0.38);font-size:12px;font-family:inherit;pointer-events:none;white-space:nowrap;}
+</style>
 </head>
 <body>
 <div id="app">
@@ -143,8 +149,15 @@
 
 <div id="toast" class="hidden"></div>
 
+<div id="v3d" class="hidden">
+  <canvas id="cv3d"></canvas>
+  <button id="v3dClose" aria-label="Close 3D view">&#10005;</button>
+  <div id="v3dHint">Tap anywhere to close</div>
+</div>
+
 <script src="physics.js?v=59ed876"></script>
 <script src="levels.js?v=59ed876"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.min.js"></script>
 <script src="game.js?v=59ed876"></script>
 </body>
 </html>
