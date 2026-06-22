@@ -89,6 +89,9 @@ const LEVELS = [
     traffic: [
       { x: 10, y: -1.5, h: Math.PI, speed: 4, loop: 30, offset: 0 },
     ],
+    markings: [
+      { type: 'lane', x: 0, y: 6, len: 24, ang: 0 },
+    ],
     hint: "So much space... you can do it!",
     solution: [{ steer: 10.2, dist: 5.55 }, { steer: -8.6, dist: 6.65 }],
   },
