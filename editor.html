@@ -633,9 +633,9 @@ function render(){
       const m=L.markings[i]; if(m.type!=='lane') continue;
       const {x1,y1,x2,y2}=markingSeg(m);
       const isSel=sel&&sel.kind==='marking'&&sel.idx===i;
-      ctx.strokeStyle=isSel?'#7ec8ff':'rgba(255,255,255,0.72)';
-      ctx.lineWidth=isSel?0.12:0.08;
-      ctx.setLineDash([0.8,0.6]);
+      ctx.strokeStyle=isSel?'#7ec8ff':'rgba(255,255,255,0.85)';
+      ctx.lineWidth=isSel?0.14:0.10;
+      ctx.setLineDash([1.0,1.0]);
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
     }
     ctx.setLineDash([]); ctx.lineCap='round';
