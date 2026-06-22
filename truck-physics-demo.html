@@ -162,22 +162,35 @@ function simPath(s, steer, totalDist, steps) {
   return { cab, trl };
 }
 
-function drawGhostRect(x, y, heading, length, frontOver, width, color, alpha) {
+// arrowDir: +1 = arrow at front face (forward travel), -1 = arrow at rear face (reverse travel)
+function drawGhostRect(x, y, heading, length, frontOver, width, color, alpha, arrowDir) {
+  const rearLen = length - frontOver;
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.translate(wx(x), wy(y));
   ctx.rotate(heading);
   ctx.beginPath();
-  ctx.rect(-(length - frontOver) * SCALE, -width / 2 * SCALE, length * SCALE, width * SCALE);
+  ctx.rect(-rearLen * SCALE, -width / 2 * SCALE, length * SCALE, width * SCALE);
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
   ctx.stroke();
+  // direction chevron on the leading face
+  const tipX  = (arrowDir > 0 ? frontOver : -rearLen) * SCALE;
+  const baseX = tipX - arrowDir * 0.6 * SCALE;
+  const aw    = 0.28 * SCALE;
+  ctx.beginPath();
+  ctx.moveTo(tipX, 0);
+  ctx.lineTo(baseX, -aw);
+  ctx.lineTo(baseX,  aw);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
   ctx.restore();
 }
 
-const GHOST_COUNT = 5;
+const GHOST_COUNT = 10;
 const GHOST_DIST  = 20;
-const GHOST_STEPS = 40;
+const GHOST_STEPS = 80;   // 0.25 m/step
 
 function drawGhosts(s) {
   const cabFront = CAB_LEN - CAB_ROVER;
@@ -185,12 +198,12 @@ function drawGhosts(s) {
   for (const [dir, cabCol, trlCol] of [[1, '#4af', '#2b8'], [-1, '#f84', '#f42']]) {
     const path = simPath(s, s.steer, dir * GHOST_DIST, GHOST_STEPS);
     for (let g = 1; g <= GHOST_COUNT; g++) {
-      const idx = Math.round(g / GHOST_COUNT * GHOST_STEPS);
-      const alpha = 0.55 - 0.08 * (g - 1);   // 0.55 → 0.23, nearest to farthest
+      const idx   = Math.round(g / GHOST_COUNT * GHOST_STEPS);
+      const alpha = 0.55 - 0.04 * (g - 1);   // 0.55 → 0.19, nearest to farthest
       const c = path.cab[idx];
       const t = path.trl[idx];
-      drawGhostRect(c.x, c.y, c.th, CAB_LEN, cabFront, CAB_WID, cabCol, alpha);
-      drawGhostRect(t.x, t.y, t.tt, TRL_LEN, trlFront, TRL_WID, trlCol, alpha);
+      drawGhostRect(c.x, c.y, c.th, CAB_LEN, cabFront, CAB_WID, cabCol, alpha,  dir);
+      drawGhostRect(t.x, t.y, t.tt, TRL_LEN, trlFront, TRL_WID, trlCol, alpha,  dir);
     }
   }
 }
