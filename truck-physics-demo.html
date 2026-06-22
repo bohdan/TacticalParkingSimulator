@@ -71,6 +71,7 @@ function reset() {
     tt: Math.PI,          // trailer heading
     speed: 0,
     steer: 0,
+    blocked: false,
   };
   // place trailer rear axle correctly
   const hw = hitch(state);
@@ -110,29 +111,28 @@ function step(dt) {
   const v = state.speed;
   const δ = state.steer;
 
-  // 3. cab bicycle model
-  const dth = (Math.abs(δ) > 0.0001)
-    ? v * Math.tan(δ) / CAB_WB * dt
-    : 0;
+  // 3. cab bicycle model — snapshot first so we can revert on articulation overrun
+  const prev = { cx: state.cx, cy: state.cy, th: state.th,
+                 tt: state.tt, trx: state.trx, try: state.try };
+  const dth = (Math.abs(δ) > 0.0001) ? v * Math.tan(δ) / CAB_WB * dt : 0;
   state.th += dth;
   state.cx += v * Math.cos(state.th) * dt;
   state.cy += v * Math.sin(state.th) * dt;
 
   // 4. trailer geometric constraint
   const hw = hitch(state);
-  const dx = hw.x - state.trx;
-  const dy = hw.y - state.try;
-  state.tt = Math.atan2(dy, dx);
+  state.tt  = Math.atan2(hw.y - state.try, hw.x - state.trx);
   state.trx = hw.x - TRL_WB * Math.cos(state.tt);
   state.try = hw.y - TRL_WB * Math.sin(state.tt);
 
-  // 4b. articulation hard stop (cab can't fold into trailer past MAX_ART)
+  // 4b. articulation limit — block movement, don't push trailer
   const β = normAngle(state.th - state.tt);
   if (Math.abs(β) > MAX_ART) {
-    state.tt  = state.th - Math.sign(β) * MAX_ART;
-    const hw2 = hitch(state);
-    state.trx = hw2.x - TRL_WB * Math.cos(state.tt);
-    state.try = hw2.y - TRL_WB * Math.sin(state.tt);
+    state.cx = prev.cx; state.cy = prev.cy; state.th = prev.th;
+    state.tt = prev.tt; state.trx = prev.trx; state.try = prev.try;
+    state.blocked = true;
+  } else {
+    state.blocked = false;
   }
 
   // 5. wrap/clamp world bounds
@@ -279,8 +279,9 @@ function updateHUD() {
   const jk = jackknife();
   const warn = Math.abs(jk) > 30;
   const el = document.getElementById('hud-text');
-  el.textContent = `speed: ${state.speed.toFixed(1)} m/s  |  steer: ${(state.steer*180/Math.PI).toFixed(0)}°  |  jackknife: ${jk.toFixed(0)}°${warn ? '  ⚠ JACKKNIFE' : ''}`;
-  el.style.color = warn ? '#f55' : '#888';
+  const suffix = state.blocked ? '  ✖ BLOCKED' : (warn ? '  ⚠ JACKKNIFE' : '');
+  el.textContent = `speed: ${state.speed.toFixed(1)} m/s  |  steer: ${(state.steer*180/Math.PI).toFixed(0)}°  |  jackknife: ${jk.toFixed(0)}°${suffix}`;
+  el.style.color = state.blocked ? '#f55' : (warn ? '#fa0' : '#888');
 }
 
 // ─── loop ─────────────────────────────────────────────────────────────────────
