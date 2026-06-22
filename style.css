@@ -146,10 +146,28 @@ button.nav {
 .mv-chip.active .mv-n { color: #5c4a00; }
 .mv-chip.add { color: #7ec8ff; border-style: dashed; font-size: 16px; min-width: 38px; }
 
+.step-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid #313a4b;
+  background: #222837;
+  color: #e7ecf3;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.step-btn:active { background: #2d3a50; }
+
 .sliderRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   height: 48px;
 }
 .sliderRow .icon {

@@ -1273,6 +1273,11 @@ makeRelativeSlider(distEl, 25, DIST_Q,
   () => editDist,
   v  => setEdit(editSteer, v));
 
+$('steerDec').addEventListener('click', () => setEdit(editSteer - STEER_Q, editDist));
+$('steerInc').addEventListener('click', () => setEdit(editSteer + STEER_Q, editDist));
+$('distDec').addEventListener('click',  () => setEdit(editSteer, editDist - DIST_Q));
+$('distInc').addEventListener('click',  () => setEdit(editSteer, editDist + DIST_Q));
+
 function commitMove() {
   if (anim) return false;
   if (editIdx !== null) {

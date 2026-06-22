@@ -40,13 +40,17 @@
     </div>
     <div class="sliderRow">
       <span class="icon">&#8634;</span>
+      <button class="step-btn" id="steerDec">&#8722;</button>
       <input id="steer" type="range" min="-35" max="35" step="1" value="0">
+      <button class="step-btn" id="steerInc">+</button>
       <span class="icon">&#8635;</span>
       <span id="steerVal" class="val">0&deg;</span>
     </div>
     <div class="sliderRow">
       <span class="icon rev">R</span>
+      <button class="step-btn" id="distDec">&#8722;</button>
       <input id="dist" type="range" min="-25" max="25" step="0.1" value="0">
+      <button class="step-btn" id="distInc">+</button>
       <span class="icon fwd">D</span>
       <span id="distVal" class="val">&mdash;</span>
     </div>
@@ -151,7 +155,7 @@
         <table id="lbTable" class="lb-table"></table>
       </div>
     </div>
-    <div style="text-align:center;margin-top:14px;">
+    <div style="position:sticky;bottom:0;background:#1f2530;text-align:center;padding:12px 0 6px;border-top:1px solid #2a3142;margin-top:14px;">
       <button id="lbClose" style="height:44px;padding:0 24px;border-radius:12px;border:1px solid #313a4b;background:#222837;color:#e7ecf3;font-size:14px;font-weight:600;">Close</button>
     </div>
   </div>
