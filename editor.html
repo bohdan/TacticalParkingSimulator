@@ -350,6 +350,9 @@ function collectYEdges(){
     const hy=sp.len/2*hs+sp.wid/2*hc;
     add(c.cy-hy); add(c.cy+hy);
   }
+  for(const m of (L.markings||[])){
+    const s=markingSeg(m); add(s.y1); add(s.y2);
+  }
   return [...pts].map(Number).sort((a,b)=>a-b);
 }
 
@@ -790,18 +793,52 @@ function render(){
     }
   }
 
-  // Measurement hover guidelines
+  // Measurement hover guidelines + object highlights
   if(hoveredMeasure){
+    const EPS=0.002, {y1:gy1,y2:gy2}=hoveredMeasure;
+    const touches=y=>Math.abs(y-gy1)<EPS||Math.abs(y-gy2)<EPS;
+    // Guidelines
     ctx.save();
     ctx.strokeStyle='rgba(100,190,255,0.55)';
     ctx.lineWidth=p;
     ctx.setLineDash([0.4,0.25]);
     ctx.beginPath();
-    ctx.moveTo(0,hoveredMeasure.y1); ctx.lineTo(L.w,hoveredMeasure.y1);
-    ctx.moveTo(0,hoveredMeasure.y2); ctx.lineTo(L.w,hoveredMeasure.y2);
+    ctx.moveTo(0,gy1); ctx.lineTo(L.w,gy1);
+    ctx.moveTo(0,gy2); ctx.lineTo(L.w,gy2);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
+    // Highlight touching objects (glow pass then crisp pass)
+    for(let pass=0;pass<2;pass++){
+      ctx.save();
+      ctx.strokeStyle=pass===0?'rgba(100,220,255,0.22)':'rgba(100,220,255,0.88)';
+      ctx.lineWidth=pass===0?5*p:1.5*p;
+      for(const w of L.walls){
+        const b=wallBounds(w);
+        const hs=Math.abs(Math.sin(b.ang)),hc=Math.abs(Math.cos(b.ang));
+        const hy=b.w/2*hs+b.h/2*hc;
+        if(!touches(b.cy-hy)&&!touches(b.cy+hy)) continue;
+        ctx.save(); ctx.translate(b.cx,b.cy); ctx.rotate(b.ang);
+        rrect(-b.w/2,-b.h/2,b.w,b.h,.1); ctx.stroke(); ctx.restore();
+      }
+      for(const c of L.cars){
+        const sp=carSpec(c);
+        const hs=Math.abs(Math.sin(c.h)),hc=Math.abs(Math.cos(c.h));
+        const hy=sp.len/2*hs+sp.wid/2*hc;
+        if(!touches(c.cy-hy)&&!touches(c.cy+hy)) continue;
+        ctx.save(); ctx.translate(c.cx,c.cy); ctx.rotate(c.h);
+        rrect(-sp.len/2,-sp.wid/2,sp.len,sp.wid,.2); ctx.stroke(); ctx.restore();
+      }
+      for(const m of (L.markings||[])){
+        const s=markingSeg(m);
+        if(!touches(s.y1)&&!touches(s.y2)) continue;
+        ctx.strokeStyle=pass===0?'rgba(100,220,255,0.28)':'rgba(180,240,255,0.92)';
+        ctx.lineWidth=pass===0?0.2:0.12;
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke();
+      }
+      ctx.restore();
+    }
   }
 
   // Drawing preview
