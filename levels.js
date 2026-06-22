@@ -413,7 +413,7 @@ const LEVELS = [
       { cx: 13.9, cy: 5.1, h: 0 },
       { cx: 18.7, cy: 5.1, h: 0 },
     ],
-    hint: "Need to nail it",
+    hint: "Need to thread the needle",
     solution: [{ steer: 0, dist: 13 }, { steer: -6, dist: 0.7 }, { steer: 6, dist: -4 }, { steer: 6, dist: 1.4 }, { steer: 13, dist: -4 }, { steer: -13, dist: -0.7 }, { steer: -35, dist: -1.4 }, { steer: 22, dist: 0.7 }, { steer: -22, dist: 0.7 }, { steer: 13, dist: -0.35 }, { steer: -35, dist: -0.35 }],
   },
   {
