@@ -89,7 +89,7 @@ const LEVELS = [
     markings: [
       { type: 'lane', x: 0, y: 6, len: 24, ang: 0 },
       { type: 'bay', x: 0, y: 8.2, len: 24, ang: 0 },
-      { type: 'bay', x: 0, y: 4, len: 24, ang: 0 },
+      { type: 'bay', x: 0, y: 3.8, len: 24, ang: 0 },
     ],
     hint: "So much space... you can do it!",
     solution: [{ steer: 10.2, dist: 5.55 }, { steer: -8.6, dist: 6.65 }],
