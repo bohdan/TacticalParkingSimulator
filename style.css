@@ -180,14 +180,6 @@ button.nav {
 }
 .sliderRow .icon.rev { color: #ff9f43; }
 .sliderRow .icon.fwd { color: #45c4ff; }
-.sliderRow .val {
-  width: 92px;
-  flex: none;
-  text-align: right;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  color: #d7dfeb;
-}
 
 input[type="range"] {
   flex: 1;

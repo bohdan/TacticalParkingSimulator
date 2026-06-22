@@ -219,11 +219,9 @@ function recomputeEdit() {
   }
   const hit = !!(editSim?.hit);
   distEl.classList.toggle('hit', hit);
-  $('distVal').textContent = editDist === 0 ? '—'
-    : `${editDist < 0 ? 'Rev' : 'Fwd'} ${Math.abs(editDist).toFixed(2)} m${hit ? ' ⚠' : ''}`;
-  // While editing a move the change is already live, so the button just closes
-  // the edit; while composing it adds the pending move.
-  $('addBtn').disabled = !!anim || (editIdx === null && (!editSim || editSim.pts.length < 2));
+  // Allow adding when steer is set even at zero distance (creates a 0-dist turn).
+  const canAdd = editIdx !== null || (editSim && editSim.pts.length >= 2) || Math.abs(editSteer) >= STEER_Q;
+  $('addBtn').disabled = !!anim || (editIdx === null && !canAdd);
   $('addBtn').innerHTML = editIdx !== null ? '&#10003; Done' : '&#65291; Add move';
 }
 
@@ -1226,8 +1224,6 @@ function setEdit(steerDeg, dist) {
   const s = Math.abs(steerDeg) < 0.1 ? 0 : snapTo(steerDeg, STEER_Q);
   editSteer = +clamp(s, -CAR.maxSteer, CAR.maxSteer).toFixed(1);
   editDist  = Math.abs(dist) < DIST_Q / 2 ? 0 : +snapTo(dist, DIST_Q).toFixed(2);
-  $('steerVal').textContent = editSteer === 0 ? '0°'
-    : `${Math.abs(editSteer).toFixed(1)}° ${editSteer < 0 ? 'left' : 'right'}`;
   // Editing an existing move applies live: write it and re-base the rest of the
   // plan immediately, so no Update step is needed.
   if (editIdx !== null) {
@@ -1283,7 +1279,7 @@ function commitMove() {
   if (editIdx !== null) {
     editIdx = null;                 // the edit is already applied live
   } else {
-    if (!editSim || editSim.pts.length < 2) return false;
+    if (!editSim && Math.abs(editSteer) < STEER_Q) return false;
     moves.push({ steer: rad(editSteer), dist: editDist });
   }
   setEdit(editSteer, 0);            // back to composing; keep the steering angle
