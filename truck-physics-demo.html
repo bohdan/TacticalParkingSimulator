@@ -46,6 +46,10 @@
 
 <div id="panel">
   <div class="sec">Visualization</div>
+  <div class="row">
+    <div class="lrow"><span>Zoom</span><span class="val" id="zoomVal">21 px/m</span></div>
+    <input type="range" id="zoom" min="8" max="42" step="1" value="21">
+  </div>
   <label class="chk"><input type="checkbox" id="showGhosts" checked> Ghost outlines</label>
   <label class="chk"><input type="checkbox" id="showTrail"  checked> Path lines</label>
 
@@ -89,7 +93,7 @@
 "use strict";
 
 // ─── tuneable parameters (driven by panel) ───────────────────────────────────
-const SCALE      = 21;
+let SCALE        = 21;
 let WORLD_W = 0, WORLD_H = 0;
 
 const CAB_LEN  = 5.5, CAB_WID  = 2.5, CAB_ROVER  = 0.8;
@@ -417,6 +421,11 @@ function wire(id, callback) {
   document.getElementById(id).addEventListener('input', callback);
 }
 
+wire('zoom', e => {
+  SCALE = +e.target.value;
+  resize();
+  document.getElementById('zoomVal').textContent = SCALE + ' px/m';
+});
 wire('showGhosts', e => { showGhosts = e.target.checked; });
 wire('showTrail',  e => { showTrail  = e.target.checked; });
 
