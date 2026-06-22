@@ -741,4 +741,16 @@ const LEVELS = [
     hint: "Only a Miata fits — use its 40° steering lock to squeeze in.",
     solution: [{ steer: -2.8, dist: 9.3 }, { steer: 40, dist: -2.6 }, { steer: -40, dist: -2.5 }, { steer: 40, dist: 0.65 }],
   },
+  {
+    id: "gknchi",
+    name: "There's no turning back from here", tier: "Expert", mode: "moves", w: 40, h: 40,
+    vehicle: "miata",
+    start: { x: 1, y: 2, h: 0 },
+    goal: { cx: 14.5, cy: 28.3, w: 3.9, h: 2, ang: 2.4771, heads: [90], tol: 45 },
+    walls: [],
+    cars: [],
+    draft: true,
+    hint: "",
+    solution: [{ steer: 3, dist: 14 }, { steer: 15, dist: 9.2 }, { steer: 5, dist: 5.35 }, { steer: 8, dist: 9.7 }, { steer: 9, dist: 3 }],
+  },
 ];
