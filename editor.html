@@ -59,10 +59,16 @@ button.nav{padding:4px 8px;font-weight:700}
 .add-opt:last-child{border-bottom:none}
 .add-opt:hover{background:#1d4f6b}
 .add-key{float:right;color:#5a6a80;font-size:10px;margin-left:12px}
-#measurePanel{width:52px;background:#0e1117;border-right:1px solid #2a3040;flex-shrink:0;position:relative;overflow:hidden;user-select:none}
+#measLeft{flex-shrink:0;display:flex;flex-direction:column;background:#0e1117;border-right:1px solid #2a3040}
+#measCorner{width:52px;height:24px;flex-shrink:0;border-bottom:1px solid #1a2030}
+#measurePanel{width:52px;flex:1;position:relative;overflow:hidden;user-select:none}
+#cvColumn{flex:1;display:flex;flex-direction:column;min-height:0}
+#measurePanelTop{height:24px;background:#0e1117;border-bottom:1px solid #2a3040;position:relative;overflow:hidden;user-select:none;flex-shrink:0}
 .meas-item{position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#4a5a70;border-top:1px solid #1a2030;cursor:default;text-align:center;overflow:hidden;white-space:nowrap}
-.meas-item:hover{background:rgba(61,143,191,0.18);color:#7ec8ff}
-@media(max-width:760px){#measurePanel{display:none}}
+.meas-item:hover,.meas-item-top:hover{background:rgba(61,143,191,0.18);color:#7ec8ff}
+.meas-item.meas-odd,.meas-item-top.meas-odd{background:rgba(255,255,255,0.025)}
+.meas-item-top{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#4a5a70;border-left:1px solid #1a2030;cursor:default;text-align:center;overflow:hidden;white-space:nowrap}
+@media(max-width:760px){#measLeft{display:none}#measurePanelTop{display:none}}
 #solveStatus{font-size:11px;color:#7dc87d;display:none;align-self:center}
 .sol-row{gap:3px}
 .sol-row.sol-hot{background:rgba(255,224,64,.08);border-radius:5px}
@@ -135,8 +141,14 @@ button.nav{padding:4px 8px;font-weight:700}
 </div>
 
 <div id="main">
-  <div id="measurePanel"></div>
-  <div id="cvWrap"><canvas id="cv"></canvas></div>
+  <div id="measLeft">
+    <div id="measCorner"></div>
+    <div id="measurePanel"></div>
+  </div>
+  <div id="cvColumn">
+    <div id="measurePanelTop"></div>
+    <div id="cvWrap"><canvas id="cv"></canvas></div>
+  </div>
   <div id="sidebar">
    <div class="row"><label>Draft</label><label style="flex:1;display:flex;align-items:center;gap:6px;color:#e0b050;font-size:12px"><input id="sDraft" type="checkbox" style="flex:0 0 auto;width:auto"> hidden from the game (editor only)</label></div>
    <div id="cutscenePanel" style="display:none">
@@ -332,6 +344,7 @@ let V = { scale:40, ox:30, oy:30 };
 
 // ── Measurement panel ────────────────────────────────────────────────────────
 let hoveredMeasure = null;
+let hoveredMeasureX = null;
 
 function collectYEdges(){
   if(!L||isCutscene(L)) return [];
@@ -356,6 +369,29 @@ function collectYEdges(){
   return [...pts].map(Number).sort((a,b)=>a-b);
 }
 
+function collectXEdges(){
+  if(!L||isCutscene(L)) return [];
+  const pts=new Set();
+  const add=x=>pts.add(+x.toFixed(3));
+  add(0); add(L.w);
+  for(const w of L.walls){
+    const b=wallBounds(w);
+    const hs=Math.abs(Math.sin(b.ang)),hc=Math.abs(Math.cos(b.ang));
+    const hx=b.w/2*hc+b.h/2*hs;
+    add(b.cx-hx); add(b.cx+hx);
+  }
+  for(const c of L.cars){
+    const sp=carSpec(c);
+    const hs=Math.abs(Math.sin(c.h)),hc=Math.abs(Math.cos(c.h));
+    const hx=sp.len/2*hc+sp.wid/2*hs;
+    add(c.cx-hx); add(c.cx+hx);
+  }
+  for(const m of (L.markings||[])){
+    const s=markingSeg(m); add(s.x1); add(s.x2);
+  }
+  return [...pts].map(Number).sort((a,b)=>a-b);
+}
+
 function updateMeasurePanel(){
   const panel=document.getElementById('measurePanel');
   if(!panel) return;
@@ -368,12 +404,33 @@ function updateMeasurePanel(){
     const top=V.oy+y1*V.scale, h=dist*V.scale;
     if(h<3) continue;
     const label=h>=14?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
-    html+=`<div class="meas-item" style="top:${top}px;height:${h}px" data-y1="${y1}" data-y2="${y2}">${label}</div>`;
+    html+=`<div class="meas-item${i%2?' meas-odd':''}" style="top:${top}px;height:${h}px" title="${dist.toFixed(2)} m" data-y1="${y1}" data-y2="${y2}">${label}</div>`;
   }
   panel.innerHTML=html;
   panel.querySelectorAll('.meas-item').forEach(el=>{
     el.addEventListener('mouseenter',()=>{ hoveredMeasure={y1:+el.dataset.y1,y2:+el.dataset.y2}; render(); });
     el.addEventListener('mouseleave',()=>{ hoveredMeasure=null; render(); });
+  });
+}
+
+function updateMeasurePanelTop(){
+  const panel=document.getElementById('measurePanelTop');
+  if(!panel) return;
+  if(!L||isCutscene(L)){ panel.innerHTML=''; return; }
+  const edges=collectXEdges();
+  let html='';
+  for(let i=0;i<edges.length-1;i++){
+    const x1=edges[i],x2=edges[i+1],dist=x2-x1;
+    if(dist<0.04) continue;
+    const left=V.ox+x1*V.scale, w=dist*V.scale;
+    if(w<3) continue;
+    const label=w>=30?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+    html+=`<div class="meas-item-top${i%2?' meas-odd':''}" style="left:${left}px;width:${w}px" title="${dist.toFixed(2)} m" data-x1="${x1}" data-x2="${x2}">${label}</div>`;
+  }
+  panel.innerHTML=html;
+  panel.querySelectorAll('[data-x1]').forEach(el=>{
+    el.addEventListener('mouseenter',()=>{ hoveredMeasureX={x1:+el.dataset.x1,x2:+el.dataset.x2}; render(); });
+    el.addEventListener('mouseleave',()=>{ hoveredMeasureX=null; render(); });
   });
 }
 
@@ -841,6 +898,52 @@ function render(){
     }
   }
 
+  // X measurement hover guidelines + object highlights
+  if(hoveredMeasureX){
+    const EPS=0.002, {x1:gx1,x2:gx2}=hoveredMeasureX;
+    const touchesX=x=>Math.abs(x-gx1)<EPS||Math.abs(x-gx2)<EPS;
+    ctx.save();
+    ctx.strokeStyle='rgba(100,190,255,0.55)';
+    ctx.lineWidth=p;
+    ctx.setLineDash([0.4,0.25]);
+    ctx.beginPath();
+    ctx.moveTo(gx1,0); ctx.lineTo(gx1,L.h);
+    ctx.moveTo(gx2,0); ctx.lineTo(gx2,L.h);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    for(let pass=0;pass<2;pass++){
+      ctx.save();
+      ctx.strokeStyle=pass===0?'rgba(100,220,255,0.22)':'rgba(100,220,255,0.88)';
+      ctx.lineWidth=pass===0?5*p:1.5*p;
+      for(const w of L.walls){
+        const b=wallBounds(w);
+        const hs=Math.abs(Math.sin(b.ang)),hc=Math.abs(Math.cos(b.ang));
+        const hx=b.w/2*hc+b.h/2*hs;
+        if(!touchesX(b.cx-hx)&&!touchesX(b.cx+hx)) continue;
+        ctx.save(); ctx.translate(b.cx,b.cy); ctx.rotate(b.ang);
+        rrect(-b.w/2,-b.h/2,b.w,b.h,.1); ctx.stroke(); ctx.restore();
+      }
+      for(const c of L.cars){
+        const sp=carSpec(c);
+        const hs=Math.abs(Math.sin(c.h)),hc=Math.abs(Math.cos(c.h));
+        const hx=sp.len/2*hc+sp.wid/2*hs;
+        if(!touchesX(c.cx-hx)&&!touchesX(c.cx+hx)) continue;
+        ctx.save(); ctx.translate(c.cx,c.cy); ctx.rotate(c.h);
+        rrect(-sp.len/2,-sp.wid/2,sp.len,sp.wid,.2); ctx.stroke(); ctx.restore();
+      }
+      for(const m of (L.markings||[])){
+        const s=markingSeg(m);
+        if(!touchesX(s.x1)&&!touchesX(s.x2)) continue;
+        ctx.strokeStyle=pass===0?'rgba(100,220,255,0.28)':'rgba(180,240,255,0.92)';
+        ctx.lineWidth=pass===0?0.2:0.12;
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
   // Drawing preview
   if(drawRect){
     const {ax,ay,bx,by}=drawRect;
@@ -855,6 +958,7 @@ function render(){
   }
 
   updateMeasurePanel();
+  updateMeasurePanelTop();
 }
 
 // Trace the solution as a schematic curve: forward arcs cyan (solid),
