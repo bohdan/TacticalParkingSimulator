@@ -397,15 +397,43 @@ function updateMeasurePanel(){
   const edges=collectYEdges(), se=getSelEdges();
   const EPS=0.002;
   let html='';
-  for(let i=0;i<edges.length-1;i++){
-    const y1=edges[i],y2=edges[i+1],dist=y2-y1;
-    if(dist<0.04) continue;
-    const top=V.oy+y1*V.scale, h=dist*V.scale;
-    if(h<3) continue;
-    const isSel=se&&Math.abs(y1-se.yMin)<EPS&&Math.abs(y2-se.yMax)<EPS;
-    const cls='meas-item'+(isSel?' meas-sel':i%2?' meas-odd':'');
-    const label=h>=14?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
-    html+=`<div class="${cls}" style="top:${top}px;height:${h}px" title="${dist.toFixed(2)} m" data-y1="${y1}" data-y2="${y2}">${label}</div>`;
+  if(se){
+    const {yMin,yMax}=se;
+    let objDone=false;
+    for(let i=0;i<edges.length-1;i++){
+      const y1=edges[i],y2=edges[i+1];
+      if(y1>=yMin-EPS&&y2<=yMax+EPS){          // inside or spanning the object
+        if(!objDone){
+          const objH=(yMax-yMin)*V.scale, objDist=yMax-yMin;
+          if(objH>=2){
+            const lbl=objH>=14?`${objDist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+            html+=`<div class="meas-item meas-sel" style="top:${V.oy+yMin*V.scale}px;height:${Math.max(objH,2)}px" title="${objDist.toFixed(2)} m" data-y1="${yMin}" data-y2="${yMax}">${lbl}</div>`;
+          }
+          objDone=true;
+        }
+        continue;
+      }
+      let dist;
+      if(y2<=yMin+EPS)       dist=yMin-y1;  // above: distance from strip's top edge to object top
+      else if(y1>=yMax-EPS)  dist=y2-yMax;  // below: distance from strip's bottom edge to object bottom
+      else continue;
+      if(dist<0.04) continue;
+      const top=V.oy+y1*V.scale, h=(y2-y1)*V.scale;
+      if(h<3) continue;
+      const cls='meas-item'+(i%2?' meas-odd':'');
+      const lbl=h>=14?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+      html+=`<div class="${cls}" style="top:${top}px;height:${h}px" title="${dist.toFixed(2)} m" data-y1="${y1}" data-y2="${y2}">${lbl}</div>`;
+    }
+  } else {
+    for(let i=0;i<edges.length-1;i++){
+      const y1=edges[i],y2=edges[i+1],dist=y2-y1;
+      if(dist<0.04) continue;
+      const top=V.oy+y1*V.scale, h=dist*V.scale;
+      if(h<3) continue;
+      const cls='meas-item'+(i%2?' meas-odd':'');
+      const lbl=h>=14?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+      html+=`<div class="${cls}" style="top:${top}px;height:${h}px" title="${dist.toFixed(2)} m" data-y1="${y1}" data-y2="${y2}">${lbl}</div>`;
+    }
   }
   panel.innerHTML=html;
   panel.querySelectorAll('.meas-item').forEach(el=>{
@@ -420,15 +448,43 @@ function updateMeasurePanelTop(){
   const edges=collectXEdges(), se=getSelEdges();
   const EPS=0.002;
   let html='';
-  for(let i=0;i<edges.length-1;i++){
-    const x1=edges[i],x2=edges[i+1],dist=x2-x1;
-    if(dist<0.04) continue;
-    const left=V.ox+x1*V.scale, w=dist*V.scale;
-    if(w<3) continue;
-    const isSel=se&&Math.abs(x1-se.xMin)<EPS&&Math.abs(x2-se.xMax)<EPS;
-    const cls='meas-item-top'+(isSel?' meas-sel':i%2?' meas-odd':'');
-    const label=w>=30?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
-    html+=`<div class="${cls}" style="left:${left}px;width:${w}px" title="${dist.toFixed(2)} m" data-x1="${x1}" data-x2="${x2}">${label}</div>`;
+  if(se){
+    const {xMin,xMax}=se;
+    let objDone=false;
+    for(let i=0;i<edges.length-1;i++){
+      const x1=edges[i],x2=edges[i+1];
+      if(x1>=xMin-EPS&&x2<=xMax+EPS){
+        if(!objDone){
+          const objW=(xMax-xMin)*V.scale, objDist=xMax-xMin;
+          if(objW>=2){
+            const lbl=objW>=30?`${objDist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+            html+=`<div class="meas-item-top meas-sel" style="left:${V.ox+xMin*V.scale}px;width:${Math.max(objW,2)}px" title="${objDist.toFixed(2)} m" data-x1="${xMin}" data-x2="${xMax}">${lbl}</div>`;
+          }
+          objDone=true;
+        }
+        continue;
+      }
+      let dist;
+      if(x2<=xMin+EPS)       dist=xMin-x1;
+      else if(x1>=xMax-EPS)  dist=x2-xMax;
+      else continue;
+      if(dist<0.04) continue;
+      const left=V.ox+x1*V.scale, w=(x2-x1)*V.scale;
+      if(w<3) continue;
+      const cls='meas-item-top'+(i%2?' meas-odd':'');
+      const lbl=w>=30?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+      html+=`<div class="${cls}" style="left:${left}px;width:${w}px" title="${dist.toFixed(2)} m" data-x1="${x1}" data-x2="${x2}">${lbl}</div>`;
+    }
+  } else {
+    for(let i=0;i<edges.length-1;i++){
+      const x1=edges[i],x2=edges[i+1],dist=x2-x1;
+      if(dist<0.04) continue;
+      const left=V.ox+x1*V.scale, w=dist*V.scale;
+      if(w<3) continue;
+      const cls='meas-item-top'+(i%2?' meas-odd':'');
+      const lbl=w>=30?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+      html+=`<div class="${cls}" style="left:${left}px;width:${w}px" title="${dist.toFixed(2)} m" data-x1="${x1}" data-x2="${x2}">${lbl}</div>`;
+    }
   }
   panel.innerHTML=html;
   panel.querySelectorAll('[data-x1]').forEach(el=>{
