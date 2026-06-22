@@ -1020,6 +1020,7 @@ cv.addEventListener('pointerdown', e=>{
            hit.kind==='wall'?L.walls[hit.idx]:
            hit.kind==='car'?L.cars[hit.idx]:
            hit.kind==='traffic'?L.traffic[hit.idx]:
+           hit.kind==='marking'?L.markings[hit.idx]:
            hit.kind==='goal'?L.goal:L.start)};
     updateSidebar(); render();
   } else {
@@ -1066,6 +1067,11 @@ cv.addEventListener('pointermove', e=>{
       const w=L.walls[sel.idx];
       if(w.ang!=null){ w.cx=snapW(o.cx+dx); w.cy=snapW(o.cy+dy); }
       else { w.x=snapW(o.x+dx); w.y=snapW(o.y+dy); }
+    }
+    else if(sel.kind==='marking'){
+      const m=L.markings[sel.idx];
+      m.x1=snapW(o.x1+dx); m.y1=snapW(o.y1+dy);
+      m.x2=snapW(o.x2+dx); m.y2=snapW(o.y2+dy);
     }
   }
   else if(drag.handle.startsWith('corner')){
@@ -1516,8 +1522,8 @@ function updateSelPanel(){
     lis('seColor',v=>{t.color=v;render();});
   } else if(sel.kind==='marking'){
     const m=L.markings[sel.idx];
-    liv('seMx1',v=>{m.x1=v;render();}); liv('seMy1',v=>{m.y1=v;render();});
-    liv('seMx2',v=>{m.x2=v;render();}); liv('seMy2',v=>{m.y2=v;render();});
+    liv('seMx1',v=>{m.x1=v;markDirty();render();}); liv('seMy1',v=>{m.y1=v;markDirty();render();});
+    liv('seMx2',v=>{m.x2=v;markDirty();render();}); liv('seMy2',v=>{m.y2=v;markDirty();render();});
   }
 }
 
