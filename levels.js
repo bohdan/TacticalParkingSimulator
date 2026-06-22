@@ -86,9 +86,6 @@ const LEVELS = [
       { cx: 15.9, cy: 2.7, h: Math.PI },
       { cx: 20.8, cy: 2.6, h: Math.PI },
     ],
-    traffic: [
-      { x: 10, y: -1.5, h: Math.PI, speed: 4, loop: 30, offset: 0 },
-    ],
     markings: [
       { type: 'lane', x: 0, y: 6, len: 24, ang: 0 },
       { type: 'bay', x: 0, y: 8.2, len: 24, ang: 0 },
