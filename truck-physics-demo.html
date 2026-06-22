@@ -8,46 +8,111 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #1a1a2e; overflow: hidden; font-family: monospace; color: #e0e0e0; }
   canvas { display: block; }
-  #overlay { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
-             text-align: center; pointer-events: none; }
-  #hud-text { font-size: 11px; color: #888; }
-  #controls  { margin-top: 3px; font-size: 10px; color: #444; }
+
+  /* ── HUD overlay (bottom-centre) ── */
+  #overlay { position: fixed; bottom: 14px; left: calc(50% - 100px);
+             transform: translateX(-50%); text-align: center; pointer-events: none; }
+  #hud-text  { font-size: 11px; color: #888; }
+  #kb-hint   { margin-top: 3px; font-size: 10px; color: #444; }
+
+  /* ── Side panel ── */
+  #panel {
+    position: fixed; right: 0; top: 0; bottom: 0; width: 200px;
+    background: rgba(8,13,22,0.88); border-left: 1px solid #1e2e3e;
+    padding: 12px 10px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 5px;
+    font-size: 11px; color: #aaa;
+  }
+  #panel .sec {
+    color: #4a7a8a; font-size: 9px; letter-spacing: 2px;
+    text-transform: uppercase; margin-top: 8px; padding-bottom: 3px;
+    border-bottom: 1px solid #1e2e3e;
+  }
+  #panel label.chk { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  #panel label.chk input { cursor: pointer; accent-color: #4af; }
+  #panel .row { display: flex; flex-direction: column; gap: 1px; }
+  #panel .lrow { display: flex; justify-content: space-between; }
+  #panel .val  { color: #4af; }
+  #panel input[type=range] { width: 100%; cursor: pointer; accent-color: #4af; }
 </style>
 </head>
 <body>
 <canvas id="canvas"></canvas>
+
 <div id="overlay">
   <div><span id="hud-text">speed: 0.0 m/s &nbsp;|&nbsp; steer: 0° &nbsp;|&nbsp; jackknife: 0°</span></div>
-  <div id="controls">W/S or ↑/↓ &nbsp; drive &nbsp;&nbsp; A/D or ←/→ &nbsp; steer &nbsp;&nbsp; R &nbsp; reset</div>
+  <div id="kb-hint">W/S or ↑/↓ &nbsp; drive &nbsp;&nbsp; A/D or ←/→ &nbsp; steer &nbsp;&nbsp; R &nbsp; reset</div>
+</div>
+
+<div id="panel">
+  <div class="sec">Visualization</div>
+  <label class="chk"><input type="checkbox" id="showGhosts" checked> Ghost outlines</label>
+  <label class="chk"><input type="checkbox" id="showTrail"  checked> Path lines</label>
+
+  <div class="row">
+    <div class="lrow"><span>Projection</span><span class="val" id="projDistVal">20 m</span></div>
+    <input type="range" id="projDist" min="5" max="40" step="1" value="20">
+  </div>
+  <div class="row">
+    <div class="lrow"><span>Ghost count</span><span class="val" id="ghostCountVal">10</span></div>
+    <input type="range" id="ghostCount" min="2" max="20" step="1" value="10">
+  </div>
+  <div class="row">
+    <div class="lrow"><span>Arrow every</span><span class="val" id="arrowEveryVal">4 m</span></div>
+    <input type="range" id="arrowEvery" min="1" max="10" step="1" value="4">
+  </div>
+
+  <div class="sec">Vehicle</div>
+  <div class="row">
+    <div class="lrow"><span>Max steer</span><span class="val" id="maxSteerVal">35°</span></div>
+    <input type="range" id="maxSteer" min="10" max="55" step="1" value="35">
+  </div>
+  <div class="row">
+    <div class="lrow"><span>Art. limit</span><span class="val" id="maxArtVal">75°</span></div>
+    <input type="range" id="maxArt" min="20" max="90" step="1" value="75">
+  </div>
+  <div class="row">
+    <div class="lrow"><span>Cab wheelbase</span><span class="val" id="cabWbVal">4.0 m</span></div>
+    <input type="range" id="cabWb" min="1.5" max="7" step="0.5" value="4">
+  </div>
+  <div class="row">
+    <div class="lrow"><span>Trailer axle</span><span class="val" id="trlWbVal">8.0 m</span></div>
+    <input type="range" id="trlWb" min="2" max="15" step="0.5" value="8">
+  </div>
+  <div class="row">
+    <div class="lrow"><span>Hitch offset</span><span class="val" id="hitchOffVal">0.4 m</span></div>
+    <input type="range" id="hitchOff" min="0" max="2" step="0.1" value="0.4">
+  </div>
 </div>
 
 <script>
 "use strict";
 
-// ─── constants ───────────────────────────────────────────────────────────────
-const SCALE    = 21;        // px per metre (1.5× zoom)
-let   WORLD_W  = 0;         // derived from canvas size
-let   WORLD_H  = 0;
+// ─── tuneable parameters (driven by panel) ───────────────────────────────────
+const SCALE      = 21;
+let WORLD_W = 0, WORLD_H = 0;
 
-const CAB_WB   = 4.0;       // cab wheelbase (front axle → rear axle)
-const CAB_LEN  = 5.5;       // total cab body length
-const CAB_WID  = 2.5;
-const CAB_ROVER = 0.8;      // cab rear overhang behind rear axle
+const CAB_LEN  = 5.5, CAB_WID  = 2.5, CAB_ROVER  = 0.8;
+const TRL_WID  = 2.5, TRL_ROVER = 0.8;
+const MAX_SPEED = 5.0, ACCEL = 3.0, STEER_RATE = 60 * Math.PI / 180;
 
-const HITCH_OFF = 0.4;      // hitch behind cab rear axle
+let CAB_WB    = 4.0;
+let HITCH_OFF = 0.4;
+let TRL_WB    = 8.0;
+let TRL_LEN   = TRL_WB + TRL_ROVER + 0.2;   // front overhang = 0.2 m fixed
 
-const TRL_WB   = 8.0;       // kingpin → trailer rear axle
-const TRL_LEN  = 9.0;       // total trailer body length
-const TRL_WID  = 2.5;
-const TRL_ROVER = 0.8;      // trailer rear overhang
+let MAX_STEER  = 35 * Math.PI / 180;
+let MAX_ART    = 75 * Math.PI / 180;
 
-const MAX_STEER = 35 * Math.PI / 180;
-const MAX_ART   = 75 * Math.PI / 180;   // max cab–trailer articulation angle
-const MAX_SPEED = 5.0;      // m/s
-const ACCEL     = 3.0;
-const STEER_RATE = 60 * Math.PI / 180;  // rad/s
+let GHOST_COUNT  = 10;
+let PROJ_DIST    = 20;
+let PROJ_STEPS   = 80;   // recalculated when PROJ_DIST changes
+let ARROW_EVERY  = 4;    // metres between direction arrows on trail
 
-// ─── canvas setup ────────────────────────────────────────────────────────────
+let showGhosts = true;
+let showTrail  = true;
+
+// ─── canvas ──────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('canvas');
 const ctx    = canvas.getContext('2d');
 
@@ -65,22 +130,15 @@ let state, keys = {};
 
 function reset() {
   state = {
-    // cab rear axle
-    cx: WORLD_W * 0.65,
-    cy: WORLD_H * 0.5,
-    th: Math.PI,          // heading (cab)
-    tt: Math.PI,          // trailer heading
-    speed: 0,
-    steer: 0,
-    blocked: false,
+    cx: WORLD_W * 0.62, cy: WORLD_H * 0.5,
+    th: Math.PI, tt: Math.PI,
+    speed: 0, steer: 0, blocked: false,
   };
-  // place trailer rear axle correctly
   const hw = hitch(state);
   state.trx = hw.x - TRL_WB * Math.cos(state.tt);
   state.try = hw.y - TRL_WB * Math.sin(state.tt);
 }
 
-// hitch position (behind cab rear axle)
 function hitch(s) {
   return {
     x: s.cx - HITCH_OFF * Math.cos(s.th),
@@ -96,47 +154,41 @@ function normAngle(a) {
 
 // ─── physics step ────────────────────────────────────────────────────────────
 function step(dt) {
-  // 1. steering input
-  const steerInput = (keys['ArrowLeft'] || keys['a'] || keys['A'] ? -1 : 0)
-                   + (keys['ArrowRight'] || keys['d'] || keys['D'] ? 1 : 0);
+  const steerInput = (keys['ArrowLeft']  || keys['a'] || keys['A'] ? -1 : 0)
+                   + (keys['ArrowRight'] || keys['d'] || keys['D'] ?  1 : 0);
   state.steer += steerInput * STEER_RATE * dt;
   state.steer = Math.max(-MAX_STEER, Math.min(MAX_STEER, state.steer));
 
-  // 2. speed input
-  const driveInput = (keys['ArrowUp'] || keys['w'] || keys['W'] ? 1 : 0)
+  const driveInput = (keys['ArrowUp']   || keys['w'] || keys['W'] ?  1 : 0)
                    + (keys['ArrowDown'] || keys['s'] || keys['S'] ? -1 : 0);
   state.speed += driveInput * ACCEL * dt;
   state.speed = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, state.speed));
-  if (!driveInput) state.speed *= Math.pow(0.1, dt);   // friction
+  if (!driveInput) state.speed *= Math.pow(0.1, dt);
 
   const v = state.speed;
   const δ = state.steer;
 
-  // 3. cab bicycle model — snapshot first so we can revert on articulation overrun
   const prev = { cx: state.cx, cy: state.cy, th: state.th,
                  tt: state.tt, trx: state.trx, try: state.try };
+
   const dth = (Math.abs(δ) > 0.0001) ? v * Math.tan(δ) / CAB_WB * dt : 0;
   state.th += dth;
   state.cx += v * Math.cos(state.th) * dt;
   state.cy += v * Math.sin(state.th) * dt;
 
-  // 4. trailer geometric constraint
   const hw = hitch(state);
   state.tt  = Math.atan2(hw.y - state.try, hw.x - state.trx);
   state.trx = hw.x - TRL_WB * Math.cos(state.tt);
   state.try = hw.y - TRL_WB * Math.sin(state.tt);
 
-  // 4b. articulation limit — block movement, don't push trailer
   const β = normAngle(state.th - state.tt);
   if (Math.abs(β) > MAX_ART) {
-    state.cx = prev.cx; state.cy = prev.cy; state.th = prev.th;
-    state.tt = prev.tt; state.trx = prev.trx; state.try = prev.try;
+    Object.assign(state, prev);
     state.blocked = true;
   } else {
     state.blocked = false;
   }
 
-  // 5. wrap/clamp world bounds
   state.cx = Math.max(1, Math.min(WORLD_W - 1, state.cx));
   state.cy = Math.max(1, Math.min(WORLD_H - 1, state.cy));
 }
@@ -145,25 +197,62 @@ function step(dt) {
 function simPath(s, steer, totalDist, steps) {
   let p = { cx: s.cx, cy: s.cy, th: s.th, tt: s.tt, trx: s.trx, try: s.try };
   const ds = totalDist / steps;
-  const cab = [{ x: p.cx, y: p.cy, th: p.th }];
-  const trl = [{ x: p.trx, y: p.try, tt: p.tt }];
+  const cab = [{ x: p.cx,  y: p.cy,  th: p.th }];
+  const trl = [{ x: p.trx, y: p.try, th: p.tt }];
   for (let i = 0; i < steps; i++) {
     p.th += (Math.abs(steer) > 0.0001 ? Math.tan(steer) / CAB_WB * ds : 0);
     p.cx += Math.cos(p.th) * ds;
     p.cy += Math.sin(p.th) * ds;
     const hw = { x: p.cx - HITCH_OFF * Math.cos(p.th), y: p.cy - HITCH_OFF * Math.sin(p.th) };
-    p.tt = Math.atan2(hw.y - p.try, hw.x - p.trx);
-    const β2 = normAngle(p.th - p.tt);
-    if (Math.abs(β2) > MAX_ART) p.tt = p.th - Math.sign(β2) * MAX_ART;
+    const tt  = Math.atan2(hw.y - p.try, hw.x - p.trx);
+    if (Math.abs(normAngle(p.th - tt)) > MAX_ART) break;   // stop at articulation limit
+    p.tt  = tt;
     p.trx = hw.x - TRL_WB * Math.cos(p.tt);
     p.try = hw.y - TRL_WB * Math.sin(p.tt);
-    cab.push({ x: p.cx, y: p.cy, th: p.th });
-    trl.push({ x: p.trx, y: p.try, tt: p.tt });
+    cab.push({ x: p.cx,  y: p.cy,  th: p.th });
+    trl.push({ x: p.trx, y: p.try, th: p.tt });
   }
   return { cab, trl };
 }
 
-// arrowDir: +1 = arrow at front face (forward travel), -1 = arrow at rear face (reverse travel)
+function drawTrailWithArrows(pts, color, travelDir) {
+  if (pts.length < 2) return;
+  ctx.save();
+
+  // dashed polyline
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 5]);
+  ctx.globalAlpha = 0.3;
+  ctx.beginPath();
+  ctx.moveTo(wx(pts[0].x), wy(pts[0].y));
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(wx(pts[i].x), wy(pts[i].y));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // direction chevrons every ARROW_EVERY metres
+  const stepDist = PROJ_DIST / PROJ_STEPS;
+  const gap = Math.max(1, Math.round(ARROW_EVERY / stepDist));
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = color;
+  for (let i = gap; i < pts.length; i += gap) {
+    const p   = pts[i];
+    const ang = p.th + (travelDir < 0 ? Math.PI : 0);
+    const sz  = 0.22 * SCALE;
+    ctx.save();
+    ctx.translate(wx(p.x), wy(p.y));
+    ctx.rotate(ang);
+    ctx.beginPath();
+    ctx.moveTo(sz, 0);
+    ctx.lineTo(-sz * 0.55, -sz * 0.42);
+    ctx.lineTo(-sz * 0.55,  sz * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 function drawGhostRect(x, y, heading, length, frontOver, width, color, alpha, arrowDir) {
   const rearLen = length - frontOver;
   ctx.save();
@@ -175,10 +264,10 @@ function drawGhostRect(x, y, heading, length, frontOver, width, color, alpha, ar
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
   ctx.stroke();
-  // direction chevron on the leading face
+  // direction arrow on the leading face
   const tipX  = (arrowDir > 0 ? frontOver : -rearLen) * SCALE;
-  const baseX = tipX - arrowDir * 0.6 * SCALE;
-  const aw    = 0.28 * SCALE;
+  const baseX = tipX - arrowDir * 0.55 * SCALE;
+  const aw    = 0.26 * SCALE;
   ctx.beginPath();
   ctx.moveTo(tipX, 0);
   ctx.lineTo(baseX, -aw);
@@ -189,22 +278,28 @@ function drawGhostRect(x, y, heading, length, frontOver, width, color, alpha, ar
   ctx.restore();
 }
 
-const GHOST_COUNT = 10;
-const GHOST_DIST  = 20;
-const GHOST_STEPS = 80;   // 0.25 m/step
-
-function drawGhosts(s) {
-  const cabFront = CAB_LEN - CAB_ROVER;
-  const trlFront = TRL_LEN - TRL_ROVER;
+function drawProjection(s) {
+  const cabFront = CAB_LEN  - CAB_ROVER;
+  const trlFront = TRL_LEN  - TRL_ROVER;
   for (const [dir, cabCol, trlCol] of [[1, '#4af', '#2b8'], [-1, '#f84', '#f42']]) {
-    const path = simPath(s, s.steer, dir * GHOST_DIST, GHOST_STEPS);
-    for (let g = 1; g <= GHOST_COUNT; g++) {
-      const idx   = Math.round(g / GHOST_COUNT * GHOST_STEPS);
-      const alpha = 0.55 - 0.04 * (g - 1);   // 0.55 → 0.19, nearest to farthest
-      const c = path.cab[idx];
-      const t = path.trl[idx];
-      drawGhostRect(c.x, c.y, c.th, CAB_LEN, cabFront, CAB_WID, cabCol, alpha,  dir);
-      drawGhostRect(t.x, t.y, t.tt, TRL_LEN, trlFront, TRL_WID, trlCol, alpha,  dir);
+    const path = simPath(s, s.steer, dir * PROJ_DIST, PROJ_STEPS);
+    const n    = path.cab.length;
+
+    if (showTrail) {
+      drawTrailWithArrows(path.cab, cabCol, dir);
+      drawTrailWithArrows(path.trl, trlCol, dir);
+    }
+
+    if (showGhosts && n > 1) {
+      for (let g = 1; g <= GHOST_COUNT; g++) {
+        const idx   = Math.min(Math.round(g / GHOST_COUNT * (n - 1)), n - 1);
+        const alpha = 0.55 - 0.04 * (g - 1);
+        const c = path.cab[idx];
+        const t = path.trl[idx];
+        if (!c || !t) continue;
+        drawGhostRect(c.x, c.y, c.th, CAB_LEN, cabFront, CAB_WID, cabCol, alpha, dir);
+        drawGhostRect(t.x, t.y, t.th, TRL_LEN, trlFront, TRL_WID, trlCol, alpha, dir);
+      }
     }
   }
 }
@@ -213,28 +308,21 @@ function drawGhosts(s) {
 function wx(x) { return x * SCALE; }
 function wy(y) { return y * SCALE; }
 
-function drawRect(x, y, heading, length, frontOver, width, color, borderColor) {
-  // x,y = rear axle. frontOver = distance forward from rear axle. length backwards from that.
+function drawRect(x, y, heading, length, frontOver, width, fill, stroke) {
   ctx.save();
   ctx.translate(wx(x), wy(y));
   ctx.rotate(heading);
   ctx.beginPath();
-  // from -(length - frontOver) behind rear axle to +frontOver in front
-  const rearLen = length - frontOver;
-  ctx.rect(-rearLen * SCALE, -width / 2 * SCALE, length * SCALE, width * SCALE);
-  ctx.fillStyle = color;
+  ctx.rect(-(length - frontOver) * SCALE, -width / 2 * SCALE, length * SCALE, width * SCALE);
+  ctx.fillStyle = fill;
   ctx.fill();
-  if (borderColor) { ctx.strokeStyle = borderColor; ctx.lineWidth = 1; ctx.stroke(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
   ctx.restore();
 }
 
 function drawCab(s) {
-  // cab rear axle = (s.cx, s.cy)
-  // body extends CAB_ROVER back, (CAB_LEN - CAB_ROVER) forward
   const frontOver = CAB_LEN - CAB_ROVER;
   drawRect(s.cx, s.cy, s.th, CAB_LEN, frontOver, CAB_WID, '#1a2a4a', '#4a6a9a');
-
-  // windscreen line
   ctx.save();
   ctx.translate(wx(s.cx), wy(s.cy));
   ctx.rotate(s.th);
@@ -243,25 +331,21 @@ function drawCab(s) {
   ctx.beginPath();
   const wsy = CAB_WID * 0.5 * 0.7 * SCALE;
   const wsx = (frontOver - 0.8) * SCALE;
-  ctx.moveTo(wsx, -wsy);
-  ctx.lineTo(wsx,  wsy);
+  ctx.moveTo(wsx, -wsy); ctx.lineTo(wsx, wsy);
   ctx.stroke();
   ctx.restore();
 }
 
 function drawTrailer(s) {
-  // trailer rear axle = (s.trx, s.try)
   const frontOver = TRL_LEN - TRL_ROVER;
   drawRect(s.trx, s.try, s.tt, TRL_LEN, frontOver, TRL_WID, '#888880', '#aaa');
-
-  // rear door seam
   ctx.save();
   ctx.translate(wx(s.trx), wy(s.try));
   ctx.rotate(s.tt);
   ctx.strokeStyle = '#555';
   ctx.lineWidth = 1;
-  ctx.beginPath();
   const hw2 = TRL_WID * 0.5 * SCALE;
+  ctx.beginPath();
   ctx.moveTo(-TRL_ROVER * SCALE, -hw2);
   ctx.lineTo(-TRL_ROVER * SCALE,  hw2);
   ctx.stroke();
@@ -279,8 +363,6 @@ function drawHitch(s) {
 function drawGround() {
   ctx.fillStyle = '#1e2830';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // faint grid
   ctx.strokeStyle = '#252f38';
   ctx.lineWidth = 0.5;
   for (let x = 0; x <= WORLD_W; x += 5) {
@@ -293,29 +375,28 @@ function drawGround() {
 
 function jackknife() {
   let a = (state.th - state.tt) * 180 / Math.PI;
-  // normalise to -180..180
-  while (a > 180) a -= 360;
+  while (a >  180) a -= 360;
   while (a < -180) a += 360;
   return a;
 }
 
 function updateHUD() {
-  const jk = jackknife();
-  const warn = Math.abs(jk) > 30;
-  const el = document.getElementById('hud-text');
+  const jk   = jackknife();
+  const warn  = Math.abs(jk) > 30;
+  const el    = document.getElementById('hud-text');
   const suffix = state.blocked ? '  ✖ BLOCKED' : (warn ? '  ⚠ JACKKNIFE' : '');
-  el.textContent = `speed: ${state.speed.toFixed(1)} m/s  |  steer: ${(state.steer*180/Math.PI).toFixed(0)}°  |  jackknife: ${jk.toFixed(0)}°${suffix}`;
+  el.textContent = `speed: ${state.speed.toFixed(1)} m/s  |  steer: ${(state.steer * 180 / Math.PI).toFixed(0)}°  |  jackknife: ${jk.toFixed(0)}°${suffix}`;
   el.style.color = state.blocked ? '#f55' : (warn ? '#fa0' : '#888');
 }
 
-// ─── loop ─────────────────────────────────────────────────────────────────────
+// ─── loop ────────────────────────────────────────────────────────────────────
 let last = null;
 function loop(ts) {
   const dt = last ? Math.min((ts - last) / 1000, 0.05) : 0;
   last = ts;
   step(dt);
   drawGround();
-  drawGhosts(state);
+  drawProjection(state);
   drawTrailer(state);
   drawCab(state);
   drawHitch(state);
@@ -327,10 +408,57 @@ function loop(ts) {
 document.addEventListener('keydown', e => {
   keys[e.key] = true;
   if (e.key === 'r' || e.key === 'R') reset();
-  // prevent page scroll from arrows
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
 });
 document.addEventListener('keyup', e => { keys[e.key] = false; });
+
+// ─── panel wiring ────────────────────────────────────────────────────────────
+function wire(id, callback) {
+  document.getElementById(id).addEventListener('input', callback);
+}
+
+wire('showGhosts', e => { showGhosts = e.target.checked; });
+wire('showTrail',  e => { showTrail  = e.target.checked; });
+
+wire('projDist',   e => {
+  PROJ_DIST  = +e.target.value;
+  PROJ_STEPS = Math.round(PROJ_DIST / 0.25);
+  document.getElementById('projDistVal').textContent = PROJ_DIST + ' m';
+});
+wire('ghostCount', e => {
+  GHOST_COUNT = +e.target.value;
+  document.getElementById('ghostCountVal').textContent = GHOST_COUNT;
+});
+wire('arrowEvery', e => {
+  ARROW_EVERY = +e.target.value;
+  document.getElementById('arrowEveryVal').textContent = ARROW_EVERY + ' m';
+});
+wire('maxSteer', e => {
+  MAX_STEER = +e.target.value * Math.PI / 180;
+  state.steer = Math.max(-MAX_STEER, Math.min(MAX_STEER, state.steer));
+  document.getElementById('maxSteerVal').textContent = e.target.value + '°';
+});
+wire('maxArt', e => {
+  MAX_ART = +e.target.value * Math.PI / 180;
+  document.getElementById('maxArtVal').textContent = e.target.value + '°';
+});
+wire('cabWb', e => {
+  CAB_WB = +e.target.value;
+  document.getElementById('cabWbVal').textContent = CAB_WB.toFixed(1) + ' m';
+});
+wire('trlWb', e => {
+  TRL_WB  = +e.target.value;
+  TRL_LEN = TRL_WB + TRL_ROVER + 0.2;
+  // reposition trailer to match new length
+  const hw = hitch(state);
+  state.trx = hw.x - TRL_WB * Math.cos(state.tt);
+  state.try = hw.y - TRL_WB * Math.sin(state.tt);
+  document.getElementById('trlWbVal').textContent = TRL_WB.toFixed(1) + ' m';
+});
+wire('hitchOff', e => {
+  HITCH_OFF = +e.target.value;
+  document.getElementById('hitchOffVal').textContent = HITCH_OFF.toFixed(1) + ' m';
+});
 
 // ─── start ───────────────────────────────────────────────────────────────────
 reset();
