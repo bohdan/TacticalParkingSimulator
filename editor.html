@@ -285,7 +285,7 @@ function newLevel(){
       { x:0, y:10.5, w:22, h:2.5, kind:'curb' },
       { x:0, y:0,    w:22, h:1.6, kind:'curb' },
     ],
-    cars:[], traffic:[],
+    cars:[], traffic:[], markings:[],
     hint:'', solution:[],
   };
 }
@@ -310,6 +310,7 @@ function normalizeLevel(lv){
     walls:(lv.walls||[]).map(w=>({...w})),
     cars:(lv.cars||[]).map(c=>({...c})),
     traffic:(lv.traffic||[]).map(t=>({...t})),
+    markings:(lv.markings||[]).map(m=>({...m})),
     ...(lv.par != null ? { par: lv.par } : {}),
     ...(lv.draft ? { draft: true } : {}),
     hint:lv.hint||'',
@@ -621,6 +622,20 @@ function render(){
   ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=2*p;
   ctx.strokeRect(0,0,L.w,L.h);
 
+  // Lane markings (drawn before goal/obstacles so they appear on the asphalt)
+  if(L.markings&&L.markings.length){
+    ctx.lineCap='butt';
+    for(let i=0;i<L.markings.length;i++){
+      const m=L.markings[i]; if(m.type!=='lane') continue;
+      const isSel=sel&&sel.kind==='marking'&&sel.idx===i;
+      ctx.strokeStyle=isSel?'#7ec8ff':'rgba(255,255,255,0.72)';
+      ctx.lineWidth=isSel?0.12:0.08;
+      ctx.setLineDash([0.8,0.6]);
+      ctx.beginPath(); ctx.moveTo(m.x1,m.y1); ctx.lineTo(m.x2,m.y2); ctx.stroke();
+    }
+    ctx.setLineDash([]); ctx.lineCap='round';
+  }
+
   // Goal zone (matches game)
   const g=L.goal, ga=g.ang||0;
   ctx.save();
@@ -720,12 +735,17 @@ function render(){
     }
   }
 
-  // Wall drawing preview
+  // Drawing preview
   if(drawRect){
     const {ax,ay,bx,by}=drawRect;
-    const x=Math.min(ax,bx),y=Math.min(ay,by),w=Math.abs(bx-ax),h=Math.abs(by-ay);
     ctx.strokeStyle='#ffe040';ctx.lineWidth=2*p;ctx.setLineDash([.3,.2]);
-    ctx.strokeRect(x,y,w,h);ctx.setLineDash([]);
+    if(drawRect.isLine){
+      ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke();
+    } else {
+      const x=Math.min(ax,bx),y=Math.min(ay,by),w=Math.abs(bx-ax),h=Math.abs(by-ay);
+      ctx.strokeRect(x,y,w,h);
+    }
+    ctx.setLineDash([]);
   }
 }
 
@@ -882,6 +902,13 @@ function hitObjHandles(wx,wy){
   return null;
 }
 
+function ptToSegDist(px,py,ax,ay,bx,by){
+  const dx=bx-ax,dy=by-ay,len2=dx*dx+dy*dy;
+  if(len2<1e-6) return Math.hypot(px-ax,py-ay);
+  const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/len2));
+  return Math.hypot(px-ax-t*dx,py-ay-t*dy);
+}
+
 function hitTestAll(wx,wy){
   // cars (reverse order = top first)
   for(let i=L.cars.length-1;i>=0;i--){
@@ -904,6 +931,11 @@ function hitTestAll(wx,wy){
   for(let i=L.walls.length-1;i>=0;i--){
     const b=wallBounds(L.walls[i]);
     if(ptInOBB(wx,wy,b.cx,b.cy,b.w,b.h,b.ang)) return {kind:'wall',idx:i};
+  }
+  // markings — click within 0.3 m of the line
+  if(L.markings) for(let i=L.markings.length-1;i>=0;i--){
+    const m=L.markings[i];
+    if(m.type==='lane'&&ptToSegDist(wx,wy,m.x1,m.y1,m.x2,m.y2)<0.3) return {kind:'marking',idx:i};
   }
   return null;
 }
@@ -960,6 +992,11 @@ cv.addEventListener('pointerdown', e=>{
       L.traffic.push({x:snapW(mw.x),y:snapW(mw.y),h:0,speed:4,loop:30,offset:0});
       sel={kind:'traffic',idx:L.traffic.length-1};
       markDirty(); updateSidebar(); render(); return;
+    }
+    // lane divider: start line drag
+    if(tool==='lane'){
+      drawRect={ax:mw.x,ay:mw.y,bx:mw.x,by:mw.y,isLine:true};
+      return;
     }
     // wall / curb: start drag
     drawRect={ax:snapW(mw.x),ay:snapW(mw.y),bx:snapW(mw.x),by:snapW(mw.y)};
@@ -1111,12 +1148,20 @@ cv.addEventListener('pointerup', e=>{
   if(panning){panning=false; panOrigin=null; return;}
   if(drawRect){
     const {ax,ay,bx,by}=drawRect;
-    const x=Math.min(ax,bx),y=Math.min(ay,by),w=Math.abs(bx-ax),h=Math.abs(by-ay);
-    if(w>.2&&h>.2){
-      const kind=tool==='curb'?'curb':'wall';
-      L.walls.push({x,y,w,h,kind});
-      sel={kind:'wall',idx:L.walls.length-1};
-      markDirty(); updateSidebar();
+    if(drawRect.isLine){
+      if(Math.hypot(bx-ax,by-ay)>0.2){
+        L.markings.push({type:'lane',x1:ax,y1:ay,x2:bx,y2:by});
+        sel={kind:'marking',idx:L.markings.length-1};
+        markDirty(); updateSidebar();
+      }
+    } else {
+      const x=Math.min(ax,bx),y=Math.min(ay,by),w=Math.abs(bx-ax),h=Math.abs(by-ay);
+      if(w>.2&&h>.2){
+        const kind=tool==='curb'?'curb':'wall';
+        L.walls.push({x,y,w,h,kind});
+        sel={kind:'wall',idx:L.walls.length-1};
+        markDirty(); updateSidebar();
+      }
     }
     drawRect=null; render(); return;
   }
@@ -1153,20 +1198,22 @@ document.addEventListener('keydown', e=>{
   if(e.key==='c'||e.key==='C') setTool('curb');
   if(e.key==='a'||e.key==='A') setTool('car');
   if(e.key==='t'||e.key==='T') setTool('traffic');
+  if(e.key==='l'||e.key==='L') setTool('lane');
   if(e.key==='f'||e.key==='F'){ fitLevel(); render(); }
 });
 
 function deleteSelected(){
   if(!sel) return;
-  if(sel.kind==='wall')  L.walls.splice(sel.idx,1);
-  if(sel.kind==='car')   L.cars.splice(sel.idx,1);
+  if(sel.kind==='wall')    L.walls.splice(sel.idx,1);
+  if(sel.kind==='car')     L.cars.splice(sel.idx,1);
   if(sel.kind==='traffic') L.traffic.splice(sel.idx,1);
+  if(sel.kind==='marking') L.markings.splice(sel.idx,1);
   markDirty();
   sel=null; drag=null; updateSidebar(); render();
 }
 
 // ── Tool buttons ─────────────────────────────────────────────────────────────
-const ADD_NAMES={wall:'Wall',curb:'Curb',car:'Car',traffic:'Traffic'};
+const ADD_NAMES={wall:'Wall',curb:'Curb',car:'Car',traffic:'Traffic',lane:'Lane div.'};
 function setTool(t){
   tool=t;
   document.getElementById('toolSelect').classList.toggle('active',t==='select');
@@ -1434,6 +1481,13 @@ function updateSelPanel(){
     html+=row('loop', `<input type=number step=1   id=seLoop   value="${t.loop||30}">`);
     html+=row('offset',`<input type=number step=1  id=seOffset value="${t.offset||0}">`);
     html+=row('color',`<input type=text id=seColor value="${t.color||''}" placeholder="#4e5a6e">`);
+  } else if(sel.kind==='marking'){
+    const m=L.markings[sel.idx];
+    html+=`<p class="sel-hint" style="margin:0 0 6px">Lane divider</p>`;
+    html+=row('x1',`<input type=number step=.1 id=seMx1 value="${fmt(m.x1)}">`);
+    html+=row('y1',`<input type=number step=.1 id=seMy1 value="${fmt(m.y1)}">`);
+    html+=row('x2',`<input type=number step=.1 id=seMx2 value="${fmt(m.x2)}">`);
+    html+=row('y2',`<input type=number step=.1 id=seMy2 value="${fmt(m.y2)}">`);
   }
   html+=`<button class="danger" style="width:100%;margin-top:8px" id="btnDel">Delete</button>`;
   panel.innerHTML=html;
@@ -1459,6 +1513,10 @@ function updateSelPanel(){
     liv('seAng',v=>{t.h=rad(v);render();}); liv('seSpeed',v=>t.speed=v);
     liv('seLoop',v=>t.loop=v); liv('seOffset',v=>t.offset=v);
     lis('seColor',v=>{t.color=v;render();});
+  } else if(sel.kind==='marking'){
+    const m=L.markings[sel.idx];
+    liv('seMx1',v=>{m.x1=v;render();}); liv('seMy1',v=>{m.y1=v;render();});
+    liv('seMx2',v=>{m.x2=v;render();}); liv('seMy2',v=>{m.y2=v;render();});
   }
 }
 
@@ -1776,6 +1834,14 @@ function buildExport(lv=L){
       let ts=`{ x: ${fn(t.x)}, y: ${fn(t.y)}, h: ${fmtRad(t.h)}, speed: ${t.speed||4}, loop: ${t.loop||30}, offset: ${t.offset||0}`;
       if(t.color) ts+=`, color: ${JSON.stringify(t.color)}`;
       lines.push(`      ${ts} },`);
+    }
+    lines.push(`    ],`);
+  }
+  if(l.markings&&l.markings.length){
+    lines.push(`    markings: [`);
+    for(const m of l.markings){
+      if(m.type==='lane')
+        lines.push(`      { type: 'lane', x1: ${fn(m.x1)}, y1: ${fn(m.y1)}, x2: ${fn(m.x2)}, y2: ${fn(m.y2)} },`);
     }
     lines.push(`    ],`);
   }

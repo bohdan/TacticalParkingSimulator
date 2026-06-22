@@ -884,6 +884,21 @@ function draw(now) {
   for (let y = 1; y < level.h; y++) { ctx.moveTo(0, y); ctx.lineTo(level.w, y); }
   ctx.stroke();
 
+  // lane markings (cosmetic, no collision)
+  if (level.markings && level.markings.length) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 0.08;
+    ctx.lineCap = 'butt';
+    ctx.setLineDash([0.8, 0.6]);
+    for (const m of level.markings) {
+      if (m.type !== 'lane') continue;
+      ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   // goal zone — yellow normally, green once the car will come to rest parked
   const g = level.goal;
   const gPoly = goalPoly(g);
