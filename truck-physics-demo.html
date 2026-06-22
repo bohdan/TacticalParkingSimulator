@@ -144,8 +144,8 @@ function step(dt) {
 function simPath(s, steer, totalDist, steps) {
   let p = { cx: s.cx, cy: s.cy, th: s.th, tt: s.tt, trx: s.trx, try: s.try };
   const ds = totalDist / steps;
-  const cab = [{ x: p.cx, y: p.cy }];
-  const trl = [{ x: p.trx, y: p.try }];
+  const cab = [{ x: p.cx, y: p.cy, th: p.th }];
+  const trl = [{ x: p.trx, y: p.try, tt: p.tt }];
   for (let i = 0; i < steps; i++) {
     p.th += (Math.abs(steer) > 0.0001 ? Math.tan(steer) / CAB_WB * ds : 0);
     p.cx += Math.cos(p.th) * ds;
@@ -156,33 +156,43 @@ function simPath(s, steer, totalDist, steps) {
     if (Math.abs(β2) > MAX_ART) p.tt = p.th - Math.sign(β2) * MAX_ART;
     p.trx = hw.x - TRL_WB * Math.cos(p.tt);
     p.try = hw.y - TRL_WB * Math.sin(p.tt);
-    cab.push({ x: p.cx, y: p.cy });
-    trl.push({ x: p.trx, y: p.try });
+    cab.push({ x: p.cx, y: p.cy, th: p.th });
+    trl.push({ x: p.trx, y: p.try, tt: p.tt });
   }
   return { cab, trl };
 }
 
-function drawPath(pts, color) {
-  if (pts.length < 2) return;
+function drawGhostRect(x, y, heading, length, frontOver, width, color, alpha) {
   ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([4, 6]);
-  ctx.globalAlpha = 0.45;
+  ctx.globalAlpha = alpha;
+  ctx.translate(wx(x), wy(y));
+  ctx.rotate(heading);
   ctx.beginPath();
-  ctx.moveTo(wx(pts[0].x), wy(pts[0].y));
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(wx(pts[i].x), wy(pts[i].y));
+  ctx.rect(-(length - frontOver) * SCALE, -width / 2 * SCALE, length * SCALE, width * SCALE);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
 }
 
-function drawPaths(s) {
-  const fwd = simPath(s, s.steer,  20, 40);
-  const bwd = simPath(s, s.steer, -20, 40);
-  drawPath(fwd.cab, '#4af');
-  drawPath(fwd.trl, '#2b8');
-  drawPath(bwd.cab, '#f84');
-  drawPath(bwd.trl, '#f42');
+const GHOST_COUNT = 5;
+const GHOST_DIST  = 20;
+const GHOST_STEPS = 40;
+
+function drawGhosts(s) {
+  const cabFront = CAB_LEN - CAB_ROVER;
+  const trlFront = TRL_LEN - TRL_ROVER;
+  for (const [dir, cabCol, trlCol] of [[1, '#4af', '#2b8'], [-1, '#f84', '#f42']]) {
+    const path = simPath(s, s.steer, dir * GHOST_DIST, GHOST_STEPS);
+    for (let g = 1; g <= GHOST_COUNT; g++) {
+      const idx = Math.round(g / GHOST_COUNT * GHOST_STEPS);
+      const alpha = 0.55 - 0.08 * (g - 1);   // 0.55 → 0.23, nearest to farthest
+      const c = path.cab[idx];
+      const t = path.trl[idx];
+      drawGhostRect(c.x, c.y, c.th, CAB_LEN, cabFront, CAB_WID, cabCol, alpha);
+      drawGhostRect(t.x, t.y, t.tt, TRL_LEN, trlFront, TRL_WID, trlCol, alpha);
+    }
+  }
 }
 
 // ─── rendering ───────────────────────────────────────────────────────────────
@@ -291,7 +301,7 @@ function loop(ts) {
   last = ts;
   step(dt);
   drawGround();
-  drawPaths(state);
+  drawGhosts(state);
   drawTrailer(state);
   drawCab(state);
   drawHitch(state);
