@@ -215,7 +215,7 @@ function simPath(s, steer, totalDist, steps) {
   return { cab, trl };
 }
 
-function drawTrailWithArrows(pts, color, travelDir) {
+function drawTrailWithArrows(pts, color) {
   if (pts.length < 2) return;
   ctx.save();
 
@@ -237,7 +237,7 @@ function drawTrailWithArrows(pts, color, travelDir) {
   ctx.fillStyle = color;
   for (let i = gap; i < pts.length; i += gap) {
     const p   = pts[i];
-    const ang = p.th + (travelDir < 0 ? Math.PI : 0);
+    const ang = p.th;
     const sz  = 0.22 * SCALE;
     ctx.save();
     ctx.translate(wx(p.x), wy(p.y));
@@ -286,8 +286,8 @@ function drawProjection(s) {
     const n    = path.cab.length;
 
     if (showTrail) {
-      drawTrailWithArrows(path.cab, cabCol, dir);
-      drawTrailWithArrows(path.trl, trlCol, dir);
+      drawTrailWithArrows(path.cab, cabCol);
+      drawTrailWithArrows(path.trl, trlCol);
     }
 
     if (showGhosts && n > 1) {
