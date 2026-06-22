@@ -115,6 +115,7 @@ button.nav{padding:4px 8px;font-weight:700}
       <button class="add-opt" data-tool="car">+ Car <span class="add-key">A</span></button>
       <button class="add-opt" data-tool="traffic">+ Traffic <span class="add-key">T</span></button>
       <button class="add-opt" data-tool="lane">+ Lane div. <span class="add-key">L</span></button>
+      <button class="add-opt" data-tool="bay">+ Bay line <span class="add-key">B</span></button>
     </div>
   </div>
   <div class="sep edit-only"></div>
@@ -630,12 +631,12 @@ function render(){
   if(L.markings&&L.markings.length){
     ctx.lineCap='butt';
     for(let i=0;i<L.markings.length;i++){
-      const m=L.markings[i]; if(m.type!=='lane') continue;
+      const m=L.markings[i]; if(m.type!=='lane'&&m.type!=='bay') continue;
       const {x1,y1,x2,y2}=markingSeg(m);
       const isSel=sel&&sel.kind==='marking'&&sel.idx===i;
       ctx.strokeStyle=isSel?'#7ec8ff':'rgba(255,255,255,0.85)';
       ctx.lineWidth=isSel?0.14:0.10;
-      ctx.setLineDash([1.0,1.0]);
+      ctx.setLineDash(m.type==='lane'?[1.0,1.0]:[]);
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
     }
     ctx.setLineDash([]); ctx.lineCap='round';
@@ -940,7 +941,7 @@ function hitTestAll(wx,wy){
   // markings — click within 0.3 m of the line
   if(L.markings) for(let i=L.markings.length-1;i>=0;i--){
     const m=L.markings[i];
-    if(m.type==='lane'){const s=markingSeg(m);if(ptToSegDist(wx,wy,s.x1,s.y1,s.x2,s.y2)<0.3)return{kind:'marking',idx:i};}
+    if((m.type==='lane'||m.type==='bay')){const s=markingSeg(m);if(ptToSegDist(wx,wy,s.x1,s.y1,s.x2,s.y2)<0.3)return{kind:'marking',idx:i};}
   }
   return null;
 }
@@ -998,9 +999,9 @@ cv.addEventListener('pointerdown', e=>{
       sel={kind:'traffic',idx:L.traffic.length-1};
       markDirty(); updateSidebar(); render(); return;
     }
-    // lane divider: start line drag
-    if(tool==='lane'){
-      drawRect={ax:mw.x,ay:mw.y,bx:mw.x,by:mw.y,isLine:true};
+    // lane divider / bay separator: start line drag
+    if(tool==='lane'||tool==='bay'){
+      drawRect={ax:mw.x,ay:mw.y,bx:mw.x,by:mw.y,isLine:true,lineType:tool};
       return;
     }
     // wall / curb: start drag
@@ -1165,7 +1166,7 @@ cv.addEventListener('pointerup', e=>{
         const snap15=Math.PI/12;
         const ang=Math.round(rawAng/snap15)*snap15;
         const len=+rawLen.toFixed(2);
-        L.markings.push({type:'lane',x:ax,y:ay,len,ang});
+        L.markings.push({type:drawRect.lineType||'lane',x:ax,y:ay,len,ang});
         sel={kind:'marking',idx:L.markings.length-1};
         markDirty(); updateSidebar();
       }
@@ -1214,6 +1215,7 @@ document.addEventListener('keydown', e=>{
   if(e.key==='a'||e.key==='A') setTool('car');
   if(e.key==='t'||e.key==='T') setTool('traffic');
   if(e.key==='l'||e.key==='L') setTool('lane');
+  if(e.key==='b'||e.key==='B') setTool('bay');
   if(e.key==='f'||e.key==='F'){ fitLevel(); render(); }
 });
 
@@ -1228,7 +1230,7 @@ function deleteSelected(){
 }
 
 // ── Tool buttons ─────────────────────────────────────────────────────────────
-const ADD_NAMES={wall:'Wall',curb:'Curb',car:'Car',traffic:'Traffic',lane:'Lane div.'};
+const ADD_NAMES={wall:'Wall',curb:'Curb',car:'Car',traffic:'Traffic',lane:'Lane div.',bay:'Bay line'};
 function setTool(t){
   tool=t;
   document.getElementById('toolSelect').classList.toggle('active',t==='select');
@@ -1498,7 +1500,7 @@ function updateSelPanel(){
     html+=row('color',`<input type=text id=seColor value="${t.color||''}" placeholder="#4e5a6e">`);
   } else if(sel.kind==='marking'){
     const m=L.markings[sel.idx];
-    html+=`<p class="sel-hint" style="margin:0 0 6px">Lane divider</p>`;
+    html+=`<p class="sel-hint" style="margin:0 0 6px">${m.type==='bay'?'Bay separator':'Lane divider'}</p>`;
     html+=row('x',   `<input type=number step=.1  id=seMx   value="${fmt(m.x)}">`);
     html+=row('y',   `<input type=number step=.1  id=seMy   value="${fmt(m.y)}">`);
     html+=row('len', `<input type=number step=.1 min=.1 id=seMLen value="${fmt(m.len)}">`);
@@ -1857,8 +1859,8 @@ function buildExport(lv=L){
   if(l.markings&&l.markings.length){
     lines.push(`    markings: [`);
     for(const m of l.markings){
-      if(m.type==='lane')
-        lines.push(`      { type: 'lane', x: ${fn(m.x)}, y: ${fn(m.y)}, len: ${fn(m.len)}, ang: ${fmtRad(m.ang)} },`);
+      if(m.type==='lane'||m.type==='bay')
+        lines.push(`      { type: '${m.type}', x: ${fn(m.x)}, y: ${fn(m.y)}, len: ${fn(m.len)}, ang: ${fmtRad(m.ang)} },`);
     }
     lines.push(`    ],`);
   }

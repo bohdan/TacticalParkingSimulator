@@ -892,12 +892,14 @@ function draw(now) {
     ctx.lineCap = 'butt';
     ctx.setLineDash([1.0, 1.0]);
     for (const m of level.markings) {
-      if (m.type !== 'lane') continue;
+      if (m.type !== 'lane' && m.type !== 'bay') continue;
+      ctx.setLineDash(m.type === 'lane' ? [1.0, 1.0] : []);
       ctx.beginPath();
       ctx.moveTo(m.x, m.y);
       ctx.lineTo(m.x + Math.cos(m.ang) * m.len, m.y + Math.sin(m.ang) * m.len);
       ctx.stroke();
     }
+    ctx.setLineDash([]);
     ctx.setLineDash([]);
     ctx.restore();
   }
