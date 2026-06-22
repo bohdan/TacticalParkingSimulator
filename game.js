@@ -887,7 +887,7 @@ function draw(now) {
   // lane markings (cosmetic, no collision)
   if (level.markings && level.markings.length) {
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 0.10;
     ctx.lineCap = 'butt';
     ctx.setLineDash([1.0, 1.0]);
