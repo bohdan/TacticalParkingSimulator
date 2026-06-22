@@ -487,7 +487,7 @@ const LEVELS = [
       { cx: 20.1, cy: 8.6, h: -2.4062 },
     ],
     hint: "Park on a curve",
-    solution: [{ steer: 0, dist: 4 }, { steer: 6, dist: 9 }, { steer: 35, dist: 2.5 }, { steer: -35, dist: -2.5 }, { steer: 22, dist: 0.7 }, { steer: -35, dist: -1.4 }, { steer: 35, dist: 1.4 }, { steer: -35, dist: -1.4 }, { steer: 35, dist: 1.4 }, { steer: -22, dist: -2.5 }, { steer: 13, dist: 0.9 }],
+    solution: [{ steer: 0, dist: 4 }, { steer: 6, dist: 9.05 }, { steer: 34.8, dist: 2.5 }, { steer: -34.8, dist: -2.5 }, { steer: 22, dist: 0.7 }, { steer: -35, dist: -1.4 }, { steer: 35, dist: 1.4 }, { steer: -35, dist: -1.4 }, { steer: 35, dist: 1.4 }, { steer: -22, dist: -2.5 }, { steer: 13, dist: 0.9 }],
   },
   {
     id: "bg95m2",
