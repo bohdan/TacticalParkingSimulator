@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Truck Physics Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; display: flex; flex-direction: column; align-items: center;
+         justify-content: center; height: 100vh; font-family: monospace; color: #e0e0e0; }
+  h1 { font-size: 14px; letter-spacing: 3px; text-transform: uppercase;
+       color: #888; margin-bottom: 8px; }
+  #canvas { border: 1px solid #333; cursor: default; }
+  #hud { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+         pointer-events: none; }
+  .info { margin-top: 8px; font-size: 11px; color: #555; text-align: center; }
+  .controls { margin-top: 4px; font-size: 11px; color: #444; }
+</style>
+</head>
+<body>
+<h1>Articulated Truck &mdash; Physics Demo</h1>
+<div style="position:relative; display:inline-block;">
+  <canvas id="canvas"></canvas>
+</div>
+<div class="info">
+  <span id="hud-text">speed: 0.0 m/s &nbsp;|&nbsp; steer: 0° &nbsp;|&nbsp; jackknife: 0°</span>
+</div>
+<div class="controls">W/S or ↑/↓ &nbsp; drive &nbsp;&nbsp; A/D or ←/→ &nbsp; steer &nbsp;&nbsp; R &nbsp; reset</div>
+
+<script>
+"use strict";
+
+// ─── constants ───────────────────────────────────────────────────────────────
+const SCALE    = 14;        // px per metre
+const WORLD_W  = 70;        // metres
+const WORLD_H  = 45;
+
+const CAB_WB   = 4.0;       // cab wheelbase (front axle → rear axle)
+const CAB_LEN  = 5.5;       // total cab body length
+const CAB_WID  = 2.5;
+const CAB_ROVER = 0.8;      // cab rear overhang behind rear axle
+
+const HITCH_OFF = 0.4;      // hitch behind cab rear axle
+
+const TRL_WB   = 8.0;       // kingpin → trailer rear axle
+const TRL_LEN  = 9.0;       // total trailer body length
+const TRL_WID  = 2.5;
+const TRL_ROVER = 0.8;      // trailer rear overhang
+
+const MAX_STEER = 35 * Math.PI / 180;
+const MAX_SPEED = 5.0;      // m/s
+const ACCEL     = 3.0;
+const STEER_RATE = 60 * Math.PI / 180;  // rad/s
+
+// ─── canvas setup ────────────────────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+canvas.width  = WORLD_W * SCALE;
+canvas.height = WORLD_H * SCALE;
+
+// ─── state ───────────────────────────────────────────────────────────────────
+let state, keys = {};
+
+function reset() {
+  state = {
+    // cab rear axle
+    cx: WORLD_W * 0.65,
+    cy: WORLD_H * 0.5,
+    th: Math.PI,          // heading (cab)
+    tt: Math.PI,          // trailer heading
+    speed: 0,
+    steer: 0,
+  };
+  // place trailer rear axle correctly
+  const hw = hitch(state);
+  state.trx = hw.x - TRL_WB * Math.cos(state.tt);
+  state.try = hw.y - TRL_WB * Math.sin(state.tt);
+}
+
+// hitch position (behind cab rear axle)
+function hitch(s) {
+  return {
+    x: s.cx - HITCH_OFF * Math.cos(s.th),
+    y: s.cy - HITCH_OFF * Math.sin(s.th),
+  };
+}
+
+// ─── physics step ────────────────────────────────────────────────────────────
+function step(dt) {
+  // 1. steering input
+  const steerInput = (keys['ArrowLeft'] || keys['a'] || keys['A'] ? -1 : 0)
+                   + (keys['ArrowRight'] || keys['d'] || keys['D'] ? 1 : 0);
+  state.steer += steerInput * STEER_RATE * dt;
+  state.steer = Math.max(-MAX_STEER, Math.min(MAX_STEER, state.steer));
+  if (!steerInput) state.steer *= Math.pow(0.05, dt);  // self-centre
+
+  // 2. speed input
+  const driveInput = (keys['ArrowUp'] || keys['w'] || keys['W'] ? 1 : 0)
+                   + (keys['ArrowDown'] || keys['s'] || keys['S'] ? -1 : 0);
+  state.speed += driveInput * ACCEL * dt;
+  state.speed = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, state.speed));
+  if (!driveInput) state.speed *= Math.pow(0.1, dt);   // friction
+
+  const v = state.speed;
+  const δ = state.steer;
+
+  // 3. cab bicycle model
+  const dth = (Math.abs(δ) > 0.0001)
+    ? v * Math.tan(δ) / CAB_WB * dt
+    : 0;
+  state.th += dth;
+  state.cx += v * Math.cos(state.th) * dt;
+  state.cy += v * Math.sin(state.th) * dt;
+
+  // 4. trailer geometric constraint
+  const hw = hitch(state);
+  const dx = hw.x - state.trx;
+  const dy = hw.y - state.try;
+  state.tt = Math.atan2(dy, dx);
+  state.trx = hw.x - TRL_WB * Math.cos(state.tt);
+  state.try = hw.y - TRL_WB * Math.sin(state.tt);
+
+  // 5. wrap/clamp world bounds
+  state.cx = Math.max(1, Math.min(WORLD_W - 1, state.cx));
+  state.cy = Math.max(1, Math.min(WORLD_H - 1, state.cy));
+}
+
+// ─── rendering ───────────────────────────────────────────────────────────────
+function wx(x) { return x * SCALE; }
+function wy(y) { return y * SCALE; }
+
+function drawRect(x, y, heading, length, frontOver, width, color, borderColor) {
+  // x,y = rear axle. frontOver = distance forward from rear axle. length backwards from that.
+  ctx.save();
+  ctx.translate(wx(x), wy(y));
+  ctx.rotate(heading);
+  ctx.beginPath();
+  // from -(length - frontOver) behind rear axle to +frontOver in front
+  const rearLen = length - frontOver;
+  ctx.rect(-rearLen * SCALE, -width / 2 * SCALE, length * SCALE, width * SCALE);
+  ctx.fillStyle = color;
+  ctx.fill();
+  if (borderColor) { ctx.strokeStyle = borderColor; ctx.lineWidth = 1; ctx.stroke(); }
+  ctx.restore();
+}
+
+function drawCab(s) {
+  // cab rear axle = (s.cx, s.cy)
+  // body extends CAB_ROVER back, (CAB_LEN - CAB_ROVER) forward
+  const frontOver = CAB_LEN - CAB_ROVER;
+  drawRect(s.cx, s.cy, s.th, CAB_LEN, frontOver, CAB_WID, '#1a2a4a', '#4a6a9a');
+
+  // windscreen line
+  ctx.save();
+  ctx.translate(wx(s.cx), wy(s.cy));
+  ctx.rotate(s.th);
+  ctx.strokeStyle = '#6af';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  const wsy = CAB_WID * 0.5 * 0.7 * SCALE;
+  const wsx = (frontOver - 0.8) * SCALE;
+  ctx.moveTo(wsx, -wsy);
+  ctx.lineTo(wsx,  wsy);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawTrailer(s) {
+  // trailer rear axle = (s.trx, s.try)
+  const frontOver = TRL_LEN - TRL_ROVER;
+  drawRect(s.trx, s.try, s.tt, TRL_LEN, frontOver, TRL_WID, '#888880', '#aaa');
+
+  // rear door seam
+  ctx.save();
+  ctx.translate(wx(s.trx), wy(s.try));
+  ctx.rotate(s.tt);
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const hw2 = TRL_WID * 0.5 * SCALE;
+  ctx.moveTo(-TRL_ROVER * SCALE, -hw2);
+  ctx.lineTo(-TRL_ROVER * SCALE,  hw2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawHitch(s) {
+  const hw = hitch(s);
+  ctx.beginPath();
+  ctx.arc(wx(hw.x), wy(hw.y), 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#f55';
+  ctx.fill();
+}
+
+function drawGround() {
+  ctx.fillStyle = '#1e2830';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // faint grid
+  ctx.strokeStyle = '#252f38';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x <= WORLD_W; x += 5) {
+    ctx.beginPath(); ctx.moveTo(wx(x), 0); ctx.lineTo(wx(x), wy(WORLD_H)); ctx.stroke();
+  }
+  for (let y = 0; y <= WORLD_H; y += 5) {
+    ctx.beginPath(); ctx.moveTo(0, wy(y)); ctx.lineTo(wx(WORLD_W), wy(y)); ctx.stroke();
+  }
+}
+
+function jackknife() {
+  let a = (state.th - state.tt) * 180 / Math.PI;
+  // normalise to -180..180
+  while (a > 180) a -= 360;
+  while (a < -180) a += 360;
+  return a;
+}
+
+function updateHUD() {
+  const jk = jackknife();
+  const warn = Math.abs(jk) > 30;
+  const el = document.getElementById('hud-text');
+  el.textContent = `speed: ${state.speed.toFixed(1)} m/s  |  steer: ${(state.steer*180/Math.PI).toFixed(0)}°  |  jackknife: ${jk.toFixed(0)}°${warn ? '  ⚠ JACKKNIFE' : ''}`;
+  el.style.color = warn ? '#f55' : '#888';
+}
+
+// ─── loop ─────────────────────────────────────────────────────────────────────
+let last = null;
+function loop(ts) {
+  const dt = last ? Math.min((ts - last) / 1000, 0.05) : 0;
+  last = ts;
+  step(dt);
+  drawGround();
+  drawTrailer(state);
+  drawCab(state);
+  drawHitch(state);
+  updateHUD();
+  requestAnimationFrame(loop);
+}
+
+// ─── input ───────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (e.key === 'r' || e.key === 'R') reset();
+  // prevent page scroll from arrows
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.key] = false; });
+
+// ─── start ───────────────────────────────────────────────────────────────────
+reset();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
