@@ -181,7 +181,7 @@ const LEVELS = [
       { cx: 7.4, cy: 6.3, h: 0.1756 },
       { cx: 16.9, cy: 11.6, h: 0.9308 },
     ],
-    hint: "Partk on a curve",
+    hint: "Park on a curve",
     solution: [{ steer: 6, dist: 16 }, { steer: -35, dist: 2 }, { steer: 0, dist: -5 }, { steer: -35, dist: -2 }],
   },
   {
@@ -451,7 +451,7 @@ const LEVELS = [
       { cx: 15.7, cy: 1.1, h: 0 },
     ],
     par: 25,
-    hint: "You were clearly in a rush.. you don't remember why.",
+    hint: "You were clearly in a rush... you don't remember why.",
     solution: [{ steer: -25, dist: 5.55 }, { steer: 35, dist: -3.3 }, { steer: 3.2, dist: 3.3 }, { steer: 35, dist: -3 }, { steer: -35, dist: 1.95 }, { steer: 35, dist: -2.1 }, { steer: -35, dist: 0.75 }, { steer: 35, dist: -0.6 }, { steer: -35, dist: 0.66 }, { steer: -3.8, dist: -2 }, { steer: -22, dist: 1.98 }, { steer: 6.4, dist: -1.7 }, { steer: -35, dist: -1.9 }, { steer: 35, dist: 1.25 }, { steer: -31.8, dist: -3.95 }, { steer: -24.2, dist: 2.75 }, { steer: -35, dist: -2.35 }, { steer: -9, dist: -12.6 }, { steer: -35, dist: 4.85 }, { steer: 35, dist: -4.35 }, { steer: -35, dist: 2.35 }, { steer: 35, dist: -1.85 }, { steer: -23.8, dist: 0.3 }],
   },
   {
@@ -486,7 +486,7 @@ const LEVELS = [
       { cx: 10.7, cy: 3.3, h: -165 * Math.PI / 180 },
       { cx: 20.1, cy: 8.6, h: -2.4062 },
     ],
-    hint: "Partk on a curve",
+    hint: "Park on a curve",
     solution: [{ steer: 0, dist: 4 }, { steer: 6, dist: 9 }, { steer: 35, dist: 2.5 }, { steer: -35, dist: -2.5 }, { steer: 22, dist: 0.7 }, { steer: -35, dist: -1.4 }, { steer: 35, dist: 1.4 }, { steer: -35, dist: -1.4 }, { steer: 35, dist: 1.4 }, { steer: -22, dist: -2.5 }, { steer: 13, dist: 0.9 }],
   },
   {
@@ -704,7 +704,7 @@ const LEVELS = [
       { x: 13.5, y: 3.6, w: 0.6, h: 2.8 },
     ],
     cars: [],
-    hint: "The boss comes and demans that you re-park the tractor",
+    hint: "The boss comes and demands that you re-park the tractor",
     solution: [{ steer: 5.8, dist: 10.9 }, { steer: 51, dist: -3.65 }, { steer: -1, dist: 1.6 }, { steer: -52, dist: 2.4 }, { steer: 0.4, dist: 3.6 }],
   },
   {
