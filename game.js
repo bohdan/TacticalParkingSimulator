@@ -2394,7 +2394,7 @@ function _car3D(spec, bodyColorHex, vehicleType) {
   const wGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelThk, 14);
   for (const [axX] of axles) {
     for (const side of [1, -1]) {
-      const wz = side * (wid / 2 + wheelThk / 2);
+      const wz = side * (wid / 2 - wheelThk / 2);
       const wm = new THREE.Mesh(wGeo, wheelMat); wm.rotation.x = Math.PI / 2;
       wm.position.set(axX, wheelR, wz); add(wm);
       const rim = new THREE.Mesh(new THREE.CircleGeometry(wheelR * 0.58, 8), rimMat);
