@@ -99,7 +99,6 @@ function step(dt) {
                    + (keys['ArrowRight'] || keys['d'] || keys['D'] ? 1 : 0);
   state.steer += steerInput * STEER_RATE * dt;
   state.steer = Math.max(-MAX_STEER, Math.min(MAX_STEER, state.steer));
-  if (!steerInput) state.steer *= Math.pow(0.05, dt);  // self-centre
 
   // 2. speed input
   const driveInput = (keys['ArrowUp'] || keys['w'] || keys['W'] ? 1 : 0)
