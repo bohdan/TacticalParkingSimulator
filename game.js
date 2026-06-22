@@ -37,7 +37,7 @@ let testLevelLoaded = false;
     lv._isTest = true;
     LEVELS.unshift(lv);
     testLevelLoaded = true;
-  } catch (e) {}
+  } catch (e) { console.warn('[try] Failed to load test level:', e); }
 })();
 
 /* ===================== Solution encode / decode ===================== */

@@ -2275,7 +2275,10 @@ document.getElementById('saveOverlay').addEventListener('click',e=>{if(e.target=
 // Pass the level via URL hash so it only affects the opened tab (never the
 // persistent game level list).
 document.getElementById('btnTry').onclick=()=>{
-  window.open('index.html#try='+levelToString(L), '_blank');
+  // Strip solver-only fields the game never reads so the URL stays compact
+  // and edge-cases with large solutions arrays can't silently break decoding.
+  const { solutions: _s, ...lvForTry } = L;
+  window.open('index.html#try='+levelToString(lvForTry), '_blank');
 };
 
 // ── Solver ────────────────────────────────────────────────────────────────────
