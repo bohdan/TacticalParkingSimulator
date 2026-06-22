@@ -59,6 +59,10 @@ button.nav{padding:4px 8px;font-weight:700}
 .add-opt:last-child{border-bottom:none}
 .add-opt:hover{background:#1d4f6b}
 .add-key{float:right;color:#5a6a80;font-size:10px;margin-left:12px}
+#measurePanel{width:52px;background:#0e1117;border-right:1px solid #2a3040;flex-shrink:0;position:relative;overflow:hidden;user-select:none}
+.meas-item{position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#4a5a70;border-top:1px solid #1a2030;cursor:default;text-align:center;overflow:hidden;white-space:nowrap}
+.meas-item:hover{background:rgba(61,143,191,0.18);color:#7ec8ff}
+@media(max-width:760px){#measurePanel{display:none}}
 #solveStatus{font-size:11px;color:#7dc87d;display:none;align-self:center}
 .sol-row{gap:3px}
 .sol-row.sol-hot{background:rgba(255,224,64,.08);border-radius:5px}
@@ -131,6 +135,7 @@ button.nav{padding:4px 8px;font-weight:700}
 </div>
 
 <div id="main">
+  <div id="measurePanel"></div>
   <div id="cvWrap"><canvas id="cv"></canvas></div>
   <div id="sidebar">
    <div class="row"><label>Draft</label><label style="flex:1;display:flex;align-items:center;gap:6px;color:#e0b050;font-size:12px"><input id="sDraft" type="checkbox" style="flex:0 0 auto;width:auto"> hidden from the game (editor only)</label></div>
@@ -324,6 +329,50 @@ function normalizeLevel(lv){
 
 // ── View ─────────────────────────────────────────────────────────────────────
 let V = { scale:40, ox:30, oy:30 };
+
+// ── Measurement panel ────────────────────────────────────────────────────────
+let hoveredMeasure = null;
+
+function collectYEdges(){
+  if(!L||isCutscene(L)) return [];
+  const pts=new Set();
+  const add=y=>pts.add(+y.toFixed(3));
+  add(0); add(L.h);
+  for(const w of L.walls){
+    const b=wallBounds(w);
+    const hs=Math.abs(Math.sin(b.ang)),hc=Math.abs(Math.cos(b.ang));
+    const hy=b.w/2*hs+b.h/2*hc;
+    add(b.cy-hy); add(b.cy+hy);
+  }
+  for(const c of L.cars){
+    const sp=carSpec(c);
+    const hs=Math.abs(Math.sin(c.h)),hc=Math.abs(Math.cos(c.h));
+    const hy=sp.len/2*hs+sp.wid/2*hc;
+    add(c.cy-hy); add(c.cy+hy);
+  }
+  return [...pts].map(Number).sort((a,b)=>a-b);
+}
+
+function updateMeasurePanel(){
+  const panel=document.getElementById('measurePanel');
+  if(!panel) return;
+  if(!L||isCutscene(L)){ panel.innerHTML=''; return; }
+  const edges=collectYEdges();
+  let html='';
+  for(let i=0;i<edges.length-1;i++){
+    const y1=edges[i],y2=edges[i+1],dist=y2-y1;
+    if(dist<0.04) continue;
+    const top=V.oy+y1*V.scale, h=dist*V.scale;
+    if(h<3) continue;
+    const label=h>=14?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+    html+=`<div class="meas-item" style="top:${top}px;height:${h}px" data-y1="${y1}" data-y2="${y2}">${label}</div>`;
+  }
+  panel.innerHTML=html;
+  panel.querySelectorAll('.meas-item').forEach(el=>{
+    el.addEventListener('mouseenter',()=>{ hoveredMeasure={y1:+el.dataset.y1,y2:+el.dataset.y2}; render(); });
+    el.addEventListener('mouseleave',()=>{ hoveredMeasure=null; render(); });
+  });
+}
 
 // ── Tool / selection / drag ──────────────────────────────────────────────────
 let tool = 'select';
@@ -741,6 +790,20 @@ function render(){
     }
   }
 
+  // Measurement hover guidelines
+  if(hoveredMeasure){
+    ctx.save();
+    ctx.strokeStyle='rgba(100,190,255,0.55)';
+    ctx.lineWidth=p;
+    ctx.setLineDash([0.4,0.25]);
+    ctx.beginPath();
+    ctx.moveTo(0,hoveredMeasure.y1); ctx.lineTo(L.w,hoveredMeasure.y1);
+    ctx.moveTo(0,hoveredMeasure.y2); ctx.lineTo(L.w,hoveredMeasure.y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   // Drawing preview
   if(drawRect){
     const {ax,ay,bx,by}=drawRect;
@@ -753,6 +816,8 @@ function render(){
     }
     ctx.setLineDash([]);
   }
+
+  updateMeasurePanel();
 }
 
 // Trace the solution as a schematic curve: forward arcs cyan (solid),
