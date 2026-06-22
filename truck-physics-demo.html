@@ -48,6 +48,7 @@ const TRL_WID  = 2.5;
 const TRL_ROVER = 0.8;      // trailer rear overhang
 
 const MAX_STEER = 35 * Math.PI / 180;
+const MAX_ART   = 75 * Math.PI / 180;   // max cab–trailer articulation angle
 const MAX_SPEED = 5.0;      // m/s
 const ACCEL     = 3.0;
 const STEER_RATE = 60 * Math.PI / 180;  // rad/s
@@ -85,6 +86,12 @@ function hitch(s) {
   };
 }
 
+function normAngle(a) {
+  while (a >  Math.PI) a -= 2 * Math.PI;
+  while (a < -Math.PI) a += 2 * Math.PI;
+  return a;
+}
+
 // ─── physics step ────────────────────────────────────────────────────────────
 function step(dt) {
   // 1. steering input
@@ -120,9 +127,63 @@ function step(dt) {
   state.trx = hw.x - TRL_WB * Math.cos(state.tt);
   state.try = hw.y - TRL_WB * Math.sin(state.tt);
 
+  // 4b. articulation hard stop (cab can't fold into trailer past MAX_ART)
+  const β = normAngle(state.th - state.tt);
+  if (Math.abs(β) > MAX_ART) {
+    state.tt  = state.th - Math.sign(β) * MAX_ART;
+    const hw2 = hitch(state);
+    state.trx = hw2.x - TRL_WB * Math.cos(state.tt);
+    state.try = hw2.y - TRL_WB * Math.sin(state.tt);
+  }
+
   // 5. wrap/clamp world bounds
   state.cx = Math.max(1, Math.min(WORLD_W - 1, state.cx));
   state.cy = Math.max(1, Math.min(WORLD_H - 1, state.cy));
+}
+
+// ─── path projection ─────────────────────────────────────────────────────────
+function simPath(s, steer, totalDist, steps) {
+  let p = { cx: s.cx, cy: s.cy, th: s.th, tt: s.tt, trx: s.trx, try: s.try };
+  const ds = totalDist / steps;
+  const cab = [{ x: p.cx, y: p.cy }];
+  const trl = [{ x: p.trx, y: p.try }];
+  for (let i = 0; i < steps; i++) {
+    p.th += (Math.abs(steer) > 0.0001 ? Math.tan(steer) / CAB_WB * ds : 0);
+    p.cx += Math.cos(p.th) * ds;
+    p.cy += Math.sin(p.th) * ds;
+    const hw = { x: p.cx - HITCH_OFF * Math.cos(p.th), y: p.cy - HITCH_OFF * Math.sin(p.th) };
+    p.tt = Math.atan2(hw.y - p.try, hw.x - p.trx);
+    const β2 = normAngle(p.th - p.tt);
+    if (Math.abs(β2) > MAX_ART) p.tt = p.th - Math.sign(β2) * MAX_ART;
+    p.trx = hw.x - TRL_WB * Math.cos(p.tt);
+    p.try = hw.y - TRL_WB * Math.sin(p.tt);
+    cab.push({ x: p.cx, y: p.cy });
+    trl.push({ x: p.trx, y: p.try });
+  }
+  return { cab, trl };
+}
+
+function drawPath(pts, color) {
+  if (pts.length < 2) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 6]);
+  ctx.globalAlpha = 0.45;
+  ctx.beginPath();
+  ctx.moveTo(wx(pts[0].x), wy(pts[0].y));
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(wx(pts[i].x), wy(pts[i].y));
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPaths(s) {
+  const fwd = simPath(s, s.steer,  20, 40);
+  const bwd = simPath(s, s.steer, -20, 40);
+  drawPath(fwd.cab, '#4af');
+  drawPath(fwd.trl, '#2b8');
+  drawPath(bwd.cab, '#f84');
+  drawPath(bwd.trl, '#f42');
 }
 
 // ─── rendering ───────────────────────────────────────────────────────────────
@@ -230,6 +291,7 @@ function loop(ts) {
   last = ts;
   step(dt);
   drawGround();
+  drawPaths(state);
   drawTrailer(state);
   drawCab(state);
   drawHitch(state);
