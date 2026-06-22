@@ -66,6 +66,7 @@ button.nav{padding:4px 8px;font-weight:700}
 #measurePanelTop{height:24px;background:#0e1117;border-bottom:1px solid #2a3040;position:relative;overflow:hidden;user-select:none;flex-shrink:0}
 .meas-item{position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#4a5a70;border-top:1px solid #1a2030;cursor:default;text-align:center;overflow:hidden;white-space:nowrap}
 .meas-item:hover,.meas-item-top:hover{background:rgba(61,143,191,0.18);color:#7ec8ff}
+.meas-item.meas-sel,.meas-item-top.meas-sel{background:rgba(100,220,255,0.13);color:#7ec8ff;border-color:#2a4050}
 .meas-item.meas-odd,.meas-item-top.meas-odd{background:rgba(255,255,255,0.07)}
 .meas-item-top{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#4a5a70;border-left:1px solid #1a2030;cursor:default;text-align:center;overflow:hidden;white-space:nowrap}
 @media(max-width:760px){#measLeft{display:none}#measurePanelTop{display:none}}
@@ -392,20 +393,44 @@ function collectXEdges(){
   return [...pts].map(Number).sort((a,b)=>a-b);
 }
 
+function getSelEdges(){
+  if(!sel||!L) return null;
+  function obb(cx,cy,ang,hl,hw){
+    const s=Math.abs(Math.sin(ang)),c=Math.abs(Math.cos(ang));
+    return{yMin:cy-hl*s-hw*c,yMax:cy+hl*s+hw*c,xMin:cx-hl*c-hw*s,xMax:cx+hl*c+hw*s};
+  }
+  if(sel.kind==='wall'){const b=wallBounds(L.walls[sel.idx]);return obb(b.cx,b.cy,b.ang,b.w/2,b.h/2);}
+  if(sel.kind==='car'){const c=L.cars[sel.idx],sp=carSpec(c);return obb(c.cx,c.cy,c.h,sp.len/2,sp.wid/2);}
+  if(sel.kind==='traffic'){const t=L.traffic[sel.idx];return obb(t.x,t.y,t.h,VSPEC.default.len/2,VSPEC.default.wid/2);}
+  if(sel.kind==='start'){const sc=startCenter(),sp=playerSpec();return obb(sc.x,sc.y,L.start.h,sp.len/2,sp.wid/2);}
+  if(sel.kind==='goal'){const g=L.goal;return obb(g.cx,g.cy,g.ang||0,g.w/2,g.h/2);}
+  if(sel.kind==='marking'){const s=markingSeg(L.markings[sel.idx]);return{yMin:Math.min(s.y1,s.y2),yMax:Math.max(s.y1,s.y2),xMin:Math.min(s.x1,s.x2),xMax:Math.max(s.x1,s.x2)};}
+  return null;
+}
+
+function selFilteredPairs(allEdges, eMin, eMax){
+  const EPS=0.002;
+  let prev=allEdges[0]; for(const e of allEdges) if(e<eMin-EPS) prev=e;
+  let next=allEdges[allEdges.length-1]; for(const e of allEdges) if(e>eMax+EPS){next=e;break;}
+  return [{a:prev,b:eMin,sel:false},{a:eMin,b:eMax,sel:true},{a:eMax,b:next,sel:false}];
+}
+
 function updateMeasurePanel(){
   const panel=document.getElementById('measurePanel');
   if(!panel) return;
   if(!L||isCutscene(L)){ panel.innerHTML=''; return; }
-  const edges=collectYEdges();
+  const allEdges=collectYEdges(), se=getSelEdges();
+  const pairs=se?selFilteredPairs(allEdges,se.yMin,se.yMax):allEdges.slice(0,-1).map((y1,i)=>({a:y1,b:allEdges[i+1],sel:false}));
   let html='';
-  for(let i=0;i<edges.length-1;i++){
-    const y1=edges[i],y2=edges[i+1],dist=y2-y1;
-    if(dist<0.04) continue;
+  pairs.forEach(({a:y1,b:y2,sel:isSel},pi)=>{
+    const dist=y2-y1;
+    if(!se&&dist<0.04) return;
     const top=V.oy+y1*V.scale, h=dist*V.scale;
-    if(h<3) continue;
-    const label=h>=14?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
-    html+=`<div class="meas-item${i%2?' meas-odd':''}" style="top:${top}px;height:${h}px" title="${dist.toFixed(2)} m" data-y1="${y1}" data-y2="${y2}">${label}</div>`;
-  }
+    if(!se&&h<3) return;
+    const cls='meas-item'+(isSel?' meas-sel':pi%2?' meas-odd':'');
+    const label=(h>=14||se)?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+    html+=`<div class="${cls}" style="top:${top}px;height:${Math.max(h,2)}px" title="${dist.toFixed(2)} m" data-y1="${y1}" data-y2="${y2}">${label}</div>`;
+  });
   panel.innerHTML=html;
   panel.querySelectorAll('.meas-item').forEach(el=>{
     el.addEventListener('mouseenter',()=>{ hoveredMeasure={y1:+el.dataset.y1,y2:+el.dataset.y2}; render(); });
@@ -417,16 +442,18 @@ function updateMeasurePanelTop(){
   const panel=document.getElementById('measurePanelTop');
   if(!panel) return;
   if(!L||isCutscene(L)){ panel.innerHTML=''; return; }
-  const edges=collectXEdges();
+  const allEdges=collectXEdges(), se=getSelEdges();
+  const pairs=se?selFilteredPairs(allEdges,se.xMin,se.xMax):allEdges.slice(0,-1).map((x1,i)=>({a:x1,b:allEdges[i+1],sel:false}));
   let html='';
-  for(let i=0;i<edges.length-1;i++){
-    const x1=edges[i],x2=edges[i+1],dist=x2-x1;
-    if(dist<0.04) continue;
+  pairs.forEach(({a:x1,b:x2,sel:isSel},pi)=>{
+    const dist=x2-x1;
+    if(!se&&dist<0.04) return;
     const left=V.ox+x1*V.scale, w=dist*V.scale;
-    if(w<3) continue;
-    const label=w>=30?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
-    html+=`<div class="meas-item-top${i%2?' meas-odd':''}" style="left:${left}px;width:${w}px" title="${dist.toFixed(2)} m" data-x1="${x1}" data-x2="${x2}">${label}</div>`;
-  }
+    if(!se&&w<3) return;
+    const cls='meas-item-top'+(isSel?' meas-sel':pi%2?' meas-odd':'');
+    const label=(w>=30||se)?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+    html+=`<div class="${cls}" style="left:${left}px;width:${Math.max(w,2)}px" title="${dist.toFixed(2)} m" data-x1="${x1}" data-x2="${x2}">${label}</div>`;
+  });
   panel.innerHTML=html;
   panel.querySelectorAll('[data-x1]').forEach(el=>{
     el.addEventListener('mouseenter',()=>{ hoveredMeasureX={x1:+el.dataset.x1,x2:+el.dataset.x2}; render(); });
