@@ -6,34 +6,28 @@
 <title>Truck Physics Demo</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #1a1a2e; display: flex; flex-direction: column; align-items: center;
-         justify-content: center; height: 100vh; font-family: monospace; color: #e0e0e0; }
-  h1 { font-size: 14px; letter-spacing: 3px; text-transform: uppercase;
-       color: #888; margin-bottom: 8px; }
-  #canvas { border: 1px solid #333; cursor: default; }
-  #hud { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-         pointer-events: none; }
-  .info { margin-top: 8px; font-size: 11px; color: #555; text-align: center; }
-  .controls { margin-top: 4px; font-size: 11px; color: #444; }
+  body { background: #1a1a2e; overflow: hidden; font-family: monospace; color: #e0e0e0; }
+  canvas { display: block; }
+  #overlay { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+             text-align: center; pointer-events: none; }
+  #hud-text { font-size: 11px; color: #888; }
+  #controls  { margin-top: 3px; font-size: 10px; color: #444; }
 </style>
 </head>
 <body>
-<h1>Articulated Truck &mdash; Physics Demo</h1>
-<div style="position:relative; display:inline-block;">
-  <canvas id="canvas"></canvas>
+<canvas id="canvas"></canvas>
+<div id="overlay">
+  <div><span id="hud-text">speed: 0.0 m/s &nbsp;|&nbsp; steer: 0° &nbsp;|&nbsp; jackknife: 0°</span></div>
+  <div id="controls">W/S or ↑/↓ &nbsp; drive &nbsp;&nbsp; A/D or ←/→ &nbsp; steer &nbsp;&nbsp; R &nbsp; reset</div>
 </div>
-<div class="info">
-  <span id="hud-text">speed: 0.0 m/s &nbsp;|&nbsp; steer: 0° &nbsp;|&nbsp; jackknife: 0°</span>
-</div>
-<div class="controls">W/S or ↑/↓ &nbsp; drive &nbsp;&nbsp; A/D or ←/→ &nbsp; steer &nbsp;&nbsp; R &nbsp; reset</div>
 
 <script>
 "use strict";
 
 // ─── constants ───────────────────────────────────────────────────────────────
-const SCALE    = 14;        // px per metre
-const WORLD_W  = 70;        // metres
-const WORLD_H  = 45;
+const SCALE    = 21;        // px per metre (1.5× zoom)
+let   WORLD_W  = 0;         // derived from canvas size
+let   WORLD_H  = 0;
 
 const CAB_WB   = 4.0;       // cab wheelbase (front axle → rear axle)
 const CAB_LEN  = 5.5;       // total cab body length
@@ -56,8 +50,15 @@ const STEER_RATE = 60 * Math.PI / 180;  // rad/s
 // ─── canvas setup ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('canvas');
 const ctx    = canvas.getContext('2d');
-canvas.width  = WORLD_W * SCALE;
-canvas.height = WORLD_H * SCALE;
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  WORLD_W = canvas.width  / SCALE;
+  WORLD_H = canvas.height / SCALE;
+}
+resize();
+window.addEventListener('resize', resize);
 
 // ─── state ───────────────────────────────────────────────────────────────────
 let state, keys = {};
