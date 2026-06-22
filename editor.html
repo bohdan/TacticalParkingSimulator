@@ -601,6 +601,9 @@ function rrectPx(x,y,w,h,r){
   ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
 }
 
+// Convert {x,y,len,ang} marking to {x1,y1,x2,y2} endpoints
+function markingSeg(m){ return {x1:m.x,y1:m.y,x2:m.x+Math.cos(m.ang)*m.len,y2:m.y+Math.sin(m.ang)*m.len}; }
+
 function render(){
   ctx.resetTransform();
   ctx.fillStyle='#0e1117';            // letterbox outside the map
@@ -628,11 +631,12 @@ function render(){
     ctx.lineCap='butt';
     for(let i=0;i<L.markings.length;i++){
       const m=L.markings[i]; if(m.type!=='lane') continue;
+      const {x1,y1,x2,y2}=markingSeg(m);
       const isSel=sel&&sel.kind==='marking'&&sel.idx===i;
       ctx.strokeStyle=isSel?'#7ec8ff':'rgba(255,255,255,0.72)';
       ctx.lineWidth=isSel?0.12:0.08;
       ctx.setLineDash([0.8,0.6]);
-      ctx.beginPath(); ctx.moveTo(m.x1,m.y1); ctx.lineTo(m.x2,m.y2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
     }
     ctx.setLineDash([]); ctx.lineCap='round';
   }
@@ -936,7 +940,7 @@ function hitTestAll(wx,wy){
   // markings — click within 0.3 m of the line
   if(L.markings) for(let i=L.markings.length-1;i>=0;i--){
     const m=L.markings[i];
-    if(m.type==='lane'&&ptToSegDist(wx,wy,m.x1,m.y1,m.x2,m.y2)<0.3) return {kind:'marking',idx:i};
+    if(m.type==='lane'){const s=markingSeg(m);if(ptToSegDist(wx,wy,s.x1,s.y1,s.x2,s.y2)<0.3)return{kind:'marking',idx:i};}
   }
   return null;
 }
@@ -1070,8 +1074,7 @@ cv.addEventListener('pointermove', e=>{
     }
     else if(sel.kind==='marking'){
       const m=L.markings[sel.idx];
-      m.x1=snapW(o.x1+dx); m.y1=snapW(o.y1+dy);
-      m.x2=snapW(o.x2+dx); m.y2=snapW(o.y2+dy);
+      m.x=snapW(o.x+dx); m.y=snapW(o.y+dy);
     }
   }
   else if(drag.handle.startsWith('corner')){
@@ -1156,8 +1159,13 @@ cv.addEventListener('pointerup', e=>{
   if(drawRect){
     const {ax,ay,bx,by}=drawRect;
     if(drawRect.isLine){
-      if(Math.hypot(bx-ax,by-ay)>0.2){
-        L.markings.push({type:'lane',x1:ax,y1:ay,x2:bx,y2:by});
+      const rawLen=Math.hypot(bx-ax,by-ay);
+      if(rawLen>0.2){
+        const rawAng=Math.atan2(by-ay,bx-ax);
+        const snap15=Math.PI/12;
+        const ang=Math.round(rawAng/snap15)*snap15;
+        const len=+rawLen.toFixed(2);
+        L.markings.push({type:'lane',x:ax,y:ay,len,ang});
         sel={kind:'marking',idx:L.markings.length-1};
         markDirty(); updateSidebar();
       }
@@ -1491,10 +1499,10 @@ function updateSelPanel(){
   } else if(sel.kind==='marking'){
     const m=L.markings[sel.idx];
     html+=`<p class="sel-hint" style="margin:0 0 6px">Lane divider</p>`;
-    html+=row('x1',`<input type=number step=.1 id=seMx1 value="${fmt(m.x1)}">`);
-    html+=row('y1',`<input type=number step=.1 id=seMy1 value="${fmt(m.y1)}">`);
-    html+=row('x2',`<input type=number step=.1 id=seMx2 value="${fmt(m.x2)}">`);
-    html+=row('y2',`<input type=number step=.1 id=seMy2 value="${fmt(m.y2)}">`);
+    html+=row('x',   `<input type=number step=.1  id=seMx   value="${fmt(m.x)}">`);
+    html+=row('y',   `<input type=number step=.1  id=seMy   value="${fmt(m.y)}">`);
+    html+=row('len', `<input type=number step=.1 min=.1 id=seMLen value="${fmt(m.len)}">`);
+    html+=row('ang°',`<input type=number step=15 id=seMAng value="${fmt(deg(m.ang),0)}">`);
   }
   html+=`<button class="danger" style="width:100%;margin-top:8px" id="btnDel">Delete</button>`;
   panel.innerHTML=html;
@@ -1522,8 +1530,10 @@ function updateSelPanel(){
     lis('seColor',v=>{t.color=v;render();});
   } else if(sel.kind==='marking'){
     const m=L.markings[sel.idx];
-    liv('seMx1',v=>{m.x1=v;markDirty();render();}); liv('seMy1',v=>{m.y1=v;markDirty();render();});
-    liv('seMx2',v=>{m.x2=v;markDirty();render();}); liv('seMy2',v=>{m.y2=v;markDirty();render();});
+    liv('seMx',  v=>{m.x=v;  markDirty();render();});
+    liv('seMy',  v=>{m.y=v;  markDirty();render();});
+    liv('seMLen',v=>{m.len=v; markDirty();render();});
+    liv('seMAng',v=>{m.ang=rad(Math.round(v/15)*15); markDirty();render();});
   }
 }
 
@@ -1848,7 +1858,7 @@ function buildExport(lv=L){
     lines.push(`    markings: [`);
     for(const m of l.markings){
       if(m.type==='lane')
-        lines.push(`      { type: 'lane', x1: ${fn(m.x1)}, y1: ${fn(m.y1)}, x2: ${fn(m.x2)}, y2: ${fn(m.y2)} },`);
+        lines.push(`      { type: 'lane', x: ${fn(m.x)}, y: ${fn(m.y)}, len: ${fn(m.len)}, ang: ${fmtRad(m.ang)} },`);
     }
     lines.push(`    ],`);
   }

@@ -893,7 +893,10 @@ function draw(now) {
     ctx.setLineDash([0.8, 0.6]);
     for (const m of level.markings) {
       if (m.type !== 'lane') continue;
-      ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(m.x, m.y);
+      ctx.lineTo(m.x + Math.cos(m.ang) * m.len, m.y + Math.sin(m.ang) * m.len);
+      ctx.stroke();
     }
     ctx.setLineDash([]);
     ctx.restore();
