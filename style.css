@@ -65,6 +65,8 @@ button.nav {
   color: #93a0b4;
   padding: 2px 0 4px;
 }
+.goal-dist { color: #7a9ec4; }
+.goal-dist.goal-in { color: #4caf7a; }
 
 #lvIntroOverlay {
   position: fixed;
