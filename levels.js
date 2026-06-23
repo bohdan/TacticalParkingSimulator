@@ -749,6 +749,7 @@ const LEVELS = [
     goal: { cx: 13.85, cy: 28, w: 4.05, h: 1.85, ang: 2.4712, heads: [141.9], tol: 45 },
     walls: [
       { x: 29.1, y: 6.3, w: 0.7, h: 12.3 },
+      { x: 21.79, y: 14, w: 5.4, h: 0.5 },
     ],
     cars: [
       { cx: 3.1, cy: 4.7, h: 0 },
@@ -758,9 +759,8 @@ const LEVELS = [
       { cx: 22.8, cy: 6.6, h: -2.4629, type: "bus" },
       { cx: 11.2, cy: 20.8, h: -116 * Math.PI / 180, type: "bus" },
       { cx: 15, cy: 22.6, h: -1.7027, type: "tractor" },
-      { cx: 17.6, cy: 12.5, h: 2.4568, type: "tractor" },
-      { cx: 24.2, cy: 12.9, h: 0.0750 },
-      { cx: 23.98, cy: 15, h: 0 },
+      { cx: 17.57, cy: 12.2, h: 2.4568, type: "tractor" },
+      { cx: 24.12, cy: 12.9, h: 0.0750 },
       { cx: 23.4, cy: 20.6, h: 0 },
     ],
     markings: [
