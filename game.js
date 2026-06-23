@@ -1860,13 +1860,14 @@ function trackFocus(dt) {
   if (view.t <= 0 && !view.focused) return;
   if (drag && drag.moved) return;            // freeze while fine-dragging
   const pose = currentTurnEnd();
-  const k = 1 - Math.exp(-dt / 0.10);        // ~100 ms time constant
+  const k    = 1 - Math.exp(-dt / 0.10);      // position: ~100 ms
+  const kAng = 1 - Math.exp(-dt / 0.40);      // rotation: ~400 ms
   view.focusX += (pose.x - view.focusX) * k;
   view.focusY += (pose.y - view.focusY) * k;
   // Shortest-arc angle smoothing.
   let da = focusAngleFor(pose) - view.focusAngle;
   da = Math.atan2(Math.sin(da), Math.cos(da));
-  view.focusAngle += da * k;
+  view.focusAngle += da * kAng;
 }
 
 /* ===================== Focus hint ===================== */
