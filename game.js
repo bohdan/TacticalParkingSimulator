@@ -352,7 +352,7 @@ function fmtGoalDist(d) {
   if (d <= 0) return '<span class="goal-dist goal-in">&#10003; In spot</span>';
   const cm = Math.round(d * 100);
   const val = cm >= 100 ? `${(d).toFixed(1)} m` : `${cm} cm`;
-  return `<span class="goal-dist">${val} from spot</span>`;
+  return `<span class="goal-dist">${val} outside</span>`;
 }
 
 function updateHUD() {
