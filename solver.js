@@ -288,7 +288,7 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
   // doesn't eat into the A* budget.
   const bf2ArcMax = opts.bf2ArcMax !== undefined ? opts.bf2ArcMax : Math.min(6, ARC_MAX);
   if (opts.bf2 !== false) {
-    const BN = Math.floor((bf2ArcMax + 1e-9) / STEP);
+    const BN = Math.floor((bf2ArcMax + 1e-9) / DIST_Q);
     const goalReach = bf2ArcMax + Math.max(goal.w, goal.h) + 1;
     outer2:
     for (let si1 = 0; si1 < STEERS.length; si1++) {
@@ -296,7 +296,7 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
       for (let di1 = 0; di1 < 2; di1++) {
         const dir1 = di1 === 0 ? 1 : -1;
         for (let n1 = 1; n1 <= BN; n1++) {
-          const dist1 = round2(dir1 * n1 * STEP);
+          const dist1 = round2(dir1 * n1 * DIST_Q);
           const p1 = advance(start, s1, dist1);
           if (hits(p1)) break;
           if (hDist(p1) <= goalReach) {
@@ -306,7 +306,7 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
                 if (sd2 === sd1 && di2 === di1) continue;   // same arc = just 1 turn
                 const dir2 = di2 === 0 ? 1 : -1;
                 for (let n2 = 1; n2 <= BN; n2++) {
-                  const dist2 = round2(dir2 * n2 * STEP);
+                  const dist2 = round2(dir2 * n2 * DIST_Q);
                   const p2 = advance(p1, s2, dist2);
                   if (hits(p2)) break;
                   if (inGoal(p2, goal)) offer(validate([
