@@ -166,7 +166,13 @@ let editIdx = null;    // index of the move being tweaked (null = composing next
 let anim = null;       // {samples, cum, total, t0, speed}
 let pendingLb = null;  // {levelIdx, stars, st} — awaiting leaderboard submit
 let solutionUsed = false; // viewing the solution locks leaderboard until Reset
-let view = { scale: 1, ox: 0, oy: 0 };
+let view = {
+  scale: 1, ox: 0, oy: 0, dpr: 1,
+  // Focus mode: t=0 normal view, t=1 fully focused; animates between
+  t: 0, focused: false,
+  focusX: 0, focusY: 0, focusAngle: 0,
+  animating: false, animFrom: 0, animTo: 0, animT0: 0, animDur: 400,
+};
 
 function planEnd() {
   return planSims.length ? planSims[planSims.length - 1].end : level.start;
@@ -451,17 +457,35 @@ function fitView() {
     cv.width = Math.round(w * dpr);
     cv.height = Math.round(h * dpr);
   }
-  const m = 8; // px margin
+  const m = 8;
   view.scale = Math.min((w - 2 * m) / level.w, (h - 2 * m) / level.h);
   view.ox = (w - level.w * view.scale) / 2;
   view.oy = (h - level.h * view.scale) / 2;
   view.dpr = dpr;
 }
 
+// Focus-mode scale: show ≈10 m across the short screen dimension.
+function focusViewScale() {
+  return Math.min(cv.clientWidth, cv.clientHeight) / 10;
+}
+
+// Lerped view parameters shared by worldTransform / toScreen / pointerToWorld.
+function viewParams() {
+  const t  = view.t;
+  const wX = level.w / 2 + (view.focusX - level.w / 2) * t;
+  const wY = level.h / 2 + (view.focusY - level.h / 2) * t;
+  return { wX, wY, ang: view.focusAngle * t,
+           sc: view.scale + (focusViewScale() - view.scale) * t };
+}
+
 function worldTransform() {
+  const W = cv.clientWidth, H = cv.clientHeight;
+  const { wX, wY, ang, sc } = viewParams();
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-  ctx.translate(view.ox, view.oy);
-  ctx.scale(view.scale, view.scale);
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(ang);
+  ctx.scale(sc, sc);
+  ctx.translate(-wX, -wY);
 }
 
 function screenTransform() {
@@ -469,7 +493,12 @@ function screenTransform() {
 }
 
 function toScreen(p) {
-  return { x: view.ox + p.x * view.scale, y: view.oy + p.y * view.scale };
+  const W = cv.clientWidth, H = cv.clientHeight;
+  const { wX, wY, ang, sc } = viewParams();
+  const dx = p.x - wX, dy = p.y - wY;
+  const c = Math.cos(ang), s = Math.sin(ang);
+  return { x: W / 2 + (dx * c - dy * s) * sc,
+           y: H / 2 + (dx * s + dy * c) * sc };
 }
 
 function drawPoly(poly) {
@@ -867,6 +896,14 @@ function draw(now) {
   // the screen. Keep the RAF alive so play resumes when we leave it.
   if (!level) { requestAnimationFrame(draw); return; }
   fitView();
+
+  // Advance focus-mode animation.
+  if (view.animating) {
+    const p = Math.min(1, (now - view.animT0) / view.animDur);
+    view.t = view.animFrom + (view.animTo - view.animFrom) * easeIO2d(p);
+    if (p >= 1) { view.t = view.animTo; view.animating = false; }
+  }
+
   screenTransform();
   ctx.fillStyle = '#171a21';
   ctx.fillRect(0, 0, cv.clientWidth, cv.clientHeight);
@@ -1211,6 +1248,7 @@ function setLevel(i) {
   anim = null;
   editIdx = null;
   solutionUsed = false;
+  resetFocus();
   setEdit(0, 0);
   recomputePlan();   // also calls updateHash()
   rebuildLevelSelect();
@@ -1253,6 +1291,7 @@ function setEdit(steerDeg, dist) {
     recomputeEdit();
     updateHUD();
   }
+  scheduleFocusHint();
 }
 
 // Relative-drag sliders: dragging accumulates a delta from the value at
@@ -1766,6 +1805,78 @@ function showSolution() {
 }
 
 
+/* ===================== Focus mode ===================== */
+
+const easeIO2d = t => t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+
+function startViewAnim(to, dur) {
+  view.animFrom = view.t; view.animTo = to;
+  view.animT0 = performance.now(); view.animDur = dur; view.animating = true;
+}
+
+function enterFocus() {
+  const pose = planEnd();
+  view.focusX     = pose.x;
+  view.focusY     = pose.y;
+  view.focusAngle = -(pose.h + Math.PI / 2); // car heading → screen up
+  view.focused    = true;
+  startViewAnim(1, 420);
+  hideFocusHint();
+  $('focusBadge').classList.remove('hidden');
+}
+
+function exitFocus() {
+  view.focused = false;
+  startViewAnim(0, 320);
+  $('focusBadge').classList.add('hidden');
+}
+
+function resetFocus() { // called on level change
+  view.t = 0; view.focused = false; view.animating = false;
+  $('focusBadge').classList.add('hidden');
+}
+
+// Re-center focus on planEnd() without leaving focus mode (after commit).
+function refocusIfActive() {
+  if (!view.focused) return;
+  const pose = planEnd();
+  view.focusX     = pose.x;
+  view.focusY     = pose.y;
+  view.focusAngle = -(pose.h + Math.PI / 2);
+}
+
+/* ===================== Focus hint ===================== */
+
+let focusHintDismissed = false;
+let focusHintTimer = null;
+
+function showFocusHint() {
+  if (focusHintDismissed || view.focused) return;
+  $('focusHint').classList.remove('hidden');
+}
+
+function hideFocusHint() {
+  clearTimeout(focusHintTimer); focusHintTimer = null;
+  $('focusHint').classList.add('hidden');
+}
+
+function scheduleFocusHint() {
+  if (focusHintDismissed || view.focused) return;
+  const d = Math.abs(editDist);
+  if (d > 0.005 && d < 0.2) {
+    if (!focusHintTimer) focusHintTimer = setTimeout(showFocusHint, 700);
+  } else {
+    hideFocusHint();
+  }
+}
+
+$('focusHintClose').addEventListener('click', e => {
+  e.stopPropagation(); focusHintDismissed = true; hideFocusHint();
+});
+$('focusBadgeClose').addEventListener('click', e => {
+  e.stopPropagation(); exitFocus();
+});
+
 // Drag directly on the canvas: the ghost car chases the pointer. The arc
 // from the current move's start pose through the pointer's world position
 // determines both steering angle and signed distance, so dragging feels
@@ -1773,8 +1884,13 @@ function showSolution() {
 // A tap (minimal movement) on a move badge selects it for tweaking.
 function pointerToWorld(e) {
   const r = cv.getBoundingClientRect();
-  return { x: (e.clientX - r.left - view.ox) / view.scale,
-           y: (e.clientY - r.top - view.oy) / view.scale };
+  const W = cv.clientWidth, H = cv.clientHeight;
+  const { wX, wY, ang, sc } = viewParams();
+  const sx = e.clientX - r.left - W / 2;
+  const sy = e.clientY - r.top  - H / 2;
+  const c = Math.cos(-ang), s = Math.sin(-ang);
+  return { x: wX + (sx * c - sy * s) / sc,
+           y: wY + (sx * s + sy * c) / sc };
 }
 
 // Given a target point in world space, find the constant-steer arc from the
@@ -1812,8 +1928,12 @@ cv.addEventListener('pointermove', e => {
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.abs(dx) > 5 || Math.abs(dy) > 5) drag.moved = true;
   if (!drag.moved) return;
-  const a = arcToPoint(editStartPose(),
-    { x: drag.tx + dx / view.scale, y: drag.ty + dy / view.scale });
+  // Un-rotate canvas delta into world space (handles focus-mode rotation).
+  const { ang, sc } = viewParams();
+  const c = Math.cos(-ang), s = Math.sin(-ang);
+  const wdx = (dx * c - dy * s) / sc;
+  const wdy = (dx * s + dy * c) / sc;
+  const a = arcToPoint(editStartPose(), { x: drag.tx + wdx, y: drag.ty + wdy });
   setEdit(a.steer, a.dist);
 });
 cv.addEventListener('pointerup', e => {
@@ -1830,8 +1950,17 @@ cv.addEventListener('pointerup', e => {
       selectMove(hit);
     } else {
       const now = performance.now();
-      if (now - lastTap < 350 && Math.abs(editDist) > 0.01) {
-        if (commitMove()) toast('Move added');
+      if (now - lastTap < 350) {
+        if (Math.abs(editDist) > 0.01) {
+          // Meaningful move pending → commit it.
+          if (commitMove()) {
+            toast('Move added');
+            refocusIfActive(); // re-centre if in focus mode
+          }
+        } else {
+          // No pending move → toggle focus mode.
+          view.focused ? exitFocus() : enterFocus();
+        }
         lastTap = 0;
       } else {
         lastTap = now;
