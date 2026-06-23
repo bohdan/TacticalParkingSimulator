@@ -83,7 +83,7 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
   const ms = CAR.maxSteer;
 
   // Steering candidates on the 0.2-deg grid (denser near full lock for tight work).
-  const fracs = [-1, -0.7, -0.45, -0.29, -0.245, -0.12, 0, 0.12, 0.245, 0.29, 0.45, 0.7, 1];
+  const fracs = [-1, -0.9, -0.71, -0.7, -0.45, -0.29, -0.245, -0.17, -0.12, 0, 0.12, 0.17, 0.245, 0.29, 0.45, 0.7, 0.71, 0.9, 1];
   const STEERS = (steerSet || [...new Set(fracs.map(f => snap(f * ms, STEER_Q)))])
     .slice().sort((a, b) => a - b);
   const STEP = Math.max(DIST_Q, snap(step, DIST_Q));
@@ -142,17 +142,17 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
   // Fine final-approach sweep — lands precisely in a tight goal the coarse steer
   // grid can't hit (e.g. a slot barely wider than the car). One extra turn.
   const dockReach = Math.max(goal.w, goal.h) / 2 + (opts.dockReach || 2.4);
-  const DOCKN = Math.round(4 / STEP);
+  const DOCKN = Math.round(4 / DIST_Q);
   const dockCells = new Set();
   let dockBudget = opts.dock === false ? 0 : (opts.dockBudget || 4000);
   function tryDock(cur) {
-    for (let sv = -ms; sv <= ms + 1e-9; sv += 2) {
-      const sd = snap(sv, STEER_Q), s = rad(sd);
+    for (const sd of STEERS) {
+      const s = rad(sd);
       for (let d = 0; d < 2; d++) {
         const dir = d === 0 ? 1 : -1;
         if (cur.inSd === sd && cur.inDir === dir) continue;
         for (let i = 1; i <= DOCKN; i++) {
-          const dist = round2(dir * i * STEP);
+          const dist = round2(dir * i * DIST_Q);
           const p = advance(cur.pose, s, dist);
           if (hits(p)) break;
           if (inGoal(p, goal)) {
