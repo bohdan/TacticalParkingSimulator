@@ -172,6 +172,7 @@ let view = {
   t: 0, focused: false,
   focusX: 0, focusY: 0, focusAngle: 0,
   animating: false, animFrom: 0, animTo: 0, animT0: 0, animDur: 400,
+  lastNow: 0,
 };
 
 function planEnd() {
@@ -897,12 +898,15 @@ function draw(now) {
   if (!level) { requestAnimationFrame(draw); return; }
   fitView();
 
-  // Advance focus-mode animation.
+  // Advance focus-mode animation + live tracking of the current turn's end.
+  const dt = view.lastNow ? Math.min(0.05, (now - view.lastNow) / 1000) : 0;
+  view.lastNow = now;
   if (view.animating) {
     const p = Math.min(1, (now - view.animT0) / view.animDur);
     view.t = view.animFrom + (view.animTo - view.animFrom) * easeIO2d(p);
     if (p >= 1) { view.t = view.animTo; view.animating = false; }
   }
+  trackFocus(dt);
 
   screenTransform();
   ctx.fillStyle = '#171a21';
@@ -1129,6 +1133,7 @@ function traveledDist(dist, sim) {
 function startRun() {
   if (!moves.length || anim) return;
   editIdx = null;
+  if (view.focused) exitFocus(); // gently pull back to the full board for the run
   // Bake every move down to the distance actually travelled, so the plan that
   // runs (and gets saved/shared) is the precise sequence the car performs —
   // no over-the-limit values that silently truncate on replay.
@@ -1814,11 +1819,23 @@ function startViewAnim(to, dur) {
   view.animT0 = performance.now(); view.animDur = dur; view.animating = true;
 }
 
+// The pose the focus view tracks: the end of the *current turn* — the move
+// being edited, the pending new move, or (with nothing pending) the plan end.
+function currentTurnEnd() {
+  if (editIdx !== null) return planSims[editIdx] ? planSims[editIdx].end : planEnd();
+  if (editSim && Math.abs(editDist) > 0.01) return editSim.end;
+  return planEnd();
+}
+
+// Desired view angle so the tracked car faces "up" on screen.
+function focusAngleFor(pose) { return -(pose.h + Math.PI / 2); }
+
 function enterFocus() {
-  const pose = planEnd();
+  const pose = currentTurnEnd();
+  // Snap to the target so the zoom-in animates from the right place.
   view.focusX     = pose.x;
   view.focusY     = pose.y;
-  view.focusAngle = -(pose.h + Math.PI / 2); // car heading → screen up
+  view.focusAngle = focusAngleFor(pose);
   view.focused    = true;
   startViewAnim(1, 420);
   hideFocusHint();
@@ -1836,13 +1853,20 @@ function resetFocus() { // called on level change
   $('focusBadge').classList.add('hidden');
 }
 
-// Re-center focus on planEnd() without leaving focus mode (after commit).
-function refocusIfActive() {
-  if (!view.focused) return;
-  const pose = planEnd();
-  view.focusX     = pose.x;
-  view.focusY     = pose.y;
-  view.focusAngle = -(pose.h + Math.PI / 2);
+// Smoothly glide the focus centre/angle toward the current turn's end. Called
+// every frame while focus is active (or animating). Held still during an active
+// canvas drag so the view doesn't chase its own input. dt in seconds.
+function trackFocus(dt) {
+  if (view.t <= 0 && !view.focused) return;
+  if (drag && drag.moved) return;            // freeze while fine-dragging
+  const pose = currentTurnEnd();
+  const k = 1 - Math.exp(-dt / 0.10);        // ~100 ms time constant
+  view.focusX += (pose.x - view.focusX) * k;
+  view.focusY += (pose.y - view.focusY) * k;
+  // Shortest-arc angle smoothing.
+  let da = focusAngleFor(pose) - view.focusAngle;
+  da = Math.atan2(Math.sin(da), Math.cos(da));
+  view.focusAngle += da * k;
 }
 
 /* ===================== Focus hint ===================== */
@@ -1851,7 +1875,7 @@ let focusHintDismissed = false;
 let focusHintTimer = null;
 
 function showFocusHint() {
-  if (focusHintDismissed || view.focused) return;
+  if (focusHintDismissed || view.focused || anim) return;
   $('focusHint').classList.remove('hidden');
 }
 
@@ -1952,11 +1976,9 @@ cv.addEventListener('pointerup', e => {
       const now = performance.now();
       if (now - lastTap < 350) {
         if (Math.abs(editDist) > 0.01) {
-          // Meaningful move pending → commit it.
-          if (commitMove()) {
-            toast('Move added');
-            refocusIfActive(); // re-centre if in focus mode
-          }
+          // Meaningful move pending → commit it. Focus (if active) glides to
+          // the new plan end on its own via trackFocus().
+          if (commitMove()) toast('Move added');
         } else {
           // No pending move → toggle focus mode.
           view.focused ? exitFocus() : enterFocus();
