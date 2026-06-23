@@ -1696,7 +1696,7 @@ async function lbGet(levelIdx) {
   const p = new URLSearchParams({
     select: 'player,moves,dist,solution,submitted_at',
     level_id: `eq.${levelKey(levelIdx)}`,
-    order: 'moves.asc,dist.asc', limit: '100',
+    order: 'moves.asc,dist.asc,submitted_at.asc', limit: '100',
   });
   const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
     headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
@@ -1708,7 +1708,7 @@ async function lbGet(levelIdx) {
 async function lbGetAll() {
   const p = new URLSearchParams({
     select: 'player,level_id,level_name,moves,dist,solution,submitted_at',
-    order: 'moves.asc,dist.asc', limit: '500',
+    order: 'moves.asc,dist.asc,submitted_at.asc', limit: '500',
   });
   const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
     headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
