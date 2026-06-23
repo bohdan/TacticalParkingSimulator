@@ -32,6 +32,24 @@ function distToGoalBoundary(pose) {
   return pointInPoly({ x: pose.x, y: pose.y }, zone) ? -d : d;
 }
 
+// Signed distance from the car outline to the goal zone boundary.
+// Positive = outside (min distance any corner is from the goal edge).
+// Negative = all corners inside (magnitude = closest corner's inward clearance).
+function distCarToGoal(pose) {
+  const cp = carPoly(pose);
+  const zone = goalPoly(level.goal);
+  let minD = Infinity;
+  let anyOutside = false;
+  for (const v of cp) {
+    if (!pointInPoly(v, zone)) anyOutside = true;
+    for (let j = 0; j < zone.length; j++) {
+      const a = zone[j], b = zone[(j+1) % zone.length];
+      minD = Math.min(minD, ptSegDist(v.x, v.y, a.x, a.y, b.x, b.y));
+    }
+  }
+  return anyOutside ? minD : -minD;
+}
+
 /* ===================== Levels ===================== */
 
 // Editor test level: passed via URL hash (#try=<base64url>) by editor.html.
@@ -344,13 +362,13 @@ function updateHUD() {
   $('objective').innerHTML = desc ? escHtml(desc) : '';
 
   const endPose = (editSim && !editSim.hit) ? editSim.end : planEnd();
-  const goalDistHtml = fmtGoalDist(distToGoalBoundary(endPose));
+  const goalDistHtml = fmtGoalDist(distCarToGoal(endPose));
 
   if (planning) {
     const st = planStats();
-    $('parInfo').innerHTML = `Moves <b>${st.moves}</b> / Par ${levelPar()} · ${(st.dist * 100).toFixed(0)}cm<br>${goalDistHtml}`;
+    $('parInfo').innerHTML = `Moves <b>${st.moves}</b> / Par ${levelPar()} · ${(st.dist * 100).toFixed(0)}cm · ${goalDistHtml}`;
   } else {
-    $('parInfo').innerHTML = `Par ${levelPar()}<br>${goalDistHtml}`;
+    $('parInfo').innerHTML = `Par ${levelPar()} · ${goalDistHtml}`;
   }
   $('stats').innerHTML = '';
   $('delBtn').disabled = (moves.length === 0 && editIdx === null && Math.abs(editDist) < 0.01) || !!anim;
