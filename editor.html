@@ -718,7 +718,7 @@ function drawSelBox(cx,cy,w,h,a){
   ctx.translate(cx,cy); if(a)ctx.rotate(a);
   ctx.strokeStyle='#ffe040'; ctx.lineWidth=3*PX();
   ctx.setLineDash([4*PX(),3*PX()]);
-  ctx.strokeRect(-w/2-0.12,-h/2-0.12,w+0.24,h+0.24);
+  ctx.strokeRect(-w/2,-h/2,w,h);
   ctx.setLineDash([]); ctx.restore();
 }
 
