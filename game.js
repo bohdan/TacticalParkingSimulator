@@ -174,6 +174,9 @@ let view = {
   animating: false, animFrom: 0, animTo: 0, animT0: 0, animDur: 400,
   lastNow: 0,
 };
+// World units per screen pixel at the current frame's zoom — updated once per
+// draw() so overlay lines (ghost, path, guides) stay cosmetically thin.
+let drawPX = 1 / 60;
 
 function planEnd() {
   return planSims.length ? planSims[planSims.length - 1].end : level.start;
@@ -721,7 +724,7 @@ function drawGhost(pose, color, steer = 0) {
   ctx.save();
   ctx.translate(pose.x, pose.y);
   ctx.rotate(pose.h);
-  ctx.lineWidth = 0.07;
+  ctx.lineWidth = Math.min(0.07, 2 * drawPX);
   ctx.strokeStyle = color;
   ctx.setLineDash([0.25, 0.18]);
   for (const [wx, wya, a] of [
@@ -738,7 +741,7 @@ function drawGhost(pose, color, steer = 0) {
   ctx.setLineDash([]);
 
   drawPoly(carPoly(pose));
-  ctx.lineWidth = 0.07;
+  ctx.lineWidth = Math.min(0.07, 2 * drawPX);
   ctx.strokeStyle = color;
   ctx.setLineDash([0.25, 0.18]);
   ctx.stroke();
@@ -760,7 +763,7 @@ function drawPath(pts, color, dashed, lw = 0.09) {
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.lineWidth = lw;
+  ctx.lineWidth = Math.min(lw, 3 * drawPX);
   ctx.strokeStyle = color;
   if (dashed) ctx.setLineDash([0.35, 0.25]);
   ctx.stroke();
@@ -867,7 +870,7 @@ function drawSteerWheels(pose, steerRad) {
     ctx.rotate(pose.h + steerRad);
     ctx.fillStyle = '#10131a';
     ctx.fillRect(-wl / 2, -wt, wl, wt * 2);
-    ctx.lineWidth = 0.03;
+    ctx.lineWidth = Math.min(0.03, 1.5 * drawPX);
     ctx.strokeStyle = 'rgba(120,220,255,0.9)';
     ctx.strokeRect(-wl / 2, -wt, wl, wt * 2);
     ctx.restore();
@@ -912,6 +915,7 @@ function draw(now) {
   ctx.fillStyle = '#171a21';
   ctx.fillRect(0, 0, cv.clientWidth, cv.clientHeight);
 
+  drawPX = 1 / viewParams().sc;
   worldTransform();
 
   // asphalt
@@ -1065,7 +1069,7 @@ function draw(now) {
     const p = hitInfo.point;
     ctx.beginPath();
     ctx.arc(p.x, p.y, 0.25 + t * 0.6, 0, 2 * Math.PI);
-    ctx.lineWidth = 0.09;
+    ctx.lineWidth = Math.min(0.09, 3 * drawPX);
     ctx.strokeStyle = `rgba(255,82,82,${1 - t})`;
     ctx.stroke();
     ctx.beginPath();
@@ -1074,7 +1078,7 @@ function draw(now) {
       ctx.moveTo(p.x + Math.cos(a) * r1, p.y + Math.sin(a) * r1);
       ctx.lineTo(p.x + Math.cos(a) * r2, p.y + Math.sin(a) * r2);
     }
-    ctx.lineWidth = 0.07;
+    ctx.lineWidth = Math.min(0.07, 2.5 * drawPX);
     ctx.strokeStyle = '#ff5252';
     ctx.stroke();
   }

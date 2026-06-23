@@ -1090,7 +1090,7 @@ function drawSolutionPath(){
     ctx.fillStyle=hot?'rgba(255,224,80,0.18)':'rgba(255,200,50,0.09)';
     ctx.fill();
     ctx.strokeStyle=hot?'rgba(255,224,80,0.80)':'rgba(255,200,50,0.42)';
-    ctx.lineWidth=hot?0.03:0.015;
+    ctx.lineWidth=Math.min(hot?0.03:0.015, 2*PX());
     ctx.stroke();
   }
   // Ghost car outline at end of each turn
@@ -1102,7 +1102,7 @@ function drawSolutionPath(){
     for(let k=1;k<4;k++) ctx.lineTo(poly[k].x,poly[k].y);
     ctx.closePath();
     ctx.strokeStyle=hot?'rgba(69,196,255,0.90)':'rgba(69,196,255,0.30)';
-    ctx.lineWidth=hot?0.04:0.02;
+    ctx.lineWidth=Math.min(hot?0.04:0.02, 2*PX());
     ctx.stroke();
   }
   ctx.restore();
@@ -1115,7 +1115,7 @@ function drawSolutionPath(){
     ctx.moveTo(seg.pts[0].x,seg.pts[0].y);
     for(const pt of seg.pts) ctx.lineTo(pt.x,pt.y);
     ctx.strokeStyle=hot?'#ffe040':(seg.rev?'rgba(255,159,67,0.95)':'rgba(69,196,255,0.95)');
-    ctx.lineWidth=hot?0.14:0.09;
+    ctx.lineWidth=Math.min(hot?0.14:0.09, 5*PX());
     if(seg.rev) ctx.setLineDash([0.3,0.22]);
     ctx.stroke(); ctx.setLineDash([]);
   }
