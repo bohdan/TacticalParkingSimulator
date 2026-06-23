@@ -278,6 +278,9 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
 
   if (inGoal(start, goal)) offer([]);
 
+  const open = [];
+  const closed = new Map();   // cell -> { turns, dist }  (re-openable)
+
   // ── Brute-force 2-turn warmup ──────────────────────────────────────────────
   // Exhaustively tries all (steer1, dist1, steer2, dist2) on the solver distance
   // grid (step STEP, arc ≤ bf2ArcMax). Complements the lattice A*: guarantees
@@ -325,8 +328,6 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
     }
   }
 
-  const open = [];
-  const closed = new Map();   // cell -> { turns, dist }  (re-openable)
   const s0 = { pose: start, turns: 0, dist: 0, parent: null, move: null,
                inSd: null, inDir: 0, cell: key(start), pat: '', f: weight * hTurns(start) };
   _heapPush(open, s0);
