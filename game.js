@@ -350,8 +350,7 @@ function rebuildLevelSelect() {
 
 function fmtGoalDist(d) {
   if (d <= 0) return '<span class="goal-dist goal-in">&#10003; In spot</span>';
-  const cm = Math.round(d * 100);
-  const val = cm >= 100 ? `${(d).toFixed(1)} m` : `${cm} cm`;
+  const val = d >= 1 ? `${d.toFixed(2)} m` : `${(d * 100).toFixed(2)} cm`;
   return `<span class="goal-dist">${val} outside</span>`;
 }
 
