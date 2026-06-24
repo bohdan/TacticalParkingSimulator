@@ -156,6 +156,22 @@ const Physics = (function (G) {
     }
     function carShape(p) { return makeShape(carPolygon(p)); }
 
+    // ── goal geometry / fit ───────────────────────────────────────────────
+    // goalPolygon: the goal zone as an opaque Polygon (axis-aligned or oriented box).
+    function goalPolygon(goal) {
+      return goal.ang
+        ? orientedBoxPolygon(goal.cx, goal.cy, goal.w, goal.h, goal.ang)
+        : rectanglePolygon(goal.cx - goal.w / 2, goal.cy - goal.h / 2, goal.w, goal.h);
+    }
+    // inGoal: does this vehicle's footprint sit fully inside the goal at an allowed heading?
+    function inGoal(pose, goal) {
+      const okHead = goal.heads.some(
+        hd => Math.abs(normalizeAngle(pose.h - rad(hd))) <= rad(goal.tol));
+      if (!okHead) return false;
+      const zone = goalPolygon(goal);
+      return carPolygon(pose).every(v => pointInPolygon(v, zone));
+    }
+
     // ── collision (HOT) ───────────────────────────────────────────────────
     // poseCollides: single-pose broad-phase + SAT. carRadius/centerOffset captured.
     function poseCollides(x, y, h, shapes) {
@@ -200,6 +216,8 @@ const Physics = (function (G) {
     }
 
     // ── opaque gameplay surface ───────────────────────────────────────────
+    // The kernel owns each operation and hands back the minimal handle (a bool from
+    // inGoal, an opaque Polygon from goalPolygon) so callers never walk the geometry.
     const applyMove = (pose, move, shapes, step) =>
       simulateMove(pose, move._steer, move._dist, shapes, step);
     const moveTurnRadius = move => turnRadius(move._steer);
@@ -216,7 +234,7 @@ const Physics = (function (G) {
       advancePose, turnRadius, arcCenter, carPolygon, carShape,
       poseCollides, simulateMove,
       // opaque gameplay surface
-      applyMove, moveTurnRadius, createSolver,
+      goalPolygon, inGoal, applyMove, moveTurnRadius, createSolver,
     };
     return kernel;
   }

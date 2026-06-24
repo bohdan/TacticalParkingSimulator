@@ -3,13 +3,13 @@
  * scene.js — the Scene component (Component 2).
  *
  * Turns a level definition into obstacles that pair render/semantic metadata with an opaque
- * collision Shape, and owns goal logic. The physics kernel never sees `kind`/`carSpec`/`pose`
- * — only `shape`. Obstacle shapes are pure geometry, so buildLevel needs NO kernel; goal-fit
- * needs the player footprint, so inGoal takes the kernel.
+ * collision Shape, and threads the raw `goal` through unchanged. The physics kernel never
+ * sees `kind`/`carSpec`/`pose` — only `shape`. Goal geometry and goal-fit are NOT here: the
+ * kernel owns `goalPolygon`/`inGoal`, since the fit depends on the vehicle footprint.
  *
- * Depends on `Physics` (physics-kernel.js) and `Geom2D` (geometry2d.js). Browser + Node.
+ * Depends on `Physics` (physics-kernel.js). Browser + Node.
  */
-const Scene = (function (P, G) {
+const Scene = (function (P) {
 
   const BORDER = 0.45; // field is fenced by a border this thick
 
@@ -40,26 +40,9 @@ const Scene = (function (P, G) {
     return Object.assign({}, def, { obstacles });
   }
 
-  // goalPolygon(goal) → Polygon (axis-aligned or oriented box). ⇐ render + clearance HUD.
-  function goalPolygon(g) {
-    if (g.ang) return G.orientedBoxPolygon(g.cx, g.cy, g.w, g.h, g.ang);
-    return G.rectanglePolygon(g.cx - g.w / 2, g.cy - g.h / 2, g.w, g.h);
-  }
-
-  // inGoal(pose, goal, kernel) → boolean. Uses kernel.carPolygon so the footprint matches
-  // the level's vehicle; heading must fall within tolerance of an allowed goal heading.
-  function inGoal(pose, goal, kernel) {
-    const okHead = goal.heads.some(
-      hd => Math.abs(P.normalizeAngle(P.poseHeading(pose) - P.rad(hd))) <= P.rad(goal.tol));
-    if (!okHead) return false;
-    const zone = goalPolygon(goal);
-    return kernel.carPolygon(pose).every(v => G.pointInPolygon(v, zone));
-  }
-
-  return { buildLevel, goalPolygon, inGoal };
+  return { buildLevel };
 })(
   typeof Physics !== 'undefined' ? Physics : require('./physics-kernel.js'),
-  typeof Geom2D  !== 'undefined' ? Geom2D  : require('./geometry2d.js'),
 );
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Scene;
