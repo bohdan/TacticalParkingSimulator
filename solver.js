@@ -524,7 +524,7 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
       workers:  opts.workers,
       _start: start, _obstacles: obstacles, _goal: goal,
     };
-    const bfDeadline = startTime + Math.min(timeMs, opts.bfTimeMs || 25000);
+    const bfDeadline = opts.bfTimeMs ? startTime + opts.bfTimeMs : Infinity;
     await bruteForceParallel(def, bfPrm, m => offer(m), shouldStop, bfDeadline, now);
   }
 
