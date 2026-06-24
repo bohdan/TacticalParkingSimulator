@@ -259,6 +259,232 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best, pr
 }
 }
 
+// ── Fast BF kernel (precomputed tables, same search as bruteForceKernel) ────
+//
+// Three precomputed tables eliminate trig from the hot inner loops:
+//
+//  Arc-1 absolute table  arc1[si][di][n] = advance(start, STEERS[si], dir*n*DQ)
+//    Filled once at startup; the n1 loop is pure array lookups — zero trig calls.
+//
+//  Local-frame delta table  dDx/dDy/dDh[si*ND+n]
+//    For a fixed steer si and n steps: Δx = R*sin(n·DQ/R), Δy = R*(1−cos(n·DQ/R)),
+//    Δh = n·DQ/R in the car's own frame. Applying to a pose p1 costs cos(p1.h) and
+//    sin(p1.h) once per p1, then each n2 step is pure arithmetic (no trig per step).
+//    For reverse: negate Δx and Δh; Δy is unchanged (same lateral offset magnitude).
+//
+//  Per-steer radii  R_tab / absR_tab
+//    Precomputed once; shared by dock() and the circleApprDist broad-phase.
+//
+// dock() and scanInterval() are identical to bruteForceKernel — correctness unchanged.
+async function bruteForceKernelFast(geom, prm, emit, shouldStop, yieldHook, best, progressHook = null) {
+  const { obstacles, goal, start } = geom;
+  const STEERS = prm.STEERS;
+  const DQ = prm.DIST_Q, A1 = prm.arc1, A2 = prm.arc2, A3 = prm.arc3;
+  const N1 = Math.floor(A1 / DQ), N2 = Math.floor(A2 / DQ), NA3 = Math.floor(A3 / DQ);
+  const wb = CAR.wb;
+  const round2 = v => Math.round(v * 100) / 100;
+  best = best || { v: Infinity, dist: Infinity };
+
+  const goalHalfDiag = 0.5 * Math.hypot(goal.w, goal.h);
+  const tolR = rad(goal.tol), gHeads = goal.heads.map(rad);
+  const dockRange = A3 + goalHalfDiag + 0.5;
+  const gate1 = A2 + dockRange + 0.5;
+  const rCar = 0.5 * Math.hypot(CAR.len, CAR.wid) + 0.02;
+  const offc = (CAR.wb + CAR.fOver - CAR.rOver) / 2;
+  const NS = STEERS.length;
+
+  // Point-based collision — accepts x,y,h separately to avoid object creation on every call.
+  function hitsXYH(px, py, ph) {
+    const ccx = px + Math.cos(ph) * offc, ccy = py + Math.sin(ph) * offc;
+    let poly = null;
+    for (let oi = 0; oi < obstacles.length; oi++) {
+      const o = obstacles[oi];
+      const bc = o.bc || (o.bc = polyBC(o.poly));
+      const dx = ccx - bc.x, dy = ccy - bc.y, rr = rCar + bc.r;
+      if (dx * dx + dy * dy > rr * rr) continue;
+      if (!poly) poly = carPoly({ x: px, y: py, h: ph });
+      if (polysCollide(poly, o.poly)) return true;
+    }
+    return false;
+  }
+
+  // ── Precompute ─────────────────────────────────────────────────────────────
+
+  const R_tab = new Float64Array(NS), absR_tab = new Float64Array(NS);
+  for (let si = 0; si < NS; si++) {
+    const s = rad(STEERS[si]);
+    R_tab[si] = Math.abs(s) < 1e-4 ? Infinity : wb / Math.tan(s);
+    absR_tab[si] = Math.abs(R_tab[si]);
+  }
+
+  // Local-frame delta table.  Index: si*ND+n  (n = 1..max(N1,N2)).
+  // dDx = R*sin(n*DQ/R) (forward Δx), dDy = R*(1−cos(n*DQ/R)) (same fwd/rev), dDh = n*DQ/R (fwd Δh).
+  const ND = Math.max(N1, N2) + 1;
+  const dDx = new Float64Array(NS * ND);
+  const dDy = new Float64Array(NS * ND);
+  const dDh = new Float64Array(NS * ND);
+  for (let si = 0; si < NS; si++) {
+    const R = R_tab[si], base = si * ND;
+    if (!isFinite(R)) {
+      for (let n = 1; n < ND; n++) dDx[base + n] = n * DQ; // dDy,dDh remain 0
+    } else {
+      for (let n = 1; n < ND; n++) {
+        const a = n * DQ / R;
+        dDx[base + n] = R * Math.sin(a);
+        dDy[base + n] = R * (1 - Math.cos(a));
+        dDh[base + n] = a;
+      }
+    }
+  }
+
+  // Arc-1 absolute pose table.  Index: (si*2+di)*(N1+1)+n  — di=0 fwd, di=1 rev.
+  const a1x = new Float64Array(NS * 2 * (N1 + 1));
+  const a1y = new Float64Array(NS * 2 * (N1 + 1));
+  const a1h = new Float64Array(NS * 2 * (N1 + 1));
+  for (let si = 0; si < NS; si++) {
+    const s1r = rad(STEERS[si]);
+    for (let di = 0; di < 2; di++) {
+      const dir = di === 0 ? 1 : -1;
+      const base = (si * 2 + di) * (N1 + 1);
+      a1x[base] = start.x; a1y[base] = start.y; a1h[base] = start.h;
+      for (let n = 1; n <= N1; n++) {
+        const p = advance(start, s1r, dir * n * DQ);
+        a1x[base + n] = p.x; a1y[base + n] = p.y; a1h[base + n] = p.h;
+      }
+    }
+  }
+
+  // ── dock / scanInterval (same logic as bruteForceKernel) ───────────────────
+  const rho = goalHalfDiag, rho2 = rho * rho;
+
+  const scanInterval = (p2, s3, lo, hi, sd3, m1, m2, na3Eff) => {
+    let nLo = Math.ceil(lo / DQ), nHi = Math.floor(hi / DQ);
+    if (nLo < -na3Eff) nLo = -na3Eff;
+    if (nHi > na3Eff) nHi = na3Eff;
+    for (let n = nLo; n <= nHi; n++) {
+      if (n === 0) continue;
+      const d = round2(n * DQ);
+      const p3 = advance(p2, s3, d);
+      if (hitsXYH(p3.x, p3.y, p3.h)) continue;
+      if (inGoal(p3, goal)) emit([m1, m2, { steer: sd3, dist: d }]);
+    }
+  };
+
+  function dock(p2x, p2y, p2h, m1, m2) {
+    if (shouldStop && shouldStop()) return;
+    const used = Math.abs(m1.dist) + Math.abs(m2.dist);
+    const na3Eff = best.dist < Infinity ? Math.min(NA3, Math.floor((best.dist - used) / DQ)) : NA3;
+    if (na3Eff <= 0) return;
+    const sinH = Math.sin(p2h), cosH = Math.cos(p2h);
+    const gx = goal.cx, gy = goal.cy;
+    const p2 = { x: p2x, y: p2y, h: p2h };
+    for (let si = 0; si < NS; si++) {
+      const R = R_tab[si], aR = absR_tab[si];
+      if (R === Infinity) {
+        let okHead = false;
+        for (const gh of gHeads) if (Math.abs(normAng(p2h - gh)) <= tolR) { okHead = true; break; }
+        if (!okHead) continue;
+        const t = (gx - p2x) * cosH + (gy - p2y) * sinH;
+        const fx = p2x + cosH * t, fy = p2y + sinH * t;
+        const cd2 = (fx - gx) * (fx - gx) + (fy - gy) * (fy - gy);
+        if (cd2 > rho2) continue;
+        const half = Math.sqrt(rho2 - cd2);
+        scanInterval(p2, 0, t - half, t + half, 0, m1, m2, na3Eff);
+        continue;
+      }
+      const Cx = p2x - sinH * R, Cy = p2y + cosH * R;
+      const dgx = gx - Cx, dgy = gy - Cy, dC2 = dgx * dgx + dgy * dgy;
+      const outer = aR + rho;
+      if (dC2 > outer * outer) continue;
+      const inner = aR - rho;
+      if (inner > 0 && dC2 < inner * inner) continue;
+      const dC = Math.sqrt(dC2);
+      let cosA = (R * R + dC2 - rho2) / (2 * aR * dC);
+      if (cosA > 1) cosA = 1; if (cosA < -1) cosA = -1;
+      const posHalf = aR * Math.acos(cosA);
+      const phi = Math.atan2(dgy, dgx), hStar = phi + (R > 0 ? Math.PI / 2 : -Math.PI / 2);
+      const sStar = R * normAng(hStar - p2h);
+      const halfW = aR * tolR;
+      const s3r = rad(STEERS[si]), sd3 = STEERS[si];
+      for (const gh of gHeads) {
+        const c = R * normAng(gh - p2h);
+        const lo = Math.max(c - halfW, sStar - posHalf);
+        const hi = Math.min(c + halfW, sStar + posHalf);
+        if (lo <= hi) scanInterval(p2, s3r, lo, hi, sd3, m1, m2, na3Eff);
+      }
+    }
+  }
+
+  // Closest approach of a fixed-steer arc to a target point — distance only.
+  function circleApprDist(px, py, ph, steer, Tx, Ty) {
+    if (Math.abs(steer) < 1e-4) {
+      const ux = Math.cos(ph), uy = Math.sin(ph);
+      const t = (Tx - px) * ux + (Ty - py) * uy;
+      return Math.hypot(px + ux * t - Tx, py + uy * t - Ty);
+    }
+    const R = wb / Math.tan(steer);
+    return Math.abs(Math.hypot(Tx - (px - Math.sin(ph) * R), Ty - (py + Math.cos(ph) * R)) - Math.abs(R));
+  }
+
+  // ── Main BF loop ───────────────────────────────────────────────────────────
+  let iter = 0;
+  for (let i1 = prm.sliceLo; i1 < prm.sliceHi; i1++) {
+    const sd1 = STEERS[i1];
+    for (let di1 = 0; di1 < 2; di1++) {
+      const dr1 = di1 === 0 ? 1 : -1;
+      const a1base = (i1 * 2 + di1) * (N1 + 1);
+      for (let n1 = 1; n1 <= N1; n1++) {
+        // Arc-1 table lookup — zero trig
+        const p1x = a1x[a1base + n1], p1y = a1y[a1base + n1], p1h = a1h[a1base + n1];
+        if (hitsXYH(p1x, p1y, p1h)) break;
+        const dist1 = round2(dr1 * n1 * DQ);
+        const p1 = { x: p1x, y: p1y, h: p1h };
+        if (inGoal(p1, goal)) { emit([{ steer: sd1, dist: dist1 }]); continue; }
+        if (Math.hypot(p1x - goal.cx, p1y - goal.cy) > gate1) continue;
+        const m1 = { steer: sd1, dist: dist1 };
+        const absDist1 = n1 * DQ;
+        const cos1 = Math.cos(p1h), sin1 = Math.sin(p1h);    // 2 trig per p1
+        for (let i2 = 0; i2 < NS; i2++) {
+          const sd2 = STEERS[i2], s2r = rad(sd2);
+          if (circleApprDist(p1x, p1y, p1h, s2r, goal.cx, goal.cy) > dockRange) continue;
+          const d2base = i2 * ND;
+          for (let di2 = 0; di2 < 2; di2++) {
+            const dr2 = di2 === 0 ? 1 : -1;
+            if (sd2 === sd1 && dr2 === dr1) continue;
+            for (let n2 = 1; n2 <= N2; n2++) {
+              // Delta-table application — arithmetic only, no trig
+              const ddx = dDx[d2base + n2], ddy = dDy[d2base + n2], ddh = dDh[d2base + n2];
+              let p2x, p2y, p2h;
+              if (dr2 === 1) {
+                p2x = p1x + cos1 * ddx - sin1 * ddy;
+                p2y = p1y + sin1 * ddx + cos1 * ddy;
+                p2h = p1h + ddh;
+              } else {
+                p2x = p1x - cos1 * ddx - sin1 * ddy;
+                p2y = p1y - sin1 * ddx + cos1 * ddy;
+                p2h = p1h - ddh;
+              }
+              if (hitsXYH(p2x, p2y, p2h)) break;
+              const dist2 = round2(dr2 * n2 * DQ);
+              const p2 = { x: p2x, y: p2y, h: p2h };
+              if (inGoal(p2, goal)) { emit([m1, { steer: sd2, dist: dist2 }]); continue; }
+              if (best.v <= 2) continue;
+              if (absDist1 + n2 * DQ >= best.dist) continue;
+              if (Math.hypot(p2x - goal.cx, p2y - goal.cy) > dockRange) continue;
+              dock(p2x, p2y, p2h, m1, { steer: sd2, dist: dist2 });
+            }
+            if ((++iter & 31) === 0) {
+              if (shouldStop && shouldStop()) return;
+              if (yieldHook) await yieldHook();
+              if (progressHook && (iter & 0x3ff) === 0) progressHook(iter);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 // Run bruteForceKernel across a pool of Web Workers (one steer-slice each),
 // streaming validated candidates back through `consume`. Resolves when every
 // worker finishes, the deadline passes, or shouldStop() trips. Falls back to a
@@ -335,7 +561,7 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
   // Inline fallback (Node / no Worker support): one kernel over the whole grid.
   const geom = { obstacles: prm._obstacles, goal: prm._goal, start: prm._start };
   const yieldHook = async () => { await new Promise(r => setTimeout(r, 0)); };
-  await bruteForceKernel(geom, Object.assign({}, prm, { sliceLo: 0, sliceHi: prm.STEERS.length }),
+  await bruteForceKernelFast(geom, Object.assign({}, prm, { sliceLo: 0, sliceHi: prm.STEERS.length }),
     onCand, () => (shouldStop && shouldStop()) || (deadline && nowFn() > deadline), yieldHook, best);
 }
 

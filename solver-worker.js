@@ -39,7 +39,7 @@ onmessage = async (e) => {
   };
 
   try {
-    await bruteForceKernel(geom, m.prm, emit, () => stopped, null, best,
+    await bruteForceKernelFast(geom, m.prm, emit, () => stopped, null, best,
       (iter) => postMessage({ type: 'progress', iter }));
   } catch (err) {
     // swallow — a dead worker just contributes nothing; main still finishes
