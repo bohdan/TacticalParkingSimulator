@@ -97,7 +97,7 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best) {
   const gate1 = A2 + dockRange + 0.5;            // turn-1 must leave a reachable turn-2
   const N1 = Math.floor(A1 / DIST_Q), N2 = Math.floor(A2 / DIST_Q);
   const skipR3 = goalHalfDiag + carHalfDiag + 0.5;
-  const Wdock = Math.ceil((prm.dockWin || 0.6) / DIST_Q);
+  const Wdock = Math.ceil((prm.dockWin || 1.0) / DIST_Q);
   const dedupP = prm.dedupPos || 0.3, dedupA = rad(prm.dedupAng || 10);
   best = best || { v: Infinity };
 
@@ -129,8 +129,14 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best) {
     const phi = Math.atan2(Ty - cyC, Tx - cxC), hStar = phi + Math.PI / 2 * Math.sign(R);
     return { cd: Math.abs(dC - Math.abs(R)), sStar: R * normAng(hStar - p.h) };
   }
-  // Analytic final turn: aim each steer's arc straight at a goal heading.
+  // Analytic final turn: invert the heading equation to find the arc length that swings
+  // the car onto a goal heading, then test a window around it.  Window width is
+  // dockWin (default 1.0 m) which covers the heading-tolerance gap — a car can enter
+  // the goal box before fully swinging to the exact goal heading, so the window must
+  // be wider than the quantisation error alone (originally 0.6 m, which was 1 step too
+  // narrow for some valid solutions).
   function dock(p2, m1, m2) {
+    if (shouldStop && shouldStop()) return;   // abort quickly when deadline fires
     for (let si = 0; si < STEERS.length; si++) {
       const sd3 = STEERS[si], s3 = rad(sd3);
       if (Math.abs(s3) < 1e-4) {                 // straight: heading fixed
@@ -147,18 +153,16 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best) {
         continue;
       }
       if (circleApproach(p2, s3, goal.cx, goal.cy).cd > skipR3) continue;
-      // Scan all arc lengths with early break on collision — heading tolerance can
-      // be large (e.g. 45°) so a narrow analytic window misses valid distances.
-      const N3 = Math.ceil(A3 / DIST_Q);
-      for (let n = 1; n <= N3; n++) {
-        const df = round2(n * DIST_Q);
-        const p3f = advance(p2, s3, df); if (hits(p3f)) break;
-        if (inGoal(p3f, goal)) emit([m1, m2, { steer: sd3, dist: df }]);
-      }
-      for (let n = 1; n <= N3; n++) {
-        const db = round2(-n * DIST_Q);
-        const p3b = advance(p2, s3, db); if (hits(p3b)) break;
-        if (inGoal(p3b, goal)) emit([m1, m2, { steer: sd3, dist: db }]);
+      const R = wb / Math.tan(s3);
+      for (const gh of gHeads) {
+        const c = Math.round(R * normAng(gh - p2.h) / DIST_Q);
+        for (let k = -Wdock; k <= Wdock; k++) {
+          const n = c + k; if (n === 0) continue;
+          const d = round2(n * DIST_Q);
+          if (Math.abs(d) > A3 || Math.abs(d) < DIST_Q) continue;
+          const p3 = advance(p2, s3, d); if (hits(p3)) continue;
+          if (inGoal(p3, goal)) emit([m1, m2, { steer: sd3, dist: d }]);
+        }
       }
     }
   }
@@ -514,7 +518,7 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
       arc1: opts.bfArc1 || Math.min(8, ARC_MAX),
       arc2: opts.bfArc2 || 6,
       arc3: opts.bfArc3 || 6,
-      dockWin:  opts.bfDockWin  || 0.6,
+      dockWin:  opts.bfDockWin  || 1.0,
       dedupPos: opts.bfDedupPos || 0.3,
       dedupAng: opts.bfDedupAng || 10,
       workers:  opts.workers,
