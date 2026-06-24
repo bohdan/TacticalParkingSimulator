@@ -241,19 +241,15 @@ const Physics = (function (G) {
 
   /* ─── Solver (Component 1c) — bound to a kernel ─────────────────────────── */
 
-  // Interface stub: the heavy weighted-A* / dock-interval search is ported in a later step.
-  // Shape is fixed here so the contract is callable and testable.
+  // The weighted-A* / dock-interval search lives in solver.js, which binds to this kernel
+  // via its makeSolver(kernel). Resolved lazily (at createSolver() time) so solver.js can
+  // load after this file — and so a kernel built for collision-only use needs no solver.
   function makeSolver(kernel) {
-    return {
-      // solve(level, opts, progressCb?) → Promise<Move[] | null>
-      solve(/* level, opts, progressCb */) {
-        throw new Error('Solver.solve: search not yet ported (interface stub).');
-      },
-      // bruteForce(...) → Promise<void> (the Web-Worker entry)
-      bruteForce(/* geom, params, emit, shouldStop, yieldHook, best, progressHook */) {
-        throw new Error('Solver.bruteForce: search not yet ported (interface stub).');
-      },
-    };
+    const impl = (typeof Solver !== 'undefined' && Solver.makeSolver) ? Solver
+               : (typeof require !== 'undefined') ? require('./solver.js') : null;
+    if (!impl || !impl.makeSolver)
+      throw new Error('Solver not loaded — include solver.js (browser) or require it (Node).');
+    return impl.makeSolver(kernel);   // → { solve, bruteForce, validateMoves }
   }
 
   /* ─── Public surface ───────────────────────────────────────────────────── */

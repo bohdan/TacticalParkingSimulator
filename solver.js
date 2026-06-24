@@ -26,13 +26,38 @@
 // propagated with those exact numbers; each emitted plan is re-simulated at the
 // game's fine collision step, so what the solver returns replays identically.
 //
-// Requires physics.js globals: CAR, SAMPLE_STEP, setVehicle, buildLevel, advance,
-// carPoly, polysCollide, polyBC, simulateMove, inGoal, normAng, rad.
+// Bound to a PhysicsKernel (physics-kernel.js) — NOT the legacy physics.js globals.
+// makeSolver(kernel) → { solve, bruteForce, validateMoves } binds the kernel; the free
+// solveParkingLevel(def, opts, cb) builds a kernel for def.vehicle and delegates, so
+// existing callers (editor.html) keep working unchanged.
 //
 // solveParkingLevel(def, opts, cb) -> Promise<{steer (deg), dist (m)}[] | null>
 
 const STEER_Q = 0.2;   // deg, player steering input grid
 const DIST_Q  = 0.05;  // m,   player distance input grid
+
+// Physics layer. In the browser these are globals; in Node (and the worker) they load here.
+const P = (typeof Physics !== 'undefined') ? Physics : require('./physics-kernel.js');
+const G = (typeof Geom2D  !== 'undefined') ? Geom2D  : require('./geometry2d.js');
+const SceneMod = (typeof Scene !== 'undefined') ? Scene : require('./scene.js');
+const rad = P.rad, deg = P.deg, normAng = P.normalizeAngle, SAMPLE_STEP = P.SAMPLE_STEP;
+const polysCollide = G.polygonsCollide, polyBC = G.polygonBoundingCircle;
+const buildLevel = SceneMod.buildLevel;
+// These five resolve to the active kernel's methods/spec, set by _bindKernel().
+let advance, carPoly, simulateMove, inGoal, CAR;
+function _bindKernel(kernel) {
+  advance = kernel.advancePose; carPoly = kernel.carPolygon;
+  simulateMove = kernel.simulateMove; inGoal = kernel.inGoal; CAR = kernel.spec;
+}
+// Public surface. makeSolver binds an existing kernel; solveParkingLevel builds one.
+function makeSolver(kernel) {
+  _bindKernel(kernel);
+  return { solve: _solve, bruteForce: bruteForceKernelFast, validateMoves };
+}
+async function solveParkingLevel(def, opts = {}, progressCb = null) {
+  _bindKernel(P.PhysicsKernel(P.physicsConfigForLevel(def)));
+  return _solve(def, opts, progressCb);
+}
 
 function _heapPush(h, s) {
   h.push(s);
@@ -565,7 +590,7 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
     onCand, () => (shouldStop && shouldStop()) || (deadline && nowFn() > deadline), yieldHook, best);
 }
 
-async function solveParkingLevel(def, opts = {}, progressCb = null) {
+async function _solve(def, opts = {}, progressCb = null) {
   const {
     weight = 1.0,          // heuristic weight: higher = greedier/faster first plan
     extraTurns = 2,        // also keep best plans at K*+1 .. K*+extraTurns
@@ -586,11 +611,9 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
 
   const snap = (v, q) => Math.round(v / q) * q;
   const round2 = v => Math.round(v * 100) / 100;
-  const savedCar = Object.assign({}, CAR);
-  const restore = () => { Object.assign(CAR, savedCar); CAR.fOver = CAR.len - CAR.wb - CAR.rOver; };
-  setVehicle(def.vehicle || 'default');
   const lvl = buildLevel(def);
-  const { obstacles, goal, start } = lvl;
+  const goal = lvl.goal, start = lvl.start;
+  const obstacles = lvl.obstacles.map(o => o.shape);   // kernel/solver collide against Shapes
   const ms = CAR.maxSteer;
 
   // Steering candidates on the 0.2-deg grid (denser near full lock for tight work).
@@ -899,7 +922,6 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
     await bruteForceParallel(def, bfPrm, m => offer(m), shouldStop, bfDeadline, now, progressCb, getInitBest());
   }
 
-  restore();
   const bestSet = solSets.has(bestTurns) ? solSets.get(bestTurns) : [];
   const bestEntry = bestSet.length ? bestSet.reduce((a, e) => e.dist < a.dist ? e : a) : null;
   progressCb && progressCb({ type: 'done', expand,
@@ -908,4 +930,5 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
   return bestEntry ? bestEntry.moves : null;
 }
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { solveParkingLevel };
+if (typeof module !== 'undefined' && module.exports) module.exports = { makeSolver, solveParkingLevel };
+else if (typeof self !== 'undefined') self.Solver = { makeSolver, solveParkingLevel };
