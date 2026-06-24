@@ -95,7 +95,7 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best, pr
   const dockRange = A3 + goalHalfDiag + 0.5;     // turn-2 must end within one dock arc of goal
   const gate1 = A2 + dockRange + 0.5;            // turn-1 must leave a reachable turn-2
   const N1 = Math.floor(A1 / DIST_Q), N2 = Math.floor(A2 / DIST_Q);
-  best = best || { v: Infinity };
+  best = best || { v: Infinity, dist: Infinity };
 
   // Per-steer turn-3 radii, precomputed once (R = wb/tan(steer); ±Infinity ≈ straight).
   const R3 = new Float64Array(STEERS.length), absR3 = new Float64Array(STEERS.length);
@@ -151,10 +151,10 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best, pr
   // non-lossy (each keeps a strict superset of poses any valid solution passes through).
   const NA3 = Math.floor(A3 / DIST_Q);
   const rho = goalHalfDiag;          // rear axle ∈ car footprint ⊂ goal box ⇒ within rho of centre
-  const scanInterval = (p2, s3, lo, hi, sd3, m1, m2) => {
+  const scanInterval = (p2, s3, lo, hi, sd3, m1, m2, na3Eff) => {
     let nLo = Math.ceil(lo / DIST_Q), nHi = Math.floor(hi / DIST_Q);
-    if (nLo < -NA3) nLo = -NA3;
-    if (nHi >  NA3) nHi =  NA3;
+    if (nLo < -na3Eff) nLo = -na3Eff;
+    if (nHi >  na3Eff) nHi =  na3Eff;
     for (let n = nLo; n <= nHi; n++) {
       if (n === 0) continue;
       const d = round2(n * DIST_Q);
@@ -164,27 +164,28 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best, pr
   };
   const rho2 = rho * rho;
   function dock(p2, m1, m2) {
-    if (shouldStop && shouldStop()) return;   // abort quickly when deadline fires
+    if (shouldStop && shouldStop()) return;
+    const used = Math.abs(m1.dist) + Math.abs(m2.dist);
+    const na3Eff = best.dist < Infinity ? Math.min(NA3, Math.floor((best.dist - used) / DIST_Q)) : NA3;
+    if (na3Eff <= 0) return;
     const ph = p2.h, sinH = Math.sin(ph), cosH = Math.cos(ph);
     const gx = goal.cx, gy = goal.cy;
     for (let si = 0; si < STEERS.length; si++) {
       const R = R3[si], aR = absR3[si];
-      if (R === Infinity) {                      // straight: heading constant, path is a line
+      if (R === Infinity) {
         let okHead = false;
         for (const gh of gHeads) if (Math.abs(normAng(ph - gh)) <= tolR) { okHead = true; break; }
         if (!okHead) continue;
-        const t = (gx - p2.x) * cosH + (gy - p2.y) * sinH;        // length to closest approach
+        const t = (gx - p2.x) * cosH + (gy - p2.y) * sinH;
         const fx = p2.x + cosH * t, fy = p2.y + sinH * t;
         const cd2 = (fx - gx) * (fx - gx) + (fy - gy) * (fy - gy);
-        if (cd2 > rho2) continue;                                  // line never enters the goal box
-        const half = Math.sqrt(rho2 - cd2);                        // chord half-length within rho
-        scanInterval(p2, 0, t - half, t + half, 0, m1, m2);
+        if (cd2 > rho2) continue;
+        const half = Math.sqrt(rho2 - cd2);
+        scanInterval(p2, 0, t - half, t + half, 0, m1, m2, na3Eff);
         continue;
       }
-      const Cx = p2.x - sinH * R, Cy = p2.y + cosH * R;            // turn-3 circle centre
+      const Cx = p2.x - sinH * R, Cy = p2.y + cosH * R;
       const dgx = gx - Cx, dgy = gy - Cy, dC2 = dgx * dgx + dgy * dgy;
-      // Reject (no sqrt) any circle that never brings the rear axle within rho of goal:
-      //   |dC − |R|| > rho  ⟺  dC > |R|+rho  OR  dC < |R|−rho
       const outer = aR + rho;
       if (dC2 > outer * outer) continue;
       const inner = aR - rho;
@@ -193,16 +194,16 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best, pr
       let cosA = (R * R + dC2 - rho2) / (2 * aR * dC);
       if (cosA >  1) cosA =  1;
       if (cosA < -1) cosA = -1;
-      const posHalf = aR * Math.acos(cosA);                        // position-interval half-width
+      const posHalf = aR * Math.acos(cosA);
       const phi = Math.atan2(dgy, dgx), hStar = phi + (R > 0 ? Math.PI / 2 : -Math.PI / 2);
-      const sStar = R * normAng(hStar - ph);                       // length to closest approach
-      const halfW = aR * tolR;                                     // heading-interval half-width
+      const sStar = R * normAng(hStar - ph);
+      const halfW = aR * tolR;
       const s3 = rad(STEERS[si]), sd3 = STEERS[si];
       for (const gh of gHeads) {
-        const c = R * normAng(gh - ph);                            // length onto the exact goal heading
+        const c = R * normAng(gh - ph);
         const lo = Math.max(c - halfW, sStar - posHalf);
         const hi = Math.min(c + halfW, sStar + posHalf);
-        if (lo <= hi) scanInterval(p2, s3, lo, hi, sd3, m1, m2);
+        if (lo <= hi) scanInterval(p2, s3, lo, hi, sd3, m1, m2, na3Eff);
       }
     }
   }
@@ -236,6 +237,7 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best, pr
               const m2 = { steer: sd2, dist: dist2 };
               if (inGoal(p2, goal)) { emit([m1, m2]); continue; }   // 2-turn
               if (best.v <= 2) continue;                          // can't beat a known ≤2-turn
+              if (Math.abs(dist1) + Math.abs(dist2) >= best.dist) continue;  // no room for arc3
               if (hDist(p2) > dockRange) continue;
               if (docked) {
                 const ck = Math.round(p2.x / dedupP) + ',' + Math.round(p2.y / dedupP) +
@@ -262,7 +264,7 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best, pr
 // worker finishes, the deadline passes, or shouldStop() trips. Falls back to a
 // single inline kernel run when Workers are unavailable (Node, older browsers).
 async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn, progressCb = null) {
-  const best = { v: Infinity };
+  const best = { v: Infinity, dist: Infinity };
   const onCand = moves => {                       // shared validate→consume→track-best
     const v = validateMoves(prm._start, moves, prm._obstacles, prm._goal);
     if (v) { if (v.length < best.v) best.v = v.length; consume(v); }
@@ -304,10 +306,14 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
           wk.onmessage = (e) => {
             const m = e.data;
             if (m.type === 'sol') {
-              if (m.moves.length < best.v) best.v = m.moves.length;
+              const d = m.moves.reduce((a, mv) => a + Math.abs(mv.dist), 0);
+              const improved = m.moves.length < best.v ||
+                (m.moves.length === best.v && d < best.dist);
+              if (m.moves.length < best.v) { best.v = m.moves.length; best.dist = d; }
+              else if (m.moves.length === best.v && d < best.dist) { best.dist = d; }
               consume(m.moves);
-              if (m.moves.length <= 2)                          // share the bound for pruning
-                for (const o of workers) { try { o.postMessage({ type: 'best', v: best.v }); } catch (e2) {} }
+              if (improved)
+                for (const o of workers) { try { o.postMessage({ type: 'best', v: best.v, dist: best.dist }); } catch (e2) {} }
             } else if (m.type === 'progress') {
               wIters[wi] = m.iter;
             } else if (m.type === 'done') {

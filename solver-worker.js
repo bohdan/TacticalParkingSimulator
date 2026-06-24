@@ -10,12 +10,16 @@
 importScripts('physics.js', 'solver.js');
 
 let stopped = false;
-const best = { v: Infinity };   // fewest valid turns this worker has seen (for dock pruning)
+const best = { v: Infinity, dist: Infinity };
 
 onmessage = async (e) => {
   const m = e.data;
   if (m.type === 'stop') { stopped = true; return; }
-  if (m.type === 'best') { if (m.v < best.v) best.v = m.v; return; }   // bound shared from a peer
+  if (m.type === 'best') {
+    if (m.v < best.v) { best.v = m.v; best.dist = m.dist ?? Infinity; }
+    else if (m.v === best.v && m.dist < best.dist) { best.dist = m.dist; }
+    return;
+  }
   if (m.type !== 'run') return;
 
   stopped = false;
@@ -28,7 +32,9 @@ onmessage = async (e) => {
   const emit = (moves) => {
     const v = validateMoves(geom.start, moves, geom.obstacles, geom.goal);
     if (!v) return;
-    if (v.length < best.v) best.v = v.length;
+    const d = v.reduce((a, m) => a + Math.abs(m.dist), 0);
+    if (v.length < best.v) { best.v = v.length; best.dist = d; }
+    else if (v.length === best.v && d < best.dist) { best.dist = d; }
     postMessage({ type: 'sol', moves: v });
   };
 
