@@ -1620,7 +1620,7 @@ function updateSolutionPanel(){
       const d=L.solution.reduce((a,m)=>a+Math.abs(m.dist),0);
       cands+=`<div class="row sol-cand sol-cand-on">`
         +`<span class="sol-n">${L.solution.length}t</span>`
-        +`<span class="sol-cand-d">${d.toFixed(1)} m · ${Math.round(d*100)} cm · shown</span>`
+        +`<span class="sol-cand-d">${d.toFixed(1)} · ${Math.round(d*100)} cm · shown</span>`
         +`<button class="sol-show" disabled title="Currently shown">✓</button>`
         +`<button class="sol-clear-current" title="Clear this solution">✕</button>`
         +`</div>`;
@@ -1630,7 +1630,7 @@ function updateSolutionPanel(){
         const on=i===shownIdx, d=s.reduce((a,m)=>a+Math.abs(m.dist),0);
         return `<div class="row sol-cand${on?' sol-cand-on':''}" data-ci="${i}">`
           +`<span class="sol-n">${s.length}t</span>`
-          +`<span class="sol-cand-d">${d.toFixed(1)} m · ${Math.round(d*100)} cm${on?' · shown':''}</span>`
+          +`<span class="sol-cand-d">${d.toFixed(1)} · ${Math.round(d*100)} cm${on?' · shown':''}</span>`
           +`<button class="sol-show" data-ci="${i}" title="Show this plan to the player"${on?' disabled':''}>${on?'✓':'Show'}</button>`
           +`<button class="sol-cand-del" data-ci="${i}" title="Remove this option">✕</button>`
           +`</div>`;
