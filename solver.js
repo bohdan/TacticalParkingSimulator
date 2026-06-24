@@ -67,18 +67,18 @@ function validateMoves(start, moves, obstacles, goal) {
 }
 
 // ── Brute-force kernel (shared: main-thread fallback OR Web Worker) ───────────
-// Enumerates the first two turns over the assigned slice of the FULL steer grid
-// (every candidate distance on the 0.05 m grid, each arc stopped on collision),
-// then finishes with an ANALYTIC third "dock" turn instead of a third brute scan:
-// for each steer it solves, in closed form, the arc length that swings the heading
-// onto a goal heading (a circle/heading inversion, obstacles ignored) and validates
-// only those handful of poses. Two cheap geometric prunes keep it tractable:
-//   • turn-2 broad-phase — a fixed steer traces a circle of radius R = wb/tan(steer);
-//     if the whole circle stays farther than dockRange from the goal centre
-//     (|dist(centre,goal) − R| > dockRange) no distance on that arc can ever dock,
-//     so the steer is skipped without rolling it out.
-//   • dock dedupe — near-identical turn-2 end poses (a 0.3 m / 10° lattice cell) are
-//     docked once; brute force otherwise re-derives the same pose thousands of times.
+// Exhaustive 3-turn search over the assigned slice of the FULL steer grid. It
+// enumerates the first two turns (every candidate distance on the 0.05 m grid, each
+// arc stopped on collision), then for each distinct turn-2 end pose docks the third
+// turn EXACTLY: for every steer it scans the whole grid arc-length interval whose
+// resulting heading falls inside the goal heading tolerance (see dock()), testing
+// in-goal at each. No analytic window and no pose dedup, so no valid solution is
+// dropped. Tractability comes only from geometric broad-phases that are provably
+// non-lossy (each keeps a strict superset of the poses any valid solution passes
+// through), e.g. the turn-2 broad-phase: a fixed steer traces a circle of radius
+// R = wb/tan(steer); if the whole circle stays farther than dockRange from the goal
+// centre (|dist(centre,goal) − R| > dockRange) no distance on that arc can ever dock,
+// so the steer is skipped without rolling it out.
 // Calls emit(moves[]) for every goal-reaching candidate; the caller validates+dedupes.
 // `best.v` is the fewest VALID turns seen so far (updated by the caller after
 // validation); once it is ≤ 2 the dock (a 3rd turn) is pruned as it can't be shorter.
@@ -91,15 +91,19 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best) {
   const rCar = 0.5 * Math.hypot(CAR.len, CAR.wid) + 0.02;
   const offc = (CAR.wb + CAR.fOver - CAR.rOver) / 2;
   const goalHalfDiag = 0.5 * Math.hypot(goal.w, goal.h);
-  const carHalfDiag = 0.5 * Math.hypot(CAR.len, CAR.wid);
   const tolR = rad(goal.tol), gHeads = goal.heads.map(rad);
   const dockRange = A3 + goalHalfDiag + 0.5;     // turn-2 must end within one dock arc of goal
   const gate1 = A2 + dockRange + 0.5;            // turn-1 must leave a reachable turn-2
   const N1 = Math.floor(A1 / DIST_Q), N2 = Math.floor(A2 / DIST_Q);
-  const skipR3 = goalHalfDiag + carHalfDiag + 0.5;
-  const Wdock = Math.ceil((prm.dockWin || 1.0) / DIST_Q);
-  const dedupP = prm.dedupPos || 0.3, dedupA = rad(prm.dedupAng || 10);
   best = best || { v: Infinity };
+
+  // Per-steer turn-3 radii, precomputed once (R = wb/tan(steer); ±Infinity ≈ straight).
+  const R3 = new Float64Array(STEERS.length), absR3 = new Float64Array(STEERS.length);
+  for (let i = 0; i < STEERS.length; i++) {
+    const s = rad(STEERS[i]);
+    const r = Math.abs(s) < 1e-4 ? Infinity : wb / Math.tan(s);
+    R3[i] = r; absR3[i] = Math.abs(r);
+  }
 
   function hits(p) {
     const ccx = p.x + Math.cos(p.h) * offc, ccy = p.y + Math.sin(p.h) * offc;
@@ -129,45 +133,86 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best) {
     const phi = Math.atan2(Ty - cyC, Tx - cxC), hStar = phi + Math.PI / 2 * Math.sign(R);
     return { cd: Math.abs(dC - Math.abs(R)), sStar: R * normAng(hStar - p.h) };
   }
-  // Analytic final turn: invert the heading equation to find the arc length that swings
-  // the car onto a goal heading, then test a window around it.  Window width is
-  // dockWin (default 1.0 m) which covers the heading-tolerance gap — a car can enter
-  // the goal box before fully swinging to the exact goal heading, so the window must
-  // be wider than the quantisation error alone (originally 0.6 m, which was 1 step too
-  // narrow for some valid solutions).
+  // Exact final turn. The heading after a turn-3 arc is linear in its length,
+  // For each turn-3 steer the in-goal arc lengths are bounded EXACTLY by two
+  // necessary conditions, each a closed-form arc-length interval:
+  //   • heading — p3.h = p2.h + d3/R is linear in d3, so the lengths whose heading is
+  //     within the goal tolerance form [c − |R|·tolR, c + |R|·tolR] (c reaches the
+  //     exact goal heading). In-goal requires heading within tolerance.
+  //   • position — in-goal ⇒ the whole car footprint is inside the goal box, so the
+  //     rear axle (a point of that footprint) is within goalHalfDiag of the goal
+  //     centre. On the turn-3 circle that is the arc [sStar − |R|·α, sStar + |R|·α]
+  //     around the closest-approach length sStar, with α from the law of cosines.
+  // The valid d3 lie in the INTERSECTION of those intervals (and [−A3, A3]); scanning
+  // every 0.05 m grid length in it and testing inGoal misses nothing. Both bounds are
+  // necessary conditions, so the intersection is a superset of the true solution set —
+  // exact, with no window guess and no p2 dedup (every distinct turn-2 end pose is
+  // docked). The geometric broad-phases gating which (p1, p2) reach here are likewise
+  // non-lossy (each keeps a strict superset of poses any valid solution passes through).
+  const NA3 = Math.floor(A3 / DIST_Q);
+  const rho = goalHalfDiag;          // rear axle ∈ car footprint ⊂ goal box ⇒ within rho of centre
+  const scanInterval = (p2, s3, lo, hi, sd3, m1, m2) => {
+    let nLo = Math.ceil(lo / DIST_Q), nHi = Math.floor(hi / DIST_Q);
+    if (nLo < -NA3) nLo = -NA3;
+    if (nHi >  NA3) nHi =  NA3;
+    for (let n = nLo; n <= nHi; n++) {
+      if (n === 0) continue;
+      const d = round2(n * DIST_Q);
+      const p3 = advance(p2, s3, d); if (hits(p3)) continue;
+      if (inGoal(p3, goal)) emit([m1, m2, { steer: sd3, dist: d }]);
+    }
+  };
+  const rho2 = rho * rho;
   function dock(p2, m1, m2) {
     if (shouldStop && shouldStop()) return;   // abort quickly when deadline fires
+    const ph = p2.h, sinH = Math.sin(ph), cosH = Math.cos(ph);
+    const gx = goal.cx, gy = goal.cy;
     for (let si = 0; si < STEERS.length; si++) {
-      const sd3 = STEERS[si], s3 = rad(sd3);
-      if (Math.abs(s3) < 1e-4) {                 // straight: heading fixed
-        for (const gh of gHeads) {
-          if (Math.abs(normAng(p2.h - gh)) > tolR) continue;
-          const c = Math.round(circleApproach(p2, 0, goal.cx, goal.cy).sStar / DIST_Q);
-          for (let k = -Wdock; k <= Wdock; k++) {
-            const n = c + k; if (n === 0) continue;
-            const d = round2(n * DIST_Q); if (Math.abs(d) > A3) continue;
-            const p3 = advance(p2, 0, d); if (hits(p3)) continue;
-            if (inGoal(p3, goal)) emit([m1, m2, { steer: 0, dist: d }]);
-          }
-        }
+      const R = R3[si], aR = absR3[si];
+      if (R === Infinity) {                      // straight: heading constant, path is a line
+        let okHead = false;
+        for (const gh of gHeads) if (Math.abs(normAng(ph - gh)) <= tolR) { okHead = true; break; }
+        if (!okHead) continue;
+        const t = (gx - p2.x) * cosH + (gy - p2.y) * sinH;        // length to closest approach
+        const fx = p2.x + cosH * t, fy = p2.y + sinH * t;
+        const cd2 = (fx - gx) * (fx - gx) + (fy - gy) * (fy - gy);
+        if (cd2 > rho2) continue;                                  // line never enters the goal box
+        const half = Math.sqrt(rho2 - cd2);                        // chord half-length within rho
+        scanInterval(p2, 0, t - half, t + half, 0, m1, m2);
         continue;
       }
-      if (circleApproach(p2, s3, goal.cx, goal.cy).cd > skipR3) continue;
-      const R = wb / Math.tan(s3);
+      const Cx = p2.x - sinH * R, Cy = p2.y + cosH * R;            // turn-3 circle centre
+      const dgx = gx - Cx, dgy = gy - Cy, dC2 = dgx * dgx + dgy * dgy;
+      // Reject (no sqrt) any circle that never brings the rear axle within rho of goal:
+      //   |dC − |R|| > rho  ⟺  dC > |R|+rho  OR  dC < |R|−rho
+      const outer = aR + rho;
+      if (dC2 > outer * outer) continue;
+      const inner = aR - rho;
+      if (inner > 0 && dC2 < inner * inner) continue;
+      const dC = Math.sqrt(dC2);
+      let cosA = (R * R + dC2 - rho2) / (2 * aR * dC);
+      if (cosA >  1) cosA =  1;
+      if (cosA < -1) cosA = -1;
+      const posHalf = aR * Math.acos(cosA);                        // position-interval half-width
+      const phi = Math.atan2(dgy, dgx), hStar = phi + (R > 0 ? Math.PI / 2 : -Math.PI / 2);
+      const sStar = R * normAng(hStar - ph);                       // length to closest approach
+      const halfW = aR * tolR;                                     // heading-interval half-width
+      const s3 = rad(STEERS[si]), sd3 = STEERS[si];
       for (const gh of gHeads) {
-        const c = Math.round(R * normAng(gh - p2.h) / DIST_Q);
-        for (let k = -Wdock; k <= Wdock; k++) {
-          const n = c + k; if (n === 0) continue;
-          const d = round2(n * DIST_Q);
-          if (Math.abs(d) > A3 || Math.abs(d) < DIST_Q) continue;
-          const p3 = advance(p2, s3, d); if (hits(p3)) continue;
-          if (inGoal(p3, goal)) emit([m1, m2, { steer: sd3, dist: d }]);
-        }
+        const c = R * normAng(gh - ph);                            // length onto the exact goal heading
+        const lo = Math.max(c - halfW, sStar - posHalf);
+        const hi = Math.min(c + halfW, sStar + posHalf);
+        if (lo <= hi) scanInterval(p2, s3, lo, hi, sd3, m1, m2);
       }
     }
   }
 
-  const docked = new Set();
+  // Optional turn-2 end-pose merge. dedupPos = 0 (default) → fully exact: every distinct
+  // p2 is docked. A positive value collapses p2 poses within that lattice cell to a
+  // single dock, trading completeness for speed (a fully exact search at the 0.2°/0.05 m
+  // input grid is intractable). Set deliberately by the caller.
+  const dedupP = prm.dedupPos || 0, dedupA = rad(prm.dedupAng || 0);
+  const docked = dedupP > 0 ? new Set() : null;
   let iter = 0;
   for (let i1 = prm.sliceLo; i1 < prm.sliceHi; i1++) {
     const sd1 = STEERS[i1], s1 = rad(sd1);
@@ -191,13 +236,14 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best) {
               const m2 = { steer: sd2, dist: dist2 };
               if (inGoal(p2, goal)) { emit([m1, m2]); continue; }   // 2-turn
               if (best.v <= 2) continue;                          // can't beat a known ≤2-turn
-              if (hDist(p2) <= dockRange) {
+              if (hDist(p2) > dockRange) continue;
+              if (docked) {
                 const ck = Math.round(p2.x / dedupP) + ',' + Math.round(p2.y / dedupP) +
                            ',' + Math.round(normAng(p2.h) / dedupA);
-                if (!docked.has(ck)) { docked.add(ck); dock(p2, m1, m2); }
+                if (docked.has(ck)) continue;
+                docked.add(ck);
               }
-            }
-          }
+              dock(p2, m1, m2);
         }
         if ((++iter & 31) === 0) {
           if (shouldStop && shouldStop()) return;
@@ -206,6 +252,8 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best) {
       }
     }
   }
+  }
+}
 }
 
 // Run bruteForceKernel across a pool of Web Workers (one steer-slice each),
@@ -518,9 +566,6 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
       arc1: opts.bfArc1 || Math.min(8, ARC_MAX),
       arc2: opts.bfArc2 || 6,
       arc3: opts.bfArc3 || 6,
-      dockWin:  opts.bfDockWin  || 1.0,
-      dedupPos: opts.bfDedupPos || 0.3,
-      dedupAng: opts.bfDedupAng || 10,
       workers:  opts.workers,
       _start: start, _obstacles: obstacles, _goal: goal,
     };
