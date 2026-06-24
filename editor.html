@@ -2363,10 +2363,10 @@ document.getElementById('btnSolve').onclick = async () => {
         updateSidebar();
         render();
       } else if (ev.type === 'phase') {
-        if (ev.phase === 'bf') status.textContent = `⚙ Brute force (${ev.workers} worker${ev.workers !== 1 ? 's' : ''})…`;
+        if (ev.phase === 'bf') status.textContent = `⚙ BF (${ev.workers} worker${ev.workers !== 1 ? 's' : ''})…`;
         else if (ev.phase === 'astar') status.textContent = `⚙ A* search…`;
       } else if (ev.type === 'bf_progress') {
-        status.textContent = `⚙ Brute force — ${ev.done}/${ev.total} workers done…`;
+        status.textContent = `⚙ BF — ${ev.done}/${ev.total} workers done…`;
       } else if (ev.type === 'depth') {
         const fmtN = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(n);
         status.textContent = `⚙ A* — ${fmtN(ev.depth)} poses visited, ${fmtN(ev.beamSize)} queued…`;
