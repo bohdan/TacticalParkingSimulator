@@ -280,18 +280,18 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
       prm.STEERS.forEach((s, i) => workerSteers[i % want].push(s));
       const wprm = Object.assign({}, prm);
       delete wprm._start; delete wprm._obstacles; delete wprm._goal;   // rebuilt in worker
+      const N1est = Math.floor((prm.arc1 || 8) / prm.DIST_Q);
+      const totalIters = prm.STEERS.length * 2 * N1est * prm.STEERS.length;
       await new Promise((resolve) => {
         let done = 0, finished = false;
         const wIters = new Array(want).fill(0);
-        const wSols  = new Array(want).fill(0);
         const finish = () => { if (finished) return; finished = true;
           for (const w of workers) { try { w.postMessage({ type: 'stop' }); w.terminate(); } catch (e) {} }
           resolve();
         };
         const emitProgress = () => {
           const iters = wIters.reduce((a, b) => a + b, 0);
-          const sols  = wSols.reduce((a, b) => a + b, 0);
-          progressCb && progressCb({ type: 'bf_progress', done, total: want, iters, sols });
+          progressCb && progressCb({ type: 'bf_progress', done, total: want, iters, totalIters });
         };
         const timer = setInterval(() => {
           if ((shouldStop && shouldStop()) || (deadline && nowFn() > deadline)) { clearInterval(timer); finish(); }
@@ -304,7 +304,6 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
           wk.onmessage = (e) => {
             const m = e.data;
             if (m.type === 'sol') {
-              wSols[wi]++;
               if (m.moves.length < best.v) best.v = m.moves.length;
               consume(m.moves);
               if (m.moves.length <= 2)                          // share the bound for pruning
