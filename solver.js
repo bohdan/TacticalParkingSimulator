@@ -54,6 +54,218 @@ function _heapPop(h) {
   return top;
 }
 
+// Ground-truth replay at the game's fine collision step — shared by the inline
+// solver and the brute-force workers (which can't see solveParkingLevel's closure).
+function validateMoves(start, moves, obstacles, goal) {
+  let p = start;
+  for (const m of moves) {
+    const sim = simulateMove(p, rad(m.steer), m.dist, obstacles, SAMPLE_STEP);
+    if (sim.hit) return null;
+    p = sim.end;
+  }
+  return inGoal(p, goal) ? moves : null;
+}
+
+// ── Brute-force kernel (shared: main-thread fallback OR Web Worker) ───────────
+// Enumerates the first two turns over the assigned slice of the FULL steer grid
+// (every candidate distance on the 0.05 m grid, each arc stopped on collision),
+// then finishes with an ANALYTIC third "dock" turn instead of a third brute scan:
+// for each steer it solves, in closed form, the arc length that swings the heading
+// onto a goal heading (a circle/heading inversion, obstacles ignored) and validates
+// only those handful of poses. Two cheap geometric prunes keep it tractable:
+//   • turn-2 broad-phase — a fixed steer traces a circle of radius R = wb/tan(steer);
+//     if the whole circle stays farther than dockRange from the goal centre
+//     (|dist(centre,goal) − R| > dockRange) no distance on that arc can ever dock,
+//     so the steer is skipped without rolling it out.
+//   • dock dedupe — near-identical turn-2 end poses (a 0.3 m / 10° lattice cell) are
+//     docked once; brute force otherwise re-derives the same pose thousands of times.
+// Calls emit(moves[]) for every goal-reaching candidate; the caller validates+dedupes.
+// `best.v` is the fewest VALID turns seen so far (updated by the caller after
+// validation); once it is ≤ 2 the dock (a 3rd turn) is pruned as it can't be shorter.
+async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best) {
+  const { obstacles, goal, start } = geom;
+  const STEERS = prm.STEERS;
+  const DIST_Q = prm.DIST_Q, A1 = prm.arc1, A2 = prm.arc2, A3 = prm.arc3;
+  const wb = CAR.wb;
+  const round2 = v => Math.round(v * 100) / 100;
+  const rCar = 0.5 * Math.hypot(CAR.len, CAR.wid) + 0.02;
+  const offc = (CAR.wb + CAR.fOver - CAR.rOver) / 2;
+  const goalHalfDiag = 0.5 * Math.hypot(goal.w, goal.h);
+  const carHalfDiag = 0.5 * Math.hypot(CAR.len, CAR.wid);
+  const tolR = rad(goal.tol), gHeads = goal.heads.map(rad);
+  const dockRange = A3 + goalHalfDiag + 0.5;     // turn-2 must end within one dock arc of goal
+  const gate1 = A2 + dockRange + 0.5;            // turn-1 must leave a reachable turn-2
+  const N1 = Math.floor(A1 / DIST_Q), N2 = Math.floor(A2 / DIST_Q);
+  const skipR3 = goalHalfDiag + carHalfDiag + 0.5;
+  const Wdock = Math.ceil((prm.dockWin || 0.6) / DIST_Q);
+  const dedupP = prm.dedupPos || 0.3, dedupA = rad(prm.dedupAng || 10);
+  best = best || { v: Infinity };
+
+  function hits(p) {
+    const ccx = p.x + Math.cos(p.h) * offc, ccy = p.y + Math.sin(p.h) * offc;
+    let poly = null;
+    for (let i = 0; i < obstacles.length; i++) {
+      const o = obstacles[i]; const bc = o.bc || (o.bc = polyBC(o.poly));
+      const dx = ccx - bc.x, dy = ccy - bc.y, rr = rCar + bc.r;
+      if (dx * dx + dy * dy > rr * rr) continue;
+      if (!poly) poly = carPoly(p);
+      if (polysCollide(poly, o.poly)) return true;
+    }
+    return false;
+  }
+  const hDist = p => Math.hypot(p.x - goal.cx, p.y - goal.cy);
+  // Closest approach of a fixed-steer arc (a circle, or a line when straight) to
+  // a target point, plus the signed arc length that reaches that closest point.
+  function circleApproach(p, steer, Tx, Ty) {
+    if (Math.abs(steer) < 1e-4) {
+      const ux = Math.cos(p.h), uy = Math.sin(p.h);
+      const t = (Tx - p.x) * ux + (Ty - p.y) * uy;
+      const fx = p.x + ux * t, fy = p.y + uy * t;
+      return { cd: Math.hypot(fx - Tx, fy - Ty), sStar: t };
+    }
+    const R = wb / Math.tan(steer);
+    const cxC = p.x - Math.sin(p.h) * R, cyC = p.y + Math.cos(p.h) * R;
+    const dC = Math.hypot(Tx - cxC, Ty - cyC);
+    const phi = Math.atan2(Ty - cyC, Tx - cxC), hStar = phi + Math.PI / 2 * Math.sign(R);
+    return { cd: Math.abs(dC - Math.abs(R)), sStar: R * normAng(hStar - p.h) };
+  }
+  // Analytic final turn: aim each steer's arc straight at a goal heading.
+  function dock(p2, m1, m2) {
+    for (let si = 0; si < STEERS.length; si++) {
+      const sd3 = STEERS[si], s3 = rad(sd3);
+      if (Math.abs(s3) < 1e-4) {                 // straight: heading fixed
+        for (const gh of gHeads) {
+          if (Math.abs(normAng(p2.h - gh)) > tolR) continue;
+          const c = Math.round(circleApproach(p2, 0, goal.cx, goal.cy).sStar / DIST_Q);
+          for (let k = -Wdock; k <= Wdock; k++) {
+            const n = c + k; if (n === 0) continue;
+            const d = round2(n * DIST_Q); if (Math.abs(d) > A3) continue;
+            const p3 = advance(p2, 0, d); if (hits(p3)) continue;
+            if (inGoal(p3, goal)) emit([m1, m2, { steer: 0, dist: d }]);
+          }
+        }
+        continue;
+      }
+      if (circleApproach(p2, s3, goal.cx, goal.cy).cd > skipR3) continue;
+      const R = wb / Math.tan(s3);
+      for (const gh of gHeads) {
+        const c = Math.round(R * normAng(gh - p2.h) / DIST_Q);
+        for (let k = -Wdock; k <= Wdock; k++) {
+          const n = c + k; if (n === 0) continue;
+          const d = round2(n * DIST_Q);
+          if (Math.abs(d) > A3 || Math.abs(d) < DIST_Q) continue;
+          const p3 = advance(p2, s3, d); if (hits(p3)) continue;
+          if (inGoal(p3, goal)) emit([m1, m2, { steer: sd3, dist: d }]);
+        }
+      }
+    }
+  }
+
+  const docked = new Set();
+  let iter = 0;
+  for (let i1 = prm.sliceLo; i1 < prm.sliceHi; i1++) {
+    const sd1 = STEERS[i1], s1 = rad(sd1);
+    for (let dr1 = 1; dr1 >= -1; dr1 -= 2) {
+      for (let n1 = 1; n1 <= N1; n1++) {
+        const dist1 = round2(dr1 * n1 * DIST_Q);
+        const p1 = advance(start, s1, dist1);
+        if (hits(p1)) break;                                    // arc blocked beyond here
+        if (inGoal(p1, goal)) { emit([{ steer: sd1, dist: dist1 }]); continue; }   // 1-turn
+        if (hDist(p1) > gate1) continue;
+        const m1 = { steer: sd1, dist: dist1 };
+        for (let i2 = 0; i2 < STEERS.length; i2++) {
+          const sd2 = STEERS[i2], s2 = rad(sd2);
+          if (circleApproach(p1, s2, goal.cx, goal.cy).cd > dockRange) continue;   // broad-phase
+          for (let dr2 = 1; dr2 >= -1; dr2 -= 2) {
+            if (sd2 === sd1 && dr2 === dr1) continue;            // same arc = still 1 turn
+            for (let n2 = 1; n2 <= N2; n2++) {
+              const dist2 = round2(dr2 * n2 * DIST_Q);
+              const p2 = advance(p1, s2, dist2);
+              if (hits(p2)) break;
+              const m2 = { steer: sd2, dist: dist2 };
+              if (inGoal(p2, goal)) { emit([m1, m2]); continue; }   // 2-turn
+              if (best.v <= 2) continue;                          // can't beat a known ≤2-turn
+              if (hDist(p2) <= dockRange) {
+                const ck = Math.round(p2.x / dedupP) + ',' + Math.round(p2.y / dedupP) +
+                           ',' + Math.round(normAng(p2.h) / dedupA);
+                if (!docked.has(ck)) { docked.add(ck); dock(p2, m1, m2); }
+              }
+            }
+          }
+        }
+        if ((++iter & 31) === 0) {
+          if (shouldStop && shouldStop()) return;
+          if (yieldHook) await yieldHook();
+        }
+      }
+    }
+  }
+}
+
+// Run bruteForceKernel across a pool of Web Workers (one steer-slice each),
+// streaming validated candidates back through `consume`. Resolves when every
+// worker finishes, the deadline passes, or shouldStop() trips. Falls back to a
+// single inline kernel run when Workers are unavailable (Node, older browsers).
+async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn) {
+  const best = { v: Infinity };
+  const onCand = moves => {                       // shared validate→consume→track-best
+    const v = validateMoves(prm._start, moves, prm._obstacles, prm._goal);
+    if (v) { if (v.length < best.v) best.v = v.length; consume(v); }
+    return v;
+  };
+
+  const haveWorkers = typeof Worker !== 'undefined' && prm.workers !== 0;
+  if (haveWorkers) {
+    let workers = [];
+    try {
+      const want = Math.min(prm.workers || 8, prm.STEERS.length);
+      const bounds = [];
+      for (let w = 0; w < want; w++)
+        bounds.push([Math.floor(w * prm.STEERS.length / want),
+                     Math.floor((w + 1) * prm.STEERS.length / want)]);
+      const wprm = Object.assign({}, prm);
+      delete wprm._start; delete wprm._obstacles; delete wprm._goal;   // rebuilt in worker
+      await new Promise((resolve) => {
+        let done = 0, finished = false;
+        const finish = () => { if (finished) return; finished = true;
+          for (const w of workers) { try { w.postMessage({ type: 'stop' }); w.terminate(); } catch (e) {} }
+          resolve();
+        };
+        const timer = setInterval(() => {
+          if ((shouldStop && shouldStop()) || (deadline && nowFn() > deadline)) { clearInterval(timer); finish(); }
+        }, 60);
+        for (let w = 0; w < want; w++) {
+          const wk = new Worker('solver-worker.js');
+          workers.push(wk);
+          wk.onmessage = (e) => {
+            const m = e.data;
+            if (m.type === 'sol') {
+              if (m.moves.length < best.v) best.v = m.moves.length;
+              consume(m.moves);
+              if (m.moves.length <= 2)                          // share the bound for pruning
+                for (const o of workers) { try { o.postMessage({ type: 'best', v: best.v }); } catch (e2) {} }
+            } else if (m.type === 'done') {
+              if (++done >= want) { clearInterval(timer); finish(); }
+            }
+          };
+          wk.onerror = () => { if (++done >= want) { clearInterval(timer); finish(); } };
+          wk.postMessage({ type: 'run', def, vehicle: def.vehicle || 'default',
+            prm: Object.assign({}, wprm, { sliceLo: bounds[w][0], sliceHi: bounds[w][1] }) });
+        }
+      });
+      return;
+    } catch (e) {
+      for (const w of workers) { try { w.terminate(); } catch (e2) {} }   // fall through to inline
+    }
+  }
+
+  // Inline fallback (Node / no Worker support): one kernel over the whole grid.
+  const geom = { obstacles: prm._obstacles, goal: prm._goal, start: prm._start };
+  const yieldHook = async () => { await new Promise(r => setTimeout(r, 0)); };
+  await bruteForceKernel(geom, Object.assign({}, prm, { sliceLo: 0, sliceHi: prm.STEERS.length }),
+    onCand, () => (shouldStop && shouldStop()) || (deadline && nowFn() > deadline), yieldHook, best);
+}
+
 async function solveParkingLevel(def, opts = {}, progressCb = null) {
   const {
     weight = 1.0,          // heuristic weight: higher = greedier/faster first plan
@@ -281,51 +493,33 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
   const open = [];
   const closed = new Map();   // cell -> { turns, dist }  (re-openable)
 
-  // ── Brute-force 2-turn warmup ──────────────────────────────────────────────
-  // Exhaustively tries all (steer1, dist1, steer2, dist2) on the solver distance
-  // grid (step STEP, arc ≤ bf2ArcMax). Complements the lattice A*: guarantees
-  // any 2-turn solution that cell-merging in the closed set would prune is found.
-  // Key pruning: skip all turn-1 endpoints that cannot reach the goal in one more
-  // arc — this cuts 60–80 % of work on typical closed levels. Async with yields
-  // every 16 ms so the UI stays responsive. Does NOT count toward `expand` so it
-  // doesn't eat into the A* budget.
-  const bf2ArcMax = opts.bf2ArcMax !== undefined ? opts.bf2ArcMax : Math.min(6, ARC_MAX);
-  if (opts.bf2 !== false) {
-    const BN = Math.floor((bf2ArcMax + 1e-9) / DIST_Q);
-    const goalReach = bf2ArcMax + Math.max(goal.w, goal.h) + 1;
-    outer2:
-    for (let si1 = 0; si1 < STEERS.length; si1++) {
-      const sd1 = STEERS[si1], s1 = rad(sd1);
-      for (let di1 = 0; di1 < 2; di1++) {
-        const dir1 = di1 === 0 ? 1 : -1;
-        for (let n1 = 1; n1 <= BN; n1++) {
-          const dist1 = round2(dir1 * n1 * DIST_Q);
-          const p1 = advance(start, s1, dist1);
-          if (hits(p1)) break;
-          if (hDist(p1) <= goalReach) {
-            for (let si2 = 0; si2 < STEERS.length; si2++) {
-              const sd2 = STEERS[si2], s2 = rad(sd2);
-              for (let di2 = 0; di2 < 2; di2++) {
-                if (sd2 === sd1 && di2 === di1) continue;   // same arc = just 1 turn
-                const dir2 = di2 === 0 ? 1 : -1;
-                for (let n2 = 1; n2 <= BN; n2++) {
-                  const dist2 = round2(dir2 * n2 * DIST_Q);
-                  const p2 = advance(p1, s2, dist2);
-                  if (hits(p2)) break;
-                  if (inGoal(p2, goal)) offer(validate([
-                    { steer: sd1, dist: dist1 },
-                    { steer: sd2, dist: dist2 },
-                  ]));
-                }
-              }
-            }
-          }
-          await yieldMaybe();
-          if (shouldStop && shouldStop()) break outer2;
-          if (now() - startTime > timeMs) break outer2;
-        }
-      }
-    }
+  // ── Brute-force warmup: turns 1 & 2 full grid + analytic 3rd-turn dock ───────
+  // Multicore brute force across Web Workers (8 by default; one steer-slice each),
+  // streaming validated candidates into offer(). Steering stays on the player input
+  // grid — default the full 0.2° grid, or pass a coarser opts.bfSteerStep for a fast
+  // pass. Time-boxed (opts.bfTimeMs, default 25 s) so the lattice A* below still gets
+  // a share of the budget on deep (>3-turn) levels. See bruteForceKernel for the
+  // turn-2 circle broad-phase and the analytic dock that make 3 turns feasible.
+  if (opts.bf !== false) {
+    const bfStep = Math.max(STEER_Q, opts.bfSteerStep || STEER_Q);    // default = full input grid
+    const bfNq = Math.floor(ms / bfStep + 1e-9);
+    const BFS = [snap(ms, STEER_Q), snap(-ms, STEER_Q)];              // always include full lock
+    for (let q = -bfNq; q <= bfNq; q++)
+      BFS.push(snap(Math.max(-ms, Math.min(ms, q * bfStep)), STEER_Q));
+    const bfPrm = {
+      STEERS: [...new Set(BFS)].sort((a, b) => a - b),
+      DIST_Q,
+      arc1: opts.bfArc1 || Math.min(8, ARC_MAX),
+      arc2: opts.bfArc2 || 6,
+      arc3: opts.bfArc3 || 6,
+      dockWin:  opts.bfDockWin  || 0.6,
+      dedupPos: opts.bfDedupPos || 0.3,
+      dedupAng: opts.bfDedupAng || 10,
+      workers:  opts.workers,
+      _start: start, _obstacles: obstacles, _goal: goal,
+    };
+    const bfDeadline = startTime + Math.min(timeMs, opts.bfTimeMs || 25000);
+    await bruteForceParallel(def, bfPrm, m => offer(m), shouldStop, bfDeadline, now);
   }
 
   const s0 = { pose: start, turns: 0, dist: 0, parent: null, move: null,
