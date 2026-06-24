@@ -2346,7 +2346,7 @@ document.getElementById('btnSolve').onclick = async () => {
       L.solution = L.solutions.length ? L.solutions[0].map(m => ({ ...m })) : (L.solution || []);
   };
   try {
-    await solveParkingLevel(L, { timeMs: 60000, idleMs: 6000, shouldStop: () => solveCancel }, ev => {
+    await solveParkingLevel(L, { idleMs: 6000, shouldStop: () => solveCancel }, ev => {
       if (ev.type === 'solution') {
         if (ev.replaces != null) allSols.delete(ev.replaces);
         allSols.set(ev.id, { turns: ev.turns, dist: ev.dist, moves: ev.moves, poses: ev.poses });
