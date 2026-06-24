@@ -132,6 +132,29 @@ function contactPoint(carP, obsP) {
 
 /* ─── Simulation ───────────────────────────────────────────────────────── */
 
+// Convex hull (Andrew's monotone chain), CCW. Used to wrap two consecutive
+// car rectangles into one swept polygon so collision is continuous, not just
+// sampled at discrete poses.
+function convexHull(pts) {
+  const p = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+  const n = p.length;
+  if (n < 3) return p;
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lo = [];
+  for (const pt of p) {
+    while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], pt) <= 0) lo.pop();
+    lo.push(pt);
+  }
+  const hi = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const pt = p[i];
+    while (hi.length >= 2 && cross(hi[hi.length - 2], hi[hi.length - 1], pt) <= 0) hi.pop();
+    hi.push(pt);
+  }
+  lo.pop(); hi.pop();
+  return lo.concat(hi);
+}
+
 // Bounding circle of a polygon (centroid + farthest-vertex radius).
 function polyBC(poly) {
   let cx = 0, cy = 0;
@@ -149,23 +172,31 @@ function simulateMove(start, steer, dist, obstacles, step) {
   // Car bounding circle (constant size, moves with the car) for broad-phase.
   const rCar = 0.5 * Math.hypot(CAR.len, CAR.wid) + 0.02;
   const offc = (CAR.wb + CAR.fOver - CAR.rOver) / 2; // body centre ahead of rear axle
+  const stepLen = Math.abs(dist) / n;                // arc length between samples
+  // Swept collision: test the convex hull of each consecutive pose pair, so a
+  // clip that passes between two samples is still caught. The hull matches the
+  // true swept region to within the sub-mm corner-arc bulge at this step size.
+  let prevPoly = carPoly(start);
   for (let i = 1; i <= n; i++) {
     const p = advance(start, steer, dist * i / n);
+    const curPoly = carPoly(p);
+    let swept = null;
     const ccx = p.x + Math.cos(p.h) * offc, ccy = p.y + Math.sin(p.h) * offc;
-    let poly = null;
     for (let oi = 0; oi < obstacles.length; oi++) {
       const o = obstacles[oi];
       const bc = o.bc || (o.bc = polyBC(o.poly));
-      const dx = ccx - bc.x, dy = ccy - bc.y, rr = rCar + bc.r;
+      // Broad-phase: hull reaches back ~stepLen toward the previous body centre.
+      const dx = ccx - bc.x, dy = ccy - bc.y, rr = rCar + stepLen + bc.r;
       if (dx * dx + dy * dy > rr * rr) continue;     // broad-phase reject
-      if (!poly) poly = carPoly(p);
-      if (polysCollide(poly, o.poly)) {
-        hit = { pose: p, point: contactPoint(poly, o.poly) };
+      if (!swept) swept = convexHull(prevPoly.concat(curPoly));
+      if (polysCollide(swept, o.poly)) {
+        hit = { pose: p, point: contactPoint(curPoly, o.poly) };
         break;
       }
     }
     if (hit) break;
     pts.push(p);
+    prevPoly = curPoly;
   }
   return { pts, end: pts[pts.length-1], hit };
 }

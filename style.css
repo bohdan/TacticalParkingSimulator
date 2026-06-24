@@ -65,6 +65,8 @@ button.nav {
   color: #93a0b4;
   padding: 2px 0 4px;
 }
+.goal-dist { color: #7a9ec4; }
+.goal-dist.goal-in { color: #4caf7a; }
 
 #lvIntroOverlay {
   position: fixed;
@@ -89,6 +91,44 @@ button.nav {
 }
 
 #cvWrap { flex: 1; min-height: 0; position: relative; }
+
+#focusHint, #focusBadge {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: 13px;
+  border-radius: 20px;
+  pointer-events: all;
+  z-index: 10;
+}
+#focusHint {
+  bottom: 10px;
+  background: rgba(10, 14, 26, 0.82);
+  border: 1px solid rgba(100, 130, 210, 0.28);
+  color: rgba(200, 215, 245, 0.88);
+  padding: 7px 9px 7px 13px;
+  backdrop-filter: blur(4px);
+}
+#focusBadge {
+  top: 10px;
+  background: rgba(10, 14, 26, 0.76);
+  border: 1px solid rgba(80, 200, 240, 0.35);
+  color: rgba(130, 220, 250, 0.92);
+  padding: 5px 9px 5px 12px;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+}
+#focusHint.hidden, #focusBadge.hidden { display: none; }
+#focusHint button, #focusBadge button {
+  background: none; border: none; color: inherit;
+  cursor: pointer; padding: 0 2px; font-size: 13px;
+  opacity: 0.55; line-height: 1;
+}
+#focusHint button:hover, #focusBadge button:hover { opacity: 1; }
 #cv {
   position: absolute;
   inset: 0;

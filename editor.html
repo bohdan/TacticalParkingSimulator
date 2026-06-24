@@ -59,10 +59,17 @@ button.nav{padding:4px 8px;font-weight:700}
 .add-opt:last-child{border-bottom:none}
 .add-opt:hover{background:#1d4f6b}
 .add-key{float:right;color:#5a6a80;font-size:10px;margin-left:12px}
-#measurePanel{width:52px;background:#0e1117;border-right:1px solid #2a3040;flex-shrink:0;position:relative;overflow:hidden;user-select:none}
+#measLeft{flex-shrink:0;display:flex;flex-direction:column;background:#0e1117;border-right:1px solid #2a3040}
+#measCorner{width:52px;height:24px;flex-shrink:0;border-bottom:1px solid #1a2030}
+#measurePanel{width:52px;flex:1;position:relative;overflow:hidden;user-select:none}
+#cvColumn{flex:1;display:flex;flex-direction:column;min-height:0}
+#measurePanelTop{height:24px;background:#0e1117;border-bottom:1px solid #2a3040;position:relative;overflow:hidden;user-select:none;flex-shrink:0}
 .meas-item{position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#4a5a70;border-top:1px solid #1a2030;cursor:default;text-align:center;overflow:hidden;white-space:nowrap}
-.meas-item:hover{background:rgba(61,143,191,0.18);color:#7ec8ff}
-@media(max-width:760px){#measurePanel{display:none}}
+.meas-item:hover,.meas-item-top:hover{background:rgba(61,143,191,0.18);color:#7ec8ff}
+.meas-item.meas-sel,.meas-item-top.meas-sel{background:rgba(100,220,255,0.13);color:#7ec8ff;border-color:#2a4050}
+.meas-item.meas-odd,.meas-item-top.meas-odd{background:rgba(255,255,255,0.07)}
+.meas-item-top{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#4a5a70;border-left:1px solid #1a2030;cursor:default;text-align:center;overflow:hidden;white-space:nowrap}
+@media(max-width:760px){#measLeft{display:none}#measurePanelTop{display:none}}
 #solveStatus{font-size:11px;color:#7dc87d;display:none;align-self:center}
 .sol-row{gap:3px}
 .sol-row.sol-hot{background:rgba(255,224,64,.08);border-radius:5px}
@@ -135,8 +142,14 @@ button.nav{padding:4px 8px;font-weight:700}
 </div>
 
 <div id="main">
-  <div id="measurePanel"></div>
-  <div id="cvWrap"><canvas id="cv"></canvas></div>
+  <div id="measLeft">
+    <div id="measCorner"></div>
+    <div id="measurePanel"></div>
+  </div>
+  <div id="cvColumn">
+    <div id="measurePanelTop"></div>
+    <div id="cvWrap"><canvas id="cv"></canvas></div>
+  </div>
   <div id="sidebar">
    <div class="row"><label>Draft</label><label style="flex:1;display:flex;align-items:center;gap:6px;color:#e0b050;font-size:12px"><input id="sDraft" type="checkbox" style="flex:0 0 auto;width:auto"> hidden from the game (editor only)</label></div>
    <div id="cutscenePanel" style="display:none">
@@ -332,50 +345,157 @@ let V = { scale:40, ox:30, oy:30 };
 
 // ── Measurement panel ────────────────────────────────────────────────────────
 let hoveredMeasure = null;
+let hoveredMeasureX = null;
 
 function collectYEdges(){
   if(!L||isCutscene(L)) return [];
   const pts=new Set();
   const add=y=>pts.add(+y.toFixed(3));
   add(0); add(L.h);
-  for(const w of L.walls){
-    const b=wallBounds(w);
-    const hs=Math.abs(Math.sin(b.ang)),hc=Math.abs(Math.cos(b.ang));
-    const hy=b.w/2*hs+b.h/2*hc;
-    add(b.cy-hy); add(b.cy+hy);
-  }
-  for(const c of L.cars){
-    const sp=carSpec(c);
-    const hs=Math.abs(Math.sin(c.h)),hc=Math.abs(Math.cos(c.h));
-    const hy=sp.len/2*hs+sp.wid/2*hc;
-    add(c.cy-hy); add(c.cy+hy);
-  }
-  for(const m of (L.markings||[])){
-    const s=markingSeg(m); add(s.y1); add(s.y2);
-  }
+  function addOBB(cx,cy,ang,hl,hw){const s=Math.abs(Math.sin(ang)),c=Math.abs(Math.cos(ang));add(cy-hl*s-hw*c);add(cy+hl*s+hw*c);}
+  for(const w of L.walls){const b=wallBounds(w);addOBB(b.cx,b.cy,b.ang,b.w/2,b.h/2);}
+  for(const c of L.cars){const sp=carSpec(c);addOBB(c.cx,c.cy,c.h,sp.len/2,sp.wid/2);}
+  {const sc=startCenter(),sp=playerSpec();addOBB(sc.x,sc.y,L.start.h,sp.len/2,sp.wid/2);}
+  {const g=L.goal;addOBB(g.cx,g.cy,g.ang||0,g.w/2,g.h/2);}
+  for(const m of (L.markings||[])){const s=markingSeg(m);add(s.y1);add(s.y2);}
   return [...pts].map(Number).sort((a,b)=>a-b);
+}
+
+function collectXEdges(){
+  if(!L||isCutscene(L)) return [];
+  const pts=new Set();
+  const add=x=>pts.add(+x.toFixed(3));
+  add(0); add(L.w);
+  function addOBB(cx,cy,ang,hl,hw){const s=Math.abs(Math.sin(ang)),c=Math.abs(Math.cos(ang));add(cx-hl*c-hw*s);add(cx+hl*c+hw*s);}
+  for(const w of L.walls){const b=wallBounds(w);addOBB(b.cx,b.cy,b.ang,b.w/2,b.h/2);}
+  for(const c of L.cars){const sp=carSpec(c);addOBB(c.cx,c.cy,c.h,sp.len/2,sp.wid/2);}
+  {const sc=startCenter(),sp=playerSpec();addOBB(sc.x,sc.y,L.start.h,sp.len/2,sp.wid/2);}
+  {const g=L.goal;addOBB(g.cx,g.cy,g.ang||0,g.w/2,g.h/2);}
+  for(const m of (L.markings||[])){const s=markingSeg(m);add(s.x1);add(s.x2);}
+  return [...pts].map(Number).sort((a,b)=>a-b);
+}
+
+function getSelEdges(){
+  if(!sel||!L) return null;
+  function obb(cx,cy,ang,hl,hw){
+    const s=Math.abs(Math.sin(ang)),c=Math.abs(Math.cos(ang));
+    return{yMin:cy-hl*s-hw*c,yMax:cy+hl*s+hw*c,xMin:cx-hl*c-hw*s,xMax:cx+hl*c+hw*s};
+  }
+  if(sel.kind==='wall'){const b=wallBounds(L.walls[sel.idx]);return obb(b.cx,b.cy,b.ang,b.w/2,b.h/2);}
+  if(sel.kind==='car'){const c=L.cars[sel.idx],sp=carSpec(c);return obb(c.cx,c.cy,c.h,sp.len/2,sp.wid/2);}
+  if(sel.kind==='traffic'){const t=L.traffic[sel.idx];return obb(t.x,t.y,t.h,VSPEC.default.len/2,VSPEC.default.wid/2);}
+  if(sel.kind==='start'){const sc=startCenter(),sp=playerSpec();return obb(sc.x,sc.y,L.start.h,sp.len/2,sp.wid/2);}
+  if(sel.kind==='goal'){const g=L.goal;return obb(g.cx,g.cy,g.ang||0,g.w/2,g.h/2);}
+  if(sel.kind==='marking'){const s=markingSeg(L.markings[sel.idx]);return{yMin:Math.min(s.y1,s.y2),yMax:Math.max(s.y1,s.y2),xMin:Math.min(s.x1,s.x2),xMax:Math.max(s.x1,s.x2)};}
+  return null;
 }
 
 function updateMeasurePanel(){
   const panel=document.getElementById('measurePanel');
   if(!panel) return;
   if(!L||isCutscene(L)){ panel.innerHTML=''; return; }
-  const edges=collectYEdges();
+  const edges=collectYEdges(), se=getSelEdges();
+  const EPS=0.002;
   let html='';
-  for(let i=0;i<edges.length-1;i++){
-    const y1=edges[i],y2=edges[i+1],dist=y2-y1;
-    if(dist<0.04) continue;
-    const top=V.oy+y1*V.scale, h=dist*V.scale;
-    if(h<3) continue;
-    const label=h>=14?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
-    html+=`<div class="meas-item" style="top:${top}px;height:${h}px" data-y1="${y1}" data-y2="${y2}">${label}</div>`;
+  if(se){
+    const {yMin,yMax}=se;
+    let objDone=false;
+    for(let i=0;i<edges.length-1;i++){
+      const y1=edges[i],y2=edges[i+1];
+      if(y1>=yMin-EPS&&y2<=yMax+EPS){          // inside or spanning the object
+        if(!objDone){
+          const objH=(yMax-yMin)*V.scale, objDist=yMax-yMin;
+          if(objH>=2){
+            const lbl=objH>=14?`${objDist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+            html+=`<div class="meas-item meas-sel" style="top:${V.oy+yMin*V.scale}px;height:${Math.max(objH,2)}px" title="${objDist.toFixed(2)} m" data-y1="${yMin}" data-y2="${yMax}">${lbl}</div>`;
+          }
+          objDone=true;
+        }
+        continue;
+      }
+      let dist;
+      if(y2<=yMin+EPS)       dist=yMin-y1;  // above: distance from strip's top edge to object top
+      else if(y1>=yMax-EPS)  dist=y2-yMax;  // below: distance from strip's bottom edge to object bottom
+      else continue;
+      if(dist<0.04) continue;
+      const top=V.oy+y1*V.scale, h=(y2-y1)*V.scale;
+      if(h<3) continue;
+      const cls='meas-item'+(i%2?' meas-odd':'');
+      const lbl=h>=14?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+      html+=`<div class="${cls}" style="top:${top}px;height:${h}px" title="${dist.toFixed(2)} m" data-y1="${y1}" data-y2="${y2}">${lbl}</div>`;
+    }
+  } else {
+    for(let i=0;i<edges.length-1;i++){
+      const y1=edges[i],y2=edges[i+1],dist=y2-y1;
+      if(dist<0.04) continue;
+      const top=V.oy+y1*V.scale, h=dist*V.scale;
+      if(h<3) continue;
+      const cls='meas-item'+(i%2?' meas-odd':'');
+      const lbl=h>=14?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+      html+=`<div class="${cls}" style="top:${top}px;height:${h}px" title="${dist.toFixed(2)} m" data-y1="${y1}" data-y2="${y2}">${lbl}</div>`;
+    }
   }
   panel.innerHTML=html;
   panel.querySelectorAll('.meas-item').forEach(el=>{
     el.addEventListener('mouseenter',()=>{ hoveredMeasure={y1:+el.dataset.y1,y2:+el.dataset.y2}; render(); });
-    el.addEventListener('mouseleave',()=>{ hoveredMeasure=null; render(); });
   });
 }
+
+function updateMeasurePanelTop(){
+  const panel=document.getElementById('measurePanelTop');
+  if(!panel) return;
+  if(!L||isCutscene(L)){ panel.innerHTML=''; return; }
+  const edges=collectXEdges(), se=getSelEdges();
+  const EPS=0.002;
+  let html='';
+  if(se){
+    const {xMin,xMax}=se;
+    let objDone=false;
+    for(let i=0;i<edges.length-1;i++){
+      const x1=edges[i],x2=edges[i+1];
+      if(x1>=xMin-EPS&&x2<=xMax+EPS){
+        if(!objDone){
+          const objW=(xMax-xMin)*V.scale, objDist=xMax-xMin;
+          if(objW>=2){
+            const lbl=objW>=30?`${objDist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+            html+=`<div class="meas-item-top meas-sel" style="left:${V.ox+xMin*V.scale}px;width:${Math.max(objW,2)}px" title="${objDist.toFixed(2)} m" data-x1="${xMin}" data-x2="${xMax}">${lbl}</div>`;
+          }
+          objDone=true;
+        }
+        continue;
+      }
+      let dist;
+      if(x2<=xMin+EPS)       dist=xMin-x1;
+      else if(x1>=xMax-EPS)  dist=x2-xMax;
+      else continue;
+      if(dist<0.04) continue;
+      const left=V.ox+x1*V.scale, w=(x2-x1)*V.scale;
+      if(w<3) continue;
+      const cls='meas-item-top'+(i%2?' meas-odd':'');
+      const lbl=w>=30?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+      html+=`<div class="${cls}" style="left:${left}px;width:${w}px" title="${dist.toFixed(2)} m" data-x1="${x1}" data-x2="${x2}">${lbl}</div>`;
+    }
+  } else {
+    for(let i=0;i<edges.length-1;i++){
+      const x1=edges[i],x2=edges[i+1],dist=x2-x1;
+      if(dist<0.04) continue;
+      const left=V.ox+x1*V.scale, w=dist*V.scale;
+      if(w<3) continue;
+      const cls='meas-item-top'+(i%2?' meas-odd':'');
+      const lbl=w>=30?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+      html+=`<div class="${cls}" style="left:${left}px;width:${w}px" title="${dist.toFixed(2)} m" data-x1="${x1}" data-x2="${x2}">${lbl}</div>`;
+    }
+  }
+  panel.innerHTML=html;
+  panel.querySelectorAll('[data-x1]').forEach(el=>{
+    el.addEventListener('mouseenter',()=>{ hoveredMeasureX={x1:+el.dataset.x1,x2:+el.dataset.x2}; render(); });
+  });
+}
+
+// One-time panel-level mouseleave — clears hover when mouse exits the ruler,
+// even after innerHTML replacement has destroyed the individual items.
+document.getElementById('measurePanel').addEventListener('mouseleave',()=>{ hoveredMeasure=null; render(); });
+document.getElementById('measurePanelTop').addEventListener('mouseleave',()=>{ hoveredMeasureX=null; render(); });
 
 // ── Tool / selection / drag ──────────────────────────────────────────────────
 let tool = 'select';
@@ -598,7 +718,7 @@ function drawSelBox(cx,cy,w,h,a){
   ctx.translate(cx,cy); if(a)ctx.rotate(a);
   ctx.strokeStyle='#ffe040'; ctx.lineWidth=3*PX();
   ctx.setLineDash([4*PX(),3*PX()]);
-  ctx.strokeRect(-w/2-0.12,-h/2-0.12,w+0.24,h+0.24);
+  ctx.strokeRect(-w/2,-h/2,w,h);
   ctx.setLineDash([]); ctx.restore();
 }
 
@@ -841,6 +961,52 @@ function render(){
     }
   }
 
+  // X measurement hover guidelines + object highlights
+  if(hoveredMeasureX){
+    const EPS=0.002, {x1:gx1,x2:gx2}=hoveredMeasureX;
+    const touchesX=x=>Math.abs(x-gx1)<EPS||Math.abs(x-gx2)<EPS;
+    ctx.save();
+    ctx.strokeStyle='rgba(100,190,255,0.55)';
+    ctx.lineWidth=p;
+    ctx.setLineDash([0.4,0.25]);
+    ctx.beginPath();
+    ctx.moveTo(gx1,0); ctx.lineTo(gx1,L.h);
+    ctx.moveTo(gx2,0); ctx.lineTo(gx2,L.h);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    for(let pass=0;pass<2;pass++){
+      ctx.save();
+      ctx.strokeStyle=pass===0?'rgba(100,220,255,0.22)':'rgba(100,220,255,0.88)';
+      ctx.lineWidth=pass===0?5*p:1.5*p;
+      for(const w of L.walls){
+        const b=wallBounds(w);
+        const hs=Math.abs(Math.sin(b.ang)),hc=Math.abs(Math.cos(b.ang));
+        const hx=b.w/2*hc+b.h/2*hs;
+        if(!touchesX(b.cx-hx)&&!touchesX(b.cx+hx)) continue;
+        ctx.save(); ctx.translate(b.cx,b.cy); ctx.rotate(b.ang);
+        rrect(-b.w/2,-b.h/2,b.w,b.h,.1); ctx.stroke(); ctx.restore();
+      }
+      for(const c of L.cars){
+        const sp=carSpec(c);
+        const hs=Math.abs(Math.sin(c.h)),hc=Math.abs(Math.cos(c.h));
+        const hx=sp.len/2*hc+sp.wid/2*hs;
+        if(!touchesX(c.cx-hx)&&!touchesX(c.cx+hx)) continue;
+        ctx.save(); ctx.translate(c.cx,c.cy); ctx.rotate(c.h);
+        rrect(-sp.len/2,-sp.wid/2,sp.len,sp.wid,.2); ctx.stroke(); ctx.restore();
+      }
+      for(const m of (L.markings||[])){
+        const s=markingSeg(m);
+        if(!touchesX(s.x1)&&!touchesX(s.x2)) continue;
+        ctx.strokeStyle=pass===0?'rgba(100,220,255,0.28)':'rgba(180,240,255,0.92)';
+        ctx.lineWidth=pass===0?0.2:0.12;
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
   // Drawing preview
   if(drawRect){
     const {ax,ay,bx,by}=drawRect;
@@ -855,6 +1021,7 @@ function render(){
   }
 
   updateMeasurePanel();
+  updateMeasurePanelTop();
 }
 
 // Trace the solution as a schematic curve: forward arcs cyan (solid),
@@ -923,7 +1090,7 @@ function drawSolutionPath(){
     ctx.fillStyle=hot?'rgba(255,224,80,0.18)':'rgba(255,200,50,0.09)';
     ctx.fill();
     ctx.strokeStyle=hot?'rgba(255,224,80,0.80)':'rgba(255,200,50,0.42)';
-    ctx.lineWidth=hot?0.03:0.015;
+    ctx.lineWidth=Math.min(hot?0.03:0.015, 2*PX());
     ctx.stroke();
   }
   // Ghost car outline at end of each turn
@@ -935,7 +1102,7 @@ function drawSolutionPath(){
     for(let k=1;k<4;k++) ctx.lineTo(poly[k].x,poly[k].y);
     ctx.closePath();
     ctx.strokeStyle=hot?'rgba(69,196,255,0.90)':'rgba(69,196,255,0.30)';
-    ctx.lineWidth=hot?0.04:0.02;
+    ctx.lineWidth=Math.min(hot?0.04:0.02, 2*PX());
     ctx.stroke();
   }
   ctx.restore();
@@ -948,7 +1115,7 @@ function drawSolutionPath(){
     ctx.moveTo(seg.pts[0].x,seg.pts[0].y);
     for(const pt of seg.pts) ctx.lineTo(pt.x,pt.y);
     ctx.strokeStyle=hot?'#ffe040':(seg.rev?'rgba(255,159,67,0.95)':'rgba(69,196,255,0.95)');
-    ctx.lineWidth=hot?0.14:0.09;
+    ctx.lineWidth=Math.min(hot?0.14:0.09, 5*PX());
     if(seg.rev) ctx.setLineDash([0.3,0.22]);
     ctx.stroke(); ctx.setLineDash([]);
   }
@@ -1145,7 +1312,7 @@ cv.addEventListener('pointermove', e=>{
     // zoom by spread change, anchored at the centroid
     if(gesture.dist>0 && g.dist>0){
       const f=Math.min(3,Math.max(.33,g.dist/gesture.dist));
-      const ns=Math.min(200,Math.max(5,V.scale*f));
+      const ns=Math.min(600,Math.max(5,V.scale*f));
       const af=ns/V.scale;
       V.ox=g.cx-(g.cx-V.ox)*af; V.oy=g.cy-(g.cy-V.oy)*af;
       V.scale=ns;
@@ -1300,9 +1467,11 @@ cv.addEventListener('wheel', e=>{
   const r=cv.getBoundingClientRect();
   const mx=e.clientX-r.left, my=e.clientY-r.top;
   const factor=e.deltaY<0?1.15:.87;
-  V.ox=mx-(mx-V.ox)*factor;
-  V.oy=my-(my-V.oy)*factor;
-  V.scale=Math.min(200,Math.max(5,V.scale*factor));
+  const ns=Math.min(600,Math.max(5,V.scale*factor));
+  const af=ns/V.scale;        // actual factor after clamping
+  V.ox=mx-(mx-V.ox)*af;
+  V.oy=my-(my-V.oy)*af;
+  V.scale=ns;
   render();
 },{passive:false});
 
@@ -1442,7 +1611,7 @@ function updateSolutionPanel(){
       const d=L.solution.reduce((a,m)=>a+Math.abs(m.dist),0);
       cands+=`<div class="row sol-cand sol-cand-on">`
         +`<span class="sol-n">${L.solution.length}t</span>`
-        +`<span class="sol-cand-d">${d.toFixed(1)} m · shown</span>`
+        +`<span class="sol-cand-d">${d.toFixed(1)} m · ${Math.round(d*100)} cm · shown</span>`
         +`<button class="sol-show" disabled title="Currently shown">✓</button>`
         +`<button class="sol-clear-current" title="Clear this solution">✕</button>`
         +`</div>`;
@@ -1452,7 +1621,7 @@ function updateSolutionPanel(){
         const on=i===shownIdx, d=s.reduce((a,m)=>a+Math.abs(m.dist),0);
         return `<div class="row sol-cand${on?' sol-cand-on':''}" data-ci="${i}">`
           +`<span class="sol-n">${s.length}t</span>`
-          +`<span class="sol-cand-d">${d.toFixed(1)} m${on?' · shown':''}</span>`
+          +`<span class="sol-cand-d">${d.toFixed(1)} m · ${Math.round(d*100)} cm${on?' · shown':''}</span>`
           +`<button class="sol-show" data-ci="${i}" title="Show this plan to the player"${on?' disabled':''}>${on?'✓':'Show'}</button>`
           +`<button class="sol-cand-del" data-ci="${i}" title="Remove this option">✕</button>`
           +`</div>`;
@@ -2108,7 +2277,10 @@ document.getElementById('saveOverlay').addEventListener('click',e=>{if(e.target=
 // Pass the level via URL hash so it only affects the opened tab (never the
 // persistent game level list).
 document.getElementById('btnTry').onclick=()=>{
-  window.open('index.html#try='+levelToString(L), '_blank');
+  // Strip solver-only fields the game never reads so the URL stays compact
+  // and edge-cases with large solutions arrays can't silently break decoding.
+  const { solutions: _s, ...lvForTry } = L;
+  window.open('index.html#try='+levelToString(lvForTry), '_blank');
 };
 
 // ── Solver ────────────────────────────────────────────────────────────────────

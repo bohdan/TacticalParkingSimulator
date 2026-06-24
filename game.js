@@ -20,6 +20,36 @@ function parkingClearance(pose) {
   return isFinite(minGap) ? minGap : 0;
 }
 
+// Signed distance from the car's rear-axle centre to the goal zone boundary.
+// Positive = outside (approaching); negative = inside (clearance of centre point).
+function distToGoalBoundary(pose) {
+  const zone = goalPoly(level.goal);
+  let d = Infinity;
+  for (let j = 0; j < zone.length; j++) {
+    const a = zone[j], b = zone[(j+1) % zone.length];
+    d = Math.min(d, ptSegDist(pose.x, pose.y, a.x, a.y, b.x, b.y));
+  }
+  return pointInPoly({ x: pose.x, y: pose.y }, zone) ? -d : d;
+}
+
+// Signed distance from the car outline to the goal zone boundary.
+// Positive = outside (min distance any corner is from the goal edge).
+// Negative = all corners inside (magnitude = closest corner's inward clearance).
+function distCarToGoal(pose) {
+  const cp = carPoly(pose);
+  const zone = goalPoly(level.goal);
+  let minD = Infinity;
+  let anyOutside = false;
+  for (const v of cp) {
+    if (!pointInPoly(v, zone)) anyOutside = true;
+    for (let j = 0; j < zone.length; j++) {
+      const a = zone[j], b = zone[(j+1) % zone.length];
+      minD = Math.min(minD, ptSegDist(v.x, v.y, a.x, a.y, b.x, b.y));
+    }
+  }
+  return anyOutside ? minD : -minD;
+}
+
 /* ===================== Levels ===================== */
 
 // Editor test level: passed via URL hash (#try=<base64url>) by editor.html.
@@ -37,7 +67,7 @@ let testLevelLoaded = false;
     lv._isTest = true;
     LEVELS.unshift(lv);
     testLevelLoaded = true;
-  } catch (e) {}
+  } catch (e) { console.warn('[try] Failed to load test level:', e); }
 })();
 
 /* ===================== Solution encode / decode ===================== */
@@ -166,7 +196,17 @@ let editIdx = null;    // index of the move being tweaked (null = composing next
 let anim = null;       // {samples, cum, total, t0, speed}
 let pendingLb = null;  // {levelIdx, stars, st} — awaiting leaderboard submit
 let solutionUsed = false; // viewing the solution locks leaderboard until Reset
-let view = { scale: 1, ox: 0, oy: 0 };
+let view = {
+  scale: 1, ox: 0, oy: 0, dpr: 1,
+  // Focus mode: t=0 normal view, t=1 fully focused; animates between
+  t: 0, focused: false,
+  focusX: 0, focusY: 0, focusAngle: 0,
+  animating: false, animFrom: 0, animTo: 0, animT0: 0, animDur: 400,
+  lastNow: 0,
+};
+// World units per screen pixel at the current frame's zoom — updated once per
+// draw() so overlay lines (ghost, path, guides) stay cosmetically thin.
+let drawPX = 1 / 60;
 
 function planEnd() {
   return planSims.length ? planSims[planSims.length - 1].end : level.start;
@@ -308,17 +348,26 @@ function rebuildLevelSelect() {
   if (nextBtn) nextBtn.disabled = adjacentUnlocked(+1) < 0;
 }
 
+function fmtGoalDist(d) {
+  if (d <= 0) return '<span class="goal-dist goal-in">&#10003; In spot</span>';
+  const val = d >= 1 ? `${d.toFixed(2)} m` : `${(d * 100).toFixed(2)} cm`;
+  return `<span class="goal-dist">${val} outside</span>`;
+}
+
 function updateHUD() {
   const planning = moves.length > 0 || Math.abs(editDist) > 0.01;
   const desc = level.tut || level.hint || '';
 
   $('objective').innerHTML = desc ? escHtml(desc) : '';
 
+  const endPose = (editSim && !editSim.hit) ? editSim.end : planEnd();
+  const goalDistHtml = fmtGoalDist(distCarToGoal(endPose));
+
   if (planning) {
     const st = planStats();
-    $('parInfo').innerHTML = `Moves <b>${st.moves}</b> / Par ${levelPar()} · ${(st.dist * 100).toFixed(0)}cm`;
+    $('parInfo').innerHTML = `Moves <b>${st.moves}</b> / Par ${levelPar()} · ${(st.dist * 100).toFixed(0)}cm · ${goalDistHtml}`;
   } else {
-    $('parInfo').textContent = `Par ${levelPar()}`;
+    $('parInfo').innerHTML = `Par ${levelPar()} · ${goalDistHtml}`;
   }
   $('stats').innerHTML = '';
   $('delBtn').disabled = (moves.length === 0 && editIdx === null && Math.abs(editDist) < 0.01) || !!anim;
@@ -451,17 +500,35 @@ function fitView() {
     cv.width = Math.round(w * dpr);
     cv.height = Math.round(h * dpr);
   }
-  const m = 8; // px margin
+  const m = 8;
   view.scale = Math.min((w - 2 * m) / level.w, (h - 2 * m) / level.h);
   view.ox = (w - level.w * view.scale) / 2;
   view.oy = (h - level.h * view.scale) / 2;
   view.dpr = dpr;
 }
 
+// Focus-mode scale: show ≈10 m across the short screen dimension.
+function focusViewScale() {
+  return Math.min(cv.clientWidth, cv.clientHeight) / 10;
+}
+
+// Lerped view parameters shared by worldTransform / toScreen / pointerToWorld.
+function viewParams() {
+  const t  = view.t;
+  const wX = level.w / 2 + (view.focusX - level.w / 2) * t;
+  const wY = level.h / 2 + (view.focusY - level.h / 2) * t;
+  return { wX, wY, ang: view.focusAngle * t,
+           sc: view.scale + (focusViewScale() - view.scale) * t };
+}
+
 function worldTransform() {
+  const W = cv.clientWidth, H = cv.clientHeight;
+  const { wX, wY, ang, sc } = viewParams();
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-  ctx.translate(view.ox, view.oy);
-  ctx.scale(view.scale, view.scale);
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(ang);
+  ctx.scale(sc, sc);
+  ctx.translate(-wX, -wY);
 }
 
 function screenTransform() {
@@ -469,7 +536,12 @@ function screenTransform() {
 }
 
 function toScreen(p) {
-  return { x: view.ox + p.x * view.scale, y: view.oy + p.y * view.scale };
+  const W = cv.clientWidth, H = cv.clientHeight;
+  const { wX, wY, ang, sc } = viewParams();
+  const dx = p.x - wX, dy = p.y - wY;
+  const c = Math.cos(ang), s = Math.sin(ang);
+  return { x: W / 2 + (dx * c - dy * s) * sc,
+           y: H / 2 + (dx * s + dy * c) * sc };
 }
 
 function drawPoly(poly) {
@@ -691,7 +763,7 @@ function drawGhost(pose, color, steer = 0) {
   ctx.save();
   ctx.translate(pose.x, pose.y);
   ctx.rotate(pose.h);
-  ctx.lineWidth = 0.07;
+  ctx.lineWidth = Math.min(0.07, 2 * drawPX);
   ctx.strokeStyle = color;
   ctx.setLineDash([0.25, 0.18]);
   for (const [wx, wya, a] of [
@@ -708,7 +780,7 @@ function drawGhost(pose, color, steer = 0) {
   ctx.setLineDash([]);
 
   drawPoly(carPoly(pose));
-  ctx.lineWidth = 0.07;
+  ctx.lineWidth = Math.min(0.07, 2 * drawPX);
   ctx.strokeStyle = color;
   ctx.setLineDash([0.25, 0.18]);
   ctx.stroke();
@@ -730,7 +802,7 @@ function drawPath(pts, color, dashed, lw = 0.09) {
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.lineWidth = lw;
+  ctx.lineWidth = Math.min(lw, 3 * drawPX);
   ctx.strokeStyle = color;
   if (dashed) ctx.setLineDash([0.35, 0.25]);
   ctx.stroke();
@@ -837,7 +909,7 @@ function drawSteerWheels(pose, steerRad) {
     ctx.rotate(pose.h + steerRad);
     ctx.fillStyle = '#10131a';
     ctx.fillRect(-wl / 2, -wt, wl, wt * 2);
-    ctx.lineWidth = 0.03;
+    ctx.lineWidth = Math.min(0.03, 1.5 * drawPX);
     ctx.strokeStyle = 'rgba(120,220,255,0.9)';
     ctx.strokeRect(-wl / 2, -wt, wl, wt * 2);
     ctx.restore();
@@ -867,10 +939,22 @@ function draw(now) {
   // the screen. Keep the RAF alive so play resumes when we leave it.
   if (!level) { requestAnimationFrame(draw); return; }
   fitView();
+
+  // Advance focus-mode animation + live tracking of the current turn's end.
+  const dt = view.lastNow ? Math.min(0.05, (now - view.lastNow) / 1000) : 0;
+  view.lastNow = now;
+  if (view.animating) {
+    const p = Math.min(1, (now - view.animT0) / view.animDur);
+    view.t = view.animFrom + (view.animTo - view.animFrom) * easeIO2d(p);
+    if (p >= 1) { view.t = view.animTo; view.animating = false; }
+  }
+  trackFocus(dt);
+
   screenTransform();
   ctx.fillStyle = '#171a21';
   ctx.fillRect(0, 0, cv.clientWidth, cv.clientHeight);
 
+  drawPX = 1 / viewParams().sc;
   worldTransform();
 
   // asphalt
@@ -887,7 +971,7 @@ function draw(now) {
   // lane markings (cosmetic, no collision)
   if (level.markings && level.markings.length) {
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 0.10;
     ctx.lineCap = 'butt';
     ctx.setLineDash([1.0, 1.0]);
@@ -1024,7 +1108,7 @@ function draw(now) {
     const p = hitInfo.point;
     ctx.beginPath();
     ctx.arc(p.x, p.y, 0.25 + t * 0.6, 0, 2 * Math.PI);
-    ctx.lineWidth = 0.09;
+    ctx.lineWidth = Math.min(0.09, 3 * drawPX);
     ctx.strokeStyle = `rgba(255,82,82,${1 - t})`;
     ctx.stroke();
     ctx.beginPath();
@@ -1033,7 +1117,7 @@ function draw(now) {
       ctx.moveTo(p.x + Math.cos(a) * r1, p.y + Math.sin(a) * r1);
       ctx.lineTo(p.x + Math.cos(a) * r2, p.y + Math.sin(a) * r2);
     }
-    ctx.lineWidth = 0.07;
+    ctx.lineWidth = Math.min(0.07, 2.5 * drawPX);
     ctx.strokeStyle = '#ff5252';
     ctx.stroke();
   }
@@ -1092,6 +1176,7 @@ function traveledDist(dist, sim) {
 function startRun() {
   if (!moves.length || anim) return;
   editIdx = null;
+  if (view.focused) exitFocus(); // gently pull back to the full board for the run
   // Bake every move down to the distance actually travelled, so the plan that
   // runs (and gets saved/shared) is the precise sequence the car performs —
   // no over-the-limit values that silently truncate on replay.
@@ -1211,6 +1296,7 @@ function setLevel(i) {
   anim = null;
   editIdx = null;
   solutionUsed = false;
+  resetFocus();
   setEdit(0, 0);
   recomputePlan();   // also calls updateHash()
   rebuildLevelSelect();
@@ -1253,6 +1339,7 @@ function setEdit(steerDeg, dist) {
     recomputeEdit();
     updateHUD();
   }
+  scheduleFocusHint();
 }
 
 // Relative-drag sliders: dragging accumulates a delta from the value at
@@ -1608,7 +1695,7 @@ async function lbGet(levelIdx) {
   const p = new URLSearchParams({
     select: 'player,moves,dist,solution,submitted_at',
     level_id: `eq.${levelKey(levelIdx)}`,
-    order: 'moves.asc,dist.asc', limit: '100',
+    order: 'moves.asc,dist.asc,submitted_at.asc', limit: '100',
   });
   const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
     headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
@@ -1620,7 +1707,7 @@ async function lbGet(levelIdx) {
 async function lbGetAll() {
   const p = new URLSearchParams({
     select: 'player,level_id,level_name,moves,dist,solution,submitted_at',
-    order: 'moves.asc,dist.asc', limit: '500',
+    order: 'moves.asc,dist.asc,submitted_at.asc', limit: '500',
   });
   const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
     headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
@@ -1766,6 +1853,98 @@ function showSolution() {
 }
 
 
+/* ===================== Focus mode ===================== */
+
+const easeIO2d = t => t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+
+function startViewAnim(to, dur) {
+  view.animFrom = view.t; view.animTo = to;
+  view.animT0 = performance.now(); view.animDur = dur; view.animating = true;
+}
+
+// The pose the focus view tracks: the end of the *current turn* — the move
+// being edited, the pending new move, or (with nothing pending) the plan end.
+function currentTurnEnd() {
+  if (editIdx !== null) return planSims[editIdx] ? planSims[editIdx].end : planEnd();
+  if (editSim && Math.abs(editDist) > 0.01) return editSim.end;
+  return planEnd();
+}
+
+// Desired view angle so the tracked car faces "up" on screen.
+function focusAngleFor(pose) { return -(pose.h + Math.PI / 2); }
+
+function enterFocus() {
+  const pose = currentTurnEnd();
+  // Snap to the target so the zoom-in animates from the right place.
+  view.focusX     = pose.x;
+  view.focusY     = pose.y;
+  view.focusAngle = focusAngleFor(pose);
+  view.focused    = true;
+  startViewAnim(1, 420);
+  hideFocusHint();
+  $('focusBadge').classList.remove('hidden');
+}
+
+function exitFocus() {
+  view.focused = false;
+  startViewAnim(0, 320);
+  $('focusBadge').classList.add('hidden');
+}
+
+function resetFocus() { // called on level change
+  view.t = 0; view.focused = false; view.animating = false;
+  $('focusBadge').classList.add('hidden');
+}
+
+// Smoothly glide the focus centre/angle toward the current turn's end. Called
+// every frame while focus is active (or animating). Held still during an active
+// canvas drag so the view doesn't chase its own input. dt in seconds.
+function trackFocus(dt) {
+  if (view.t <= 0 && !view.focused) return;
+  if (drag && drag.moved) return;            // freeze while fine-dragging
+  const pose = currentTurnEnd();
+  const k    = 1 - Math.exp(-dt / 0.10);      // position: ~100 ms
+  const kAng = 1 - Math.exp(-dt / 0.40);      // rotation: ~400 ms
+  view.focusX += (pose.x - view.focusX) * k;
+  view.focusY += (pose.y - view.focusY) * k;
+  // Shortest-arc angle smoothing.
+  let da = focusAngleFor(pose) - view.focusAngle;
+  da = Math.atan2(Math.sin(da), Math.cos(da));
+  view.focusAngle += da * kAng;
+}
+
+/* ===================== Focus hint ===================== */
+
+let focusHintDismissed = false;
+let focusHintTimer = null;
+
+function showFocusHint() {
+  if (focusHintDismissed || view.focused || anim) return;
+  $('focusHint').classList.remove('hidden');
+}
+
+function hideFocusHint() {
+  clearTimeout(focusHintTimer); focusHintTimer = null;
+  $('focusHint').classList.add('hidden');
+}
+
+function scheduleFocusHint() {
+  if (focusHintDismissed || view.focused) return;
+  const d = Math.abs(editDist);
+  if (d > 0.005 && d < 0.2) {
+    if (!focusHintTimer) focusHintTimer = setTimeout(showFocusHint, 700);
+  } else {
+    hideFocusHint();
+  }
+}
+
+$('focusHintClose').addEventListener('click', e => {
+  e.stopPropagation(); focusHintDismissed = true; hideFocusHint();
+});
+$('focusBadgeClose').addEventListener('click', e => {
+  e.stopPropagation(); exitFocus();
+});
+
 // Drag directly on the canvas: the ghost car chases the pointer. The arc
 // from the current move's start pose through the pointer's world position
 // determines both steering angle and signed distance, so dragging feels
@@ -1773,8 +1952,13 @@ function showSolution() {
 // A tap (minimal movement) on a move badge selects it for tweaking.
 function pointerToWorld(e) {
   const r = cv.getBoundingClientRect();
-  return { x: (e.clientX - r.left - view.ox) / view.scale,
-           y: (e.clientY - r.top - view.oy) / view.scale };
+  const W = cv.clientWidth, H = cv.clientHeight;
+  const { wX, wY, ang, sc } = viewParams();
+  const sx = e.clientX - r.left - W / 2;
+  const sy = e.clientY - r.top  - H / 2;
+  const c = Math.cos(-ang), s = Math.sin(-ang);
+  return { x: wX + (sx * c - sy * s) / sc,
+           y: wY + (sx * s + sy * c) / sc };
 }
 
 // Given a target point in world space, find the constant-steer arc from the
@@ -1812,8 +1996,12 @@ cv.addEventListener('pointermove', e => {
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.abs(dx) > 5 || Math.abs(dy) > 5) drag.moved = true;
   if (!drag.moved) return;
-  const a = arcToPoint(editStartPose(),
-    { x: drag.tx + dx / view.scale, y: drag.ty + dy / view.scale });
+  // Un-rotate canvas delta into world space (handles focus-mode rotation).
+  const { ang, sc } = viewParams();
+  const c = Math.cos(-ang), s = Math.sin(-ang);
+  const wdx = (dx * c - dy * s) / sc;
+  const wdy = (dx * s + dy * c) / sc;
+  const a = arcToPoint(editStartPose(), { x: drag.tx + wdx, y: drag.ty + wdy });
   setEdit(a.steer, a.dist);
 });
 cv.addEventListener('pointerup', e => {
@@ -1830,8 +2018,15 @@ cv.addEventListener('pointerup', e => {
       selectMove(hit);
     } else {
       const now = performance.now();
-      if (now - lastTap < 350 && Math.abs(editDist) > 0.01) {
-        if (commitMove()) toast('Move added');
+      if (now - lastTap < 350) {
+        if (Math.abs(editDist) > 0.01) {
+          // Meaningful move pending → commit it. Focus (if active) glides to
+          // the new plan end on its own via trackFocus().
+          if (commitMove()) toast('Move added');
+        } else {
+          // No pending move → toggle focus mode.
+          view.focused ? exitFocus() : enterFocus();
+        }
         lastTap = 0;
       } else {
         lastTap = now;
