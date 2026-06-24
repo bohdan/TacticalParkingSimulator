@@ -147,16 +147,18 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best) {
         continue;
       }
       if (circleApproach(p2, s3, goal.cx, goal.cy).cd > skipR3) continue;
-      const R = wb / Math.tan(s3);
-      for (const gh of gHeads) {
-        const c = Math.round(R * normAng(gh - p2.h) / DIST_Q);
-        for (let k = -Wdock; k <= Wdock; k++) {
-          const n = c + k; if (n === 0) continue;
-          const d = round2(n * DIST_Q);
-          if (Math.abs(d) > A3 || Math.abs(d) < DIST_Q) continue;
-          const p3 = advance(p2, s3, d); if (hits(p3)) continue;
-          if (inGoal(p3, goal)) emit([m1, m2, { steer: sd3, dist: d }]);
-        }
+      // Scan all arc lengths with early break on collision — heading tolerance can
+      // be large (e.g. 45°) so a narrow analytic window misses valid distances.
+      const N3 = Math.ceil(A3 / DIST_Q);
+      for (let n = 1; n <= N3; n++) {
+        const df = round2(n * DIST_Q);
+        const p3f = advance(p2, s3, df); if (hits(p3f)) break;
+        if (inGoal(p3f, goal)) emit([m1, m2, { steer: sd3, dist: df }]);
+      }
+      for (let n = 1; n <= N3; n++) {
+        const db = round2(-n * DIST_Q);
+        const p3b = advance(p2, s3, db); if (hits(p3b)) break;
+        if (inGoal(p3b, goal)) emit([m1, m2, { steer: sd3, dist: db }]);
       }
     }
   }
