@@ -70,7 +70,7 @@ button.nav{padding:4px 8px;font-weight:700}
 .meas-item.meas-odd,.meas-item-top.meas-odd{background:rgba(255,255,255,0.07)}
 .meas-item-top{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#4a5a70;border-left:1px solid #1a2030;cursor:default;text-align:center;overflow:hidden;white-space:nowrap}
 @media(max-width:760px){#measLeft{display:none}#measurePanelTop{display:none}}
-#solveStatus{font-size:11px;color:#7dc87d;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#solveStatus{font-size:11px;color:#7dc87d}
 .save-split{display:flex;gap:0}
 .save-split #btnSave{border-radius:6px 0 0 6px;border-right:none}
 .save-split #btnGH{border-radius:0 6px 6px 0;padding:4px 7px;min-width:0;background:#1d4f6b;border-color:#2d7396}
@@ -187,9 +187,11 @@ button.nav{padding:4px 8px;font-weight:700}
     <div id="selPanel"><p class="sel-hint">Click an object on the canvas — including the <b>start car</b> and <b>goal box</b> — to edit it here.<br>Delete key removes it.</p></div>
 
     <h2>Solution</h2>
-    <div style="display:flex;gap:5px;align-items:center;margin-bottom:8px">
-      <button id="btnSolve" title="Find fewest-turn solutions (streams improvements as it runs)">&#9881; Solve</button>
-      <button id="btnStopSolve" title="Stop solving and keep the best found so far" style="display:none">&#9632; Stop</button>
+    <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">
+      <div style="display:flex;gap:5px">
+        <button id="btnSolve" title="Find fewest-turn solutions (streams improvements as it runs)">&#9881; Solve</button>
+        <button id="btnStopSolve" title="Stop solving and keep the best found so far" style="display:none">&#9632; Stop</button>
+      </div>
       <span id="solveStatus"></span>
     </div>
     <div id="solPanel"></div>
