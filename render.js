@@ -7,9 +7,10 @@
  * `Physics` accessors (poseX/Y/Heading, spec*, polygonVertex). `steeringRadians` is the
  * explicit "turn direction" render slot.
  *
- * The geometrically-simple drawers are implemented. The elaborate per-vehicle art
- * (drawCarBody detail, arc guides, steering geometry) is the larger extraction from game.js
- * and is left as documented stubs — this file establishes the INTERFACE.
+ * Kinematics stays in the kernel: the arc/steering overlays take the caller's
+ * advancePose / arcCenter / turnRadius rather than re-deriving motion here. The one
+ * remaining simplification is drawCarBody's per-vehicle art (bus/miata/tractor detail,
+ * hubs, treads), which draws a plain body box + wheels until that styling is ported.
  *
  * Depends on the `Physics` namespace (physics-kernel.js).
  */
@@ -122,17 +123,83 @@ const Renderer = (function (P) {
     void worldPerPixel;
   }
 
-  // drawSteeringGeometry(ctx, pose, spec, steeringRadians, isPreview, worldPerPixel) —
-  // turn centre + radius circle. STUB: needs the turn centre/radius from kernel.arcCenter /
-  // kernel.moveTurnRadius passed in by the caller; wire in during the game.js rewire step.
-  function drawSteeringGeometry(/* ctx, pose, spec, steeringRadians, isPreview, worldPerPixel */) {
-    /* TODO(port): draw arcCenter dot + radius circle + steered wheels (game.js:862). */
+  // Styled world-space polyline (solid/dashed, explicit width) for the guide overlays.
+  function strokeGuide(ctx, pts, color, dashed, lineWidth) {
+    if (pts.length < 2) return;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    if (dashed) ctx.setLineDash([0.35, 0.25]);
+    ctx.beginPath();
+    ctx.moveTo(P.pointX(pts[0]), P.pointY(pts[0]));
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(P.pointX(pts[i]), P.pointY(pts[i]));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
   }
 
-  // drawArcGuides(ctx, pose, spec, steeringRadians, forwardLimit, backwardLimit, worldPerPixel)
-  // STUB: the swept corner/wheel tracks. Limits are precomputed by the caller via the kernel.
-  function drawArcGuides(/* ctx, pose, spec, steeringRadians, fwd, bwd, worldPerPixel */) {
-    /* TODO(port): sweep corner/wheel tracks over [backwardLimit, forwardLimit] (game.js:815). */
+  // drawSteeringGeometry(ctx, pose, spec, steeringRadians, turnCenter, turnRadius, previewPose, wpp)
+  // The instantaneous turn centre + radius lines (rear axle and both front wheels → centre),
+  // plus the steered front wheels. turnCenter (= kernel.arcCenter) / turnRadius (signed, =
+  // kernel.turnRadius) come from the caller's kernel so the renderer does no kinematics.
+  function drawSteeringGeometry(ctx, pose, spec, steeringRadians, turnCenter, turnRadius, previewPose, worldPerPixel) {
+    if (!turnCenter || Math.abs(steeringRadians) < P.rad(0.5)) return;   // ~straight: centre at infinity
+    const R = turnRadius;                                  // signed: wheelbase / tan(steer)
+    const px = P.poseX(pose), py = P.poseY(pose), h = P.poseHeading(pose);
+    const ux = -Math.sin(h), uy = Math.cos(h);             // rear-axle axis, toward the centre
+    const O = { x: P.pointX(turnCenter), y: P.pointY(turnCenter) };
+    const sgn = Math.sign(R);
+    const at = t => ({ x: px + t * ux, y: py + t * uy });
+    const half = P.specWidth(spec) / 2 - 0.16;             // matches drawn wheel inset
+    strokeGuide(ctx, [at(-sgn * 1.0), at(R + sgn * 1.0)], 'rgba(255,255,255,0.28)', false, 0.035);
+    strokeGuide(ctx, [{ x: px, y: py }, O], 'rgba(120,220,255,0.8)', false, 0.045);
+    drawSteeringWheels(ctx, pose, spec, steeringRadians, worldPerPixel);
+    const fp = previewPose || pose;
+    const fc = Math.cos(P.poseHeading(fp)), fs = Math.sin(P.poseHeading(fp));
+    const wb = P.specWheelbase(spec), fpx = P.poseX(fp), fpy = P.poseY(fp);
+    const fw = ly => ({ x: fpx + wb * fc - ly * fs, y: fpy + wb * fs + ly * fc });
+    strokeGuide(ctx, [fw(half), O], 'rgba(255,255,255,0.28)', false, 0.03);
+    strokeGuide(ctx, [fw(-half), O], 'rgba(255,255,255,0.28)', false, 0.03);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(O.x, O.y, 0.12, 0, 2 * Math.PI);
+    ctx.fillStyle = 'rgba(120,220,255,0.9)';
+    ctx.fill();
+    ctx.restore();
+    void worldPerPixel;
+  }
+
+  // drawArcGuides(ctx, pose, spec, steeringRadians, forwardLimit, backwardLimit, advancePose, wpp)
+  // Swept tracks of the 4 footprint corners (solid) and 4 wheels (dashed) over the drivable
+  // arc. The caller supplies its kernel's advancePose so the rollout uses the one kinematics
+  // implementation; forward/backward limits are precomputed by the caller via the kernel.
+  function drawArcGuides(ctx, pose, spec, steeringRadians, forwardLimit, backwardLimit, advancePose, worldPerPixel) {
+    const N = 60;
+    const fLen = P.specWheelbase(spec) + P.specFrontOverhang(spec);
+    const rOver = P.specRearOverhang(spec), wb = P.specWheelbase(spec), half = P.specWidth(spec) / 2;
+    const sample = (limit, dir) => {
+      const t = { cFL: [], cFR: [], cRL: [], cRR: [], wFL: [], wFR: [], wRL: [], wRR: [] };
+      for (let i = 0; i <= N; i++) {
+        const p = advancePose(pose, steeringRadians, dir * limit * i / N);
+        const cs = Math.cos(P.poseHeading(p)), sn = Math.sin(P.poseHeading(p));
+        const px = P.poseX(p), py = P.poseY(p);
+        const w = (lx, ly) => ({ x: px + cs * lx - sn * ly, y: py + sn * lx + cs * ly });
+        t.cFL.push(w(fLen, half)); t.cFR.push(w(fLen, -half));
+        t.cRL.push(w(-rOver, half)); t.cRR.push(w(-rOver, -half));
+        t.wFL.push(w(wb, half)); t.wFR.push(w(wb, -half));
+        t.wRL.push(w(0, half)); t.wRR.push(w(0, -half));
+      }
+      return t;
+    };
+    for (const [limit, dir] of [[forwardLimit, 1], [backwardLimit, -1]]) {
+      if (!(limit > 0.2)) continue;
+      const t = sample(limit, dir);
+      const col  = dir > 0 ? 'rgba(69,196,255,0.28)' : 'rgba(255,159,67,0.28)';
+      const wCol = dir > 0 ? 'rgba(69,196,255,0.50)' : 'rgba(255,159,67,0.50)';
+      for (const k of ['cFL', 'cFR', 'cRL', 'cRR']) strokeGuide(ctx, t[k], col, false, 0.06);
+      for (const k of ['wFL', 'wFR', 'wRL', 'wRR']) strokeGuide(ctx, t[k], wCol, true, 0.05);
+    }
+    void worldPerPixel;
   }
 
   return {
