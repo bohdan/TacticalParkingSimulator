@@ -263,8 +263,9 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best, pr
 // streaming validated candidates back through `consume`. Resolves when every
 // worker finishes, the deadline passes, or shouldStop() trips. Falls back to a
 // single inline kernel run when Workers are unavailable (Node, older browsers).
-async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn, progressCb = null) {
-  const best = { v: Infinity, dist: Infinity };
+async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn, progressCb = null, initBest = null) {
+  const best = initBest ? { v: initBest.v ?? Infinity, dist: initBest.dist ?? Infinity }
+                        : { v: Infinity, dist: Infinity };
   const onCand = moves => {                       // shared validate→consume→track-best
     const v = validateMoves(prm._start, moves, prm._obstacles, prm._goal);
     if (v) { if (v.length < best.v) best.v = v.length; consume(v); }
@@ -565,41 +566,53 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
   const open = [];
   const closed = new Map();   // cell -> { turns, dist }  (re-openable)
 
-  // ── Brute-force warmup: turns 1 & 2 full grid + analytic 3rd-turn dock ───────
-  // Multicore brute force across Web Workers (8 by default; one steer-slice each),
-  // streaming validated candidates into offer(). Steering stays on the player input
-  // grid — default the full 0.2° grid, or pass a coarser opts.bfSteerStep for a fast
-  // pass. Time-boxed (opts.bfTimeMs, default 25 s) so the lattice A* below still gets
-  // a share of the budget on deep (>3-turn) levels. See bruteForceKernel for the
-  // turn-2 circle broad-phase and the analytic dock that make 3 turns feasible.
+  // Pre-compute BF params so they're ready when the quick A* pass finishes.
+  let bfPrm = null, bfWorkers = 0, bfDeadline = Infinity;
   if (opts.bf !== false) {
-    const bfStep = Math.max(STEER_Q, opts.bfSteerStep || STEER_Q);    // default = full input grid
+    const bfStep = Math.max(STEER_Q, opts.bfSteerStep || STEER_Q);
     const bfNq = Math.floor(ms / bfStep + 1e-9);
-    const BFS = [snap(ms, STEER_Q), snap(-ms, STEER_Q)];              // always include full lock
+    const BFS = [snap(ms, STEER_Q), snap(-ms, STEER_Q)];
     for (let q = -bfNq; q <= bfNq; q++)
       BFS.push(snap(Math.max(-ms, Math.min(ms, q * bfStep)), STEER_Q));
-    const bfPrm = {
+    bfPrm = {
       STEERS: [...new Set(BFS)].sort((a, b) => a - b),
       DIST_Q,
       arc1: opts.bfArc1 || Math.min(8, ARC_MAX),
       arc2: opts.bfArc2 || 6,
       arc3: opts.bfArc3 || 6,
-      workers:  opts.workers,
+      workers: opts.workers,
       _start: start, _obstacles: obstacles, _goal: goal,
     };
-    const bfDeadline = opts.bfTimeMs ? startTime + opts.bfTimeMs : Infinity;
-    const bfWorkers = Math.min(bfPrm.workers || 8, bfPrm.STEERS.length);
-    progressCb && progressCb({ type: 'phase', phase: 'bf', workers: bfWorkers });
-    await bruteForceParallel(def, bfPrm, m => offer(m), shouldStop, bfDeadline, now, progressCb);
+    bfWorkers = Math.min(bfPrm.workers || 8, bfPrm.STEERS.length);
+    bfDeadline = opts.bfTimeMs ? startTime + opts.bfTimeMs : Infinity;
   }
-  progressCb && progressCb({ type: 'phase', phase: 'astar' });
+
+  // Extract current best as an initial bound for BF workers.
+  const getInitBest = () => {
+    if (bestTurns === Infinity) return { v: Infinity, dist: Infinity };
+    const set = solSets.get(bestTurns) || [];
+    return { v: bestTurns, dist: set.length ? Math.min(...set.map(e => e.dist)) : Infinity };
+  };
 
   const s0 = { pose: start, turns: 0, dist: 0, parent: null, move: null,
                inSd: null, inDir: 0, cell: key(start), pat: '', f: weight * hTurns(start) };
   _heapPush(open, s0);
   closed.set(s0.cell, { turns: 0, dist: 0 });
 
+  // Run a quick A* pass first so BF workers start with a good bound, then
+  // launch BF (workers run in parallel on other threads while this awaits),
+  // then continue A* from exactly where it left off.
+  const bfQuickExpand = opts.bfQuickExpand ?? 1000;
+  let bfLaunched = !bfPrm;
+  progressCb && progressCb({ type: 'phase', phase: bfLaunched ? 'astar' : 'astar_quick' });
+
   while (open.length && budgetLeft()) {
+    if (!bfLaunched && expand >= bfQuickExpand) {
+      bfLaunched = true;
+      progressCb && progressCb({ type: 'phase', phase: 'bf', workers: bfWorkers });
+      await bruteForceParallel(def, bfPrm, m => offer(m), shouldStop, bfDeadline, now, progressCb, getInitBest());
+      progressCb && progressCb({ type: 'phase', phase: 'astar' });
+    }
     const cur = _heapPop(open); expand++;
     if (cur.turns >= bestTurns + extraTurns) {   // can't extend a wanted candidate
       await yieldMaybe(); continue;
@@ -652,6 +665,12 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
       lastYield = now();
       progressCb && progressCb({ type: 'depth', depth: expand, beamSize: open.length });
     }
+  }
+
+  // A* finished before hitting the quick-pass threshold (small/easy level).
+  if (!bfLaunched) {
+    progressCb && progressCb({ type: 'phase', phase: 'bf', workers: bfWorkers });
+    await bruteForceParallel(def, bfPrm, m => offer(m), shouldStop, bfDeadline, now, progressCb, getInitBest());
   }
 
   restore();

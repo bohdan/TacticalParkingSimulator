@@ -2363,7 +2363,8 @@ document.getElementById('btnSolve').onclick = async () => {
         updateSidebar();
         render();
       } else if (ev.type === 'phase') {
-        if (ev.phase === 'bf') status.textContent = `⚙ BF (${ev.workers} worker${ev.workers !== 1 ? 's' : ''})…`;
+        if (ev.phase === 'astar_quick') status.textContent = `⚙ A* quick pass…`;
+        else if (ev.phase === 'bf') status.textContent = `⚙ BF (${ev.workers} worker${ev.workers !== 1 ? 's' : ''})…`;
         else if (ev.phase === 'astar') status.textContent = `⚙ A* search…`;
       } else if (ev.type === 'bf_progress') {
         const fmtN = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? Math.round(n/1000)+'k' : String(n);
