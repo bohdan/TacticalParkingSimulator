@@ -1,7 +1,8 @@
 'use strict';
 
-// physics.js (loaded before this file) provides all shared math and physics:
-// CAR, SEDAN, VEHICLES, SAMPLE_STEP, rad, deg, clamp, normAng, advance,
+// physics-compat.js (loaded before this file) provides all shared math and physics
+// as the legacy flat globals, delegating to the refactored components (PhysicsKernel,
+// Geom2D, Scene): CAR, SEDAN, VEHICLES, SAMPLE_STEP, rad, deg, clamp, normAng, advance,
 // carPoly, polysCollide, ptSegDist, rectPoly, obbPoly, goalPoly, pointInPoly,
 // centroid, contactPoint, simulateMove, buildLevel, inGoal, setVehicle.
 

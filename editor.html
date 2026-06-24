@@ -103,10 +103,10 @@ button.nav{padding:4px 8px;font-weight:700}
 }
 </style>
 <script src="levels.js"></script>
-<script src="physics.js"></script>
 <script src="geometry2d.js"></script>
 <script src="physics-kernel.js"></script>
 <script src="scene.js"></script>
+<script src="physics-compat.js"></script>
 <script src="solver.js"></script>
 </head>
 <body>
@@ -542,7 +542,7 @@ function fitLevel(){
 new ResizeObserver(resize).observe(document.getElementById('cvWrap'));
 
 // ── Math helpers ─────────────────────────────────────────────────────────────
-// rad() and deg() come from physics.js (loaded first); don't redeclare them.
+// rad() and deg() come from physics-compat.js (loaded first); don't redeclare them.
 const π   = Math.PI;
 const snap = (v,s=0.05) => Math.round(v/s)*s;
 function norm(a){ while(a>π)a-=2*π; while(a<-π)a+=2*π; return a; }

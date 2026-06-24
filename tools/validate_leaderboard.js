@@ -12,10 +12,10 @@ const https = require('https');
 
 const ROOT = path.join(__dirname, '..');
 
-// ── Physics engine ──────────────────────────────────────────────────────────
-const ctx = vm.createContext({ Math, Infinity, console });
-vm.runInContext(fs.readFileSync(path.join(ROOT, 'physics.js'), 'utf8'), ctx);
-vm.runInContext(fs.readFileSync(path.join(ROOT, 'levels.js'),  'utf8'), ctx);
+// ── Physics engine (refactored components + the legacy compat surface) ───────
+const ctx = vm.createContext({ Math, Infinity, console, Object, Array, JSON, Float64Array, isFinite });
+for (const f of ['geometry2d.js', 'physics-kernel.js', 'scene.js', 'physics-compat.js', 'levels.js'])
+  vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx);
 const { simulateMove, buildLevel, inGoal, rad, deg, setVehicle,
         carPoly, advance, convexHull, polysCollide } =
   ['simulateMove','buildLevel','inGoal','rad','deg','setVehicle',
