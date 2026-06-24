@@ -13,9 +13,12 @@
  * ONLY through the accessors below. The sole raw crossings are scalars (numbers, the
  * 'L'|'R'|'S' TurnDirection string) and the opaque wire STRING from moveSequenceToString.
  *
+ * Generic 2D geometry (SAT, hull, point-in-polygon, segment math) lives in geometry2d.js
+ * (`Geom2D`); this file owns only the vehicle/kinematics/collision-orchestration layer.
+ *
  * Works as a browser global and as a Node module (for tests).
  */
-const Physics = (function () {
+const Physics = (function (G) {
 
   /* ─── PhysicsStatics: constants ────────────────────────────────────────── */
 
@@ -53,89 +56,10 @@ const Physics = (function () {
     return a;
   }
 
-  /* ─── PhysicsStatics: geometry primitives (no vehicle dependence) ───────── */
-
-  function rectanglePolygon(x, y, w, h) {
-    return [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }];
-  }
-  function orientedBoxPolygon(cx, cy, w, h, ang) {
-    const c = Math.cos(ang), s = Math.sin(ang);
-    const pt = (x, y) => ({ x: cx + c * x - s * y, y: cy + s * x + c * y });
-    return [pt(-w / 2, -h / 2), pt(w / 2, -h / 2), pt(w / 2, h / 2), pt(-w / 2, h / 2)];
-  }
-  function pointInPolygon(pt, poly) {
-    let inside = false;
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const a = poly[i], b = poly[j];
-      if ((a.y > pt.y) !== (b.y > pt.y) &&
-          pt.x < (b.x - a.x) * (pt.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
-    }
-    return inside;
-  }
-  function polygonsCollide(A, B) {                 // SAT, convex polygons
-    for (const [P, Q] of [[A, B], [B, A]]) {
-      for (let i = 0; i < P.length; i++) {
-        const a = P[i], b = P[(i + 1) % P.length];
-        const nx = b.y - a.y, ny = a.x - b.x;
-        let minP = Infinity, maxP = -Infinity, minQ = Infinity, maxQ = -Infinity;
-        for (const v of P) { const d = v.x * nx + v.y * ny; if (d < minP) minP = d; if (d > maxP) maxP = d; }
-        for (const v of Q) { const d = v.x * nx + v.y * ny; if (d < minQ) minQ = d; if (d > maxQ) maxQ = d; }
-        if (maxP < minQ || maxQ < minP) return false;
-      }
-    }
-    return true;
-  }
-  function pointToSegmentDistance(px, py, ax, ay, bx, by) {
-    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
-    if (!l2) return Math.hypot(px - ax, py - ay);
-    const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2));
-    return Math.hypot(px - ax - t * dx, py - ay - t * dy);
-  }
-  function convexHull(pts) {                       // Andrew's monotone chain, CCW
-    const p = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
-    const n = p.length;
-    if (n < 3) return p;
-    const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
-    const lo = [];
-    for (const pt of p) {
-      while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], pt) <= 0) lo.pop();
-      lo.push(pt);
-    }
-    const hi = [];
-    for (let i = n - 1; i >= 0; i--) {
-      const pt = p[i];
-      while (hi.length >= 2 && cross(hi[hi.length - 2], hi[hi.length - 1], pt) <= 0) hi.pop();
-      hi.push(pt);
-    }
-    lo.pop(); hi.pop();
-    return lo.concat(hi);
-  }
-  function polygonBoundingCircle(poly) {
-    let cx = 0, cy = 0;
-    for (const v of poly) { cx += v.x; cy += v.y; }
-    cx /= poly.length; cy /= poly.length;
-    let r = 0;
-    for (const v of poly) { const d = Math.hypot(v.x - cx, v.y - cy); if (d > r) r = d; }
-    return { x: cx, y: cy, r };
-  }
-
-  // internal — NO external caller; not exported.
-  function centroid(poly) {
-    let x = 0, y = 0;
-    for (const v of poly) { x += v.x; y += v.y; }
-    return { x: x / poly.length, y: y / poly.length };
-  }
-  function contactPoint(carP, obsP) {
-    for (const v of carP) if (pointInPolygon(v, obsP)) return v;
-    for (const v of obsP) if (pointInPolygon(v, carP)) return v;
-    const c = centroid(obsP);
-    let best = carP[0], bd = Infinity;
-    for (const v of carP) {
-      const d = (v.x - c.x) ** 2 + (v.y - c.y) ** 2;
-      if (d < bd) { bd = d; best = v; }
-    }
-    return best;
-  }
+  /* ─── Geometry comes from Geom2D (geometry2d.js) ───────────────────────── */
+  // Pulled into locals so the hot loops below call them as flat references.
+  const { rectanglePolygon, orientedBoxPolygon, pointInPolygon, polygonsCollide,
+          convexHull, polygonBoundingCircle, contactPoint } = G;
 
   /* ─── Accessors for the opaque value types (the ONLY external read path) ─ */
 
@@ -321,9 +245,7 @@ const Physics = (function () {
     SAMPLE_STEP, VEHICLES, vehicleSpecFor,
     // math
     rad, deg, clamp, normalizeAngle,
-    // geometry primitives
-    rectanglePolygon, orientedBoxPolygon, pointInPolygon, convexHull,
-    polygonBoundingCircle, polygonsCollide, pointToSegmentDistance,
+    // (generic 2D geometry lives in Geom2D / geometry2d.js — not re-exported here)
     // opaque-type accessors
     poseX, poseY, poseHeading, pointX, pointY, polygonCount, polygonVertex,
     specLength, specWidth, specWheelbase, specRearOverhang, specFrontOverhang, specMaxSteer,
@@ -338,6 +260,6 @@ const Physics = (function () {
     // kernel
     physicsConfigForLevel, PhysicsKernel,
   };
-})();
+})(typeof Geom2D !== 'undefined' ? Geom2D : require('./geometry2d.js'));
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Physics;
