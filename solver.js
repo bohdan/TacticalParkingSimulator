@@ -82,7 +82,7 @@ function validateMoves(start, moves, obstacles, goal) {
 // Calls emit(moves[]) for every goal-reaching candidate; the caller validates+dedupes.
 // `best.v` is the fewest VALID turns seen so far (updated by the caller after
 // validation); once it is ≤ 2 the dock (a 3rd turn) is pruned as it can't be shorter.
-async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best) {
+async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best, progressHook = null) {
   const { obstacles, goal, start } = geom;
   const STEERS = prm.STEERS;
   const DIST_Q = prm.DIST_Q, A1 = prm.arc1, A2 = prm.arc2, A3 = prm.arc3;
@@ -248,6 +248,7 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best) {
         if ((++iter & 31) === 0) {
           if (shouldStop && shouldStop()) return;
           if (yieldHook) await yieldHook();
+          if (progressHook && (iter & 0x3ff) === 0) progressHook(iter);
         }
       }
     }
@@ -273,39 +274,50 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
     let workers = [];
     try {
       const want = Math.min(prm.workers || 8, prm.STEERS.length);
-      const bounds = [];
-      for (let w = 0; w < want; w++)
-        bounds.push([Math.floor(w * prm.STEERS.length / want),
-                     Math.floor((w + 1) * prm.STEERS.length / want)]);
+      // Interleave steer values across workers (round-robin) so each worker gets a mix
+      // of fast (high-lock) and slow (near-zero) steers — avoids stragglers.
+      const workerSteers = Array.from({ length: want }, () => []);
+      prm.STEERS.forEach((s, i) => workerSteers[i % want].push(s));
       const wprm = Object.assign({}, prm);
       delete wprm._start; delete wprm._obstacles; delete wprm._goal;   // rebuilt in worker
       await new Promise((resolve) => {
         let done = 0, finished = false;
+        const wIters = new Array(want).fill(0);
+        const wSols  = new Array(want).fill(0);
         const finish = () => { if (finished) return; finished = true;
           for (const w of workers) { try { w.postMessage({ type: 'stop' }); w.terminate(); } catch (e) {} }
           resolve();
         };
+        const emitProgress = () => {
+          const iters = wIters.reduce((a, b) => a + b, 0);
+          const sols  = wSols.reduce((a, b) => a + b, 0);
+          progressCb && progressCb({ type: 'bf_progress', done, total: want, iters, sols });
+        };
         const timer = setInterval(() => {
           if ((shouldStop && shouldStop()) || (deadline && nowFn() > deadline)) { clearInterval(timer); finish(); }
-          else progressCb && progressCb({ type: 'bf_progress', done, total: want });
-        }, 60);
+          else emitProgress();
+        }, 500);
         for (let w = 0; w < want; w++) {
+          const wi = w;
           const wk = new Worker('solver-worker.js');
           workers.push(wk);
           wk.onmessage = (e) => {
             const m = e.data;
             if (m.type === 'sol') {
+              wSols[wi]++;
               if (m.moves.length < best.v) best.v = m.moves.length;
               consume(m.moves);
               if (m.moves.length <= 2)                          // share the bound for pruning
                 for (const o of workers) { try { o.postMessage({ type: 'best', v: best.v }); } catch (e2) {} }
+            } else if (m.type === 'progress') {
+              wIters[wi] = m.iter;
             } else if (m.type === 'done') {
-              if (++done >= want) { clearInterval(timer); finish(); }
+              if (++done >= want) { clearInterval(timer); emitProgress(); finish(); }
             }
           };
           wk.onerror = () => { if (++done >= want) { clearInterval(timer); finish(); } };
           wk.postMessage({ type: 'run', def, vehicle: def.vehicle || 'default',
-            prm: Object.assign({}, wprm, { sliceLo: bounds[w][0], sliceHi: bounds[w][1] }) });
+            prm: Object.assign({}, wprm, { STEERS: workerSteers[w], sliceLo: 0, sliceHi: workerSteers[w].length }) });
         }
       });
       return;

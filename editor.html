@@ -2366,7 +2366,11 @@ document.getElementById('btnSolve').onclick = async () => {
         if (ev.phase === 'bf') status.textContent = `⚙ BF (${ev.workers} worker${ev.workers !== 1 ? 's' : ''})…`;
         else if (ev.phase === 'astar') status.textContent = `⚙ A* search…`;
       } else if (ev.type === 'bf_progress') {
-        status.textContent = `⚙ BF — ${ev.done}/${ev.total} workers done…`;
+        const fmtN = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? Math.round(n/1000)+'k' : String(n);
+        const parts = [`${ev.done}/${ev.total} workers done`];
+        if (ev.iters) parts.push(`${fmtN(ev.iters)} checked`);
+        if (ev.sols)  parts.push(`${ev.sols} found`);
+        status.textContent = `⚙ BF — ${parts.join(', ')}…`;
       } else if (ev.type === 'depth') {
         const fmtN = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(n);
         status.textContent = `⚙ A* — ${fmtN(ev.depth)} poses visited, ${fmtN(ev.beamSize)} queued…`;
