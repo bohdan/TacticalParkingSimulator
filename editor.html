@@ -70,7 +70,10 @@ button.nav{padding:4px 8px;font-weight:700}
 .meas-item.meas-odd,.meas-item-top.meas-odd{background:rgba(255,255,255,0.07)}
 .meas-item-top{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#4a5a70;border-left:1px solid #1a2030;cursor:default;text-align:center;overflow:hidden;white-space:nowrap}
 @media(max-width:760px){#measLeft{display:none}#measurePanelTop{display:none}}
-#solveStatus{font-size:11px;color:#7dc87d;display:none;align-self:center}
+#solveStatus{font-size:11px;color:#7dc87d;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.save-split{display:flex;gap:0}
+.save-split #btnSave{border-radius:6px 0 0 6px;border-right:none}
+.save-split #btnGH{border-radius:0 6px 6px 0;padding:4px 7px;min-width:0;background:#1d4f6b;border-color:#2d7396}
 .sol-row{gap:3px}
 .sol-row.sol-hot{background:rgba(255,224,64,.08);border-radius:5px}
 .sol-n{flex:0 0 16px;font-size:11px;color:#7080a0;text-align:right}
@@ -133,12 +136,11 @@ button.nav{padding:4px 8px;font-weight:700}
   <button id="btnImport" class="edit-only">&#8595; Import</button>
   <button id="btnExport">Export ↗</button>
   <button id="btnTry">&#9654; Try</button>
-  <button id="btnSolve" title="Find fewest-turn solutions (streams improvements as it runs)">&#9881; Solve</button>
-  <button id="btnStopSolve" title="Stop solving and keep the best found so far" style="display:none">&#9632; Stop</button>
-  <span id="solveStatus"></span>
   <div class="sep"></div>
-  <button id="btnGH">&#9881; GitHub</button>
-  <button id="btnSave" class="primary" title="Save all levels to GitHub">&#8593; Save all</button>
+  <div class="save-split">
+    <button id="btnSave" class="primary" title="Save all levels to GitHub">&#8593; Save</button>
+    <button id="btnGH" class="primary" title="GitHub settings">&#9881;</button>
+  </div>
 </div>
 
 <div id="main">
@@ -184,7 +186,12 @@ button.nav{padding:4px 8px;font-weight:700}
     <h2>Selected</h2>
     <div id="selPanel"><p class="sel-hint">Click an object on the canvas — including the <b>start car</b> and <b>goal box</b> — to edit it here.<br>Delete key removes it.</p></div>
 
-    <h2>Solution <span style="font-size:10px;color:#3d8fbf">(⚙ Solve to fill)</span></h2>
+    <h2>Solution</h2>
+    <div style="display:flex;gap:5px;align-items:center;margin-bottom:8px">
+      <button id="btnSolve" title="Find fewest-turn solutions (streams improvements as it runs)">&#9881; Solve</button>
+      <button id="btnStopSolve" title="Stop solving and keep the best found so far" style="display:none">&#9632; Stop</button>
+      <span id="solveStatus"></span>
+    </div>
     <div id="solPanel"></div>
    </div>
   </div>
@@ -2301,7 +2308,6 @@ document.getElementById('btnSolve').onclick = async () => {
   solveCancel = false;
   btn.disabled = true;
   stopBtn.style.display = '';
-  status.style.display = 'inline';
   status.textContent = '⚙ Starting…';
   // Diverse solution set keyed by solver-assigned id.
   // Solver emits each accepted plan with id + replaces (id of plan it superseded).
@@ -2356,8 +2362,18 @@ document.getElementById('btnSolve').onclick = async () => {
         status.textContent = `⚙ ${minT} turn${minT !== 1 ? 's' : ''} · ${allSols.size} option${allSols.size !== 1 ? 's' : ''}…`;
         updateSidebar();
         render();
+      } else if (ev.type === 'phase') {
+        if (!allSols.size) {
+          if (ev.phase === 'bf') status.textContent = `⚙ Brute force (${ev.workers} worker${ev.workers !== 1 ? 's' : ''})…`;
+          else if (ev.phase === 'astar') status.textContent = `⚙ A* search…`;
+        }
+      } else if (ev.type === 'bf_progress') {
+        if (!allSols.size) status.textContent = `⚙ Brute force — ${ev.done}/${ev.total} workers done…`;
       } else if (ev.type === 'depth') {
-        if (!allSols.size) status.textContent = `⚙ Searching… (${ev.depth} expanded)`;
+        if (!allSols.size) {
+          const fmtN = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(n);
+          status.textContent = `⚙ A* — ${fmtN(ev.depth)} poses visited, ${fmtN(ev.beamSize)} queued…`;
+        }
       }
     });
     applyBest();

@@ -260,7 +260,7 @@ async function bruteForceKernel(geom, prm, emit, shouldStop, yieldHook, best) {
 // streaming validated candidates back through `consume`. Resolves when every
 // worker finishes, the deadline passes, or shouldStop() trips. Falls back to a
 // single inline kernel run when Workers are unavailable (Node, older browsers).
-async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn) {
+async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn, progressCb = null) {
   const best = { v: Infinity };
   const onCand = moves => {                       // shared validate→consume→track-best
     const v = validateMoves(prm._start, moves, prm._obstacles, prm._goal);
@@ -287,6 +287,7 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
         };
         const timer = setInterval(() => {
           if ((shouldStop && shouldStop()) || (deadline && nowFn() > deadline)) { clearInterval(timer); finish(); }
+          else progressCb && progressCb({ type: 'bf_progress', done, total: want });
         }, 60);
         for (let w = 0; w < want; w++) {
           const wk = new Worker('solver-worker.js');
@@ -570,8 +571,11 @@ async function solveParkingLevel(def, opts = {}, progressCb = null) {
       _start: start, _obstacles: obstacles, _goal: goal,
     };
     const bfDeadline = opts.bfTimeMs ? startTime + opts.bfTimeMs : Infinity;
-    await bruteForceParallel(def, bfPrm, m => offer(m), shouldStop, bfDeadline, now);
+    const bfWorkers = Math.min(bfPrm.workers || 8, bfPrm.STEERS.length);
+    progressCb && progressCb({ type: 'phase', phase: 'bf', workers: bfWorkers });
+    await bruteForceParallel(def, bfPrm, m => offer(m), shouldStop, bfDeadline, now, progressCb);
   }
+  progressCb && progressCb({ type: 'phase', phase: 'astar' });
 
   const s0 = { pose: start, turns: 0, dist: 0, parent: null, move: null,
                inSd: null, inDir: 0, cell: key(start), pat: '', f: weight * hTurns(start) };
