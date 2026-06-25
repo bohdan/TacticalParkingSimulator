@@ -8,10 +8,11 @@
  * migrate. Everything is namespaced under the single global `Physics` (no `const advance`
  * clashes with physics.js).
  *
- * DEFAULT POSTURE: everything the layer emits is opaque. Pose / Point / Polygon /
- * VehicleSpec / Collision / Shape / Move / MoveResult are handles; the outside reads them
- * ONLY through the accessors below. The sole raw crossings are scalars (numbers, the
- * 'L'|'R'|'S' TurnDirection string) and the opaque wire STRING from moveSequenceToString.
+ * VALUE TYPES: Pose {x,y,h}, Point {x,y}, Polygon (array of points), VehicleSpec
+ * {len,wid,wb,rOver,fOver,maxSteer}, Collision {pose,point}, MoveResult {pts,end,hit} and
+ * Shape {poly,bc} are plain readable structs — read their fields directly. Move is the one
+ * encapsulated type: its `_steer` (radians) / `_dist` are private (underscore-prefixed) and
+ * read only via the move* helpers (degrees in/out, 'L'|'R'|'S' TurnDirection, wire string).
  *
  * Generic 2D geometry (SAT, hull, point-in-polygon, segment math) lives in geometry2d.js
  * (`Geom2D`); this file owns only the vehicle/kinematics/collision-orchestration layer.
@@ -32,7 +33,7 @@ const Physics = (function (G) {
     tractor: { len: 3.8,  wid: 1.95, wb: 2.15,  rOver: 0.45, maxSteer: 52 },
   };
 
-  // vehicleSpecFor(type) → opaque VehicleSpec (fOver filled). ⇐ game/editor/scene/kernel.
+  // vehicleSpecFor(type) → VehicleSpec (fOver filled). ⇐ game/editor/scene/kernel.
   function vehicleSpecFor(type) {
     const v = VEHICLE_DEFS[type] || VEHICLE_DEFS.default;
     return Object.freeze({
@@ -61,18 +62,8 @@ const Physics = (function (G) {
   const { rectanglePolygon, orientedBoxPolygon, pointInPolygon, polygonsCollide,
           convexHull, polygonBoundingCircle, contactPoint } = G;
 
-  /* ─── Accessors for the opaque value types (the ONLY external read path) ─ */
-
-  const poseX = p => p.x, poseY = p => p.y, poseHeading = p => p.h;
-  const pointX = pt => pt.x, pointY = pt => pt.y;
-  const polygonCount = poly => poly.length;
-  const polygonVertex = (poly, i) => poly[i];
-  const specLength = s => s.len, specWidth = s => s.wid, specWheelbase = s => s.wb;
-  const specRearOverhang = s => s.rOver, specFrontOverhang = s => s.fOver;
-  const specMaxSteer = s => s.maxSteer;
-  const collisionPose = c => c.pose, collisionPoint = c => c.point;
-
-  /* ─── Opaque obstacle Shape (pure geometry, vehicle-independent) ────────── */
+  /* ─── Obstacle Shape (pure geometry, vehicle-independent) ───────────────── */
+  // Shape = { poly, bc }: poly is the polygon, bc its bounding circle (collision cache).
 
   function makeShape(poly) { return { poly, bc: polygonBoundingCircle(poly) }; }
   const Shape = Object.freeze({
@@ -80,10 +71,9 @@ const Physics = (function (G) {
     orientedBox: (cx, cy, w, h, ang) => makeShape(orientedBoxPolygon(cx, cy, w, h, ang)),
     polygon:     (points)            => makeShape(points),
   });
-  const shapePolygon  = shape => shape.poly;
   const shapesCollide = (a, b) => polygonsCollide(a.poly, b.poly);
 
-  /* ─── Opaque Move (control intent; vehicle-independent) ─────────────────── */
+  /* ─── Move (control intent; vehicle-independent; encapsulated) ──────────── */
 
   // Move(steeringDegrees, signedDistanceMeters). One allocation per user move — never hot.
   function Move(steeringDegrees, signedDistanceMeters) {
@@ -103,12 +93,6 @@ const Physics = (function (G) {
   }
   const moveSequenceToString = moves => moves.map(moveToString).join(';');
   const parseMoveSequence = s => (s ? s.split(';').filter(Boolean).map(parseMove) : []);
-
-  /* ─── Opaque MoveResult accessors ──────────────────────────────────────── */
-
-  const resultPath      = r => r.pts;
-  const resultEndPose   = r => r.end;
-  const resultCollision = r => r.hit;
 
   /* ─── Per-level kernel config ──────────────────────────────────────────── */
 
@@ -215,9 +199,9 @@ const Physics = (function (G) {
       return { pts, end: pts[pts.length - 1], hit };
     }
 
-    // ── opaque gameplay surface ───────────────────────────────────────────
-    // The kernel owns each operation and hands back the minimal handle (a bool from
-    // inGoal, an opaque Polygon from goalPolygon) so callers never walk the geometry.
+    // ── gameplay surface ──────────────────────────────────────────────────
+    // The kernel owns each operation and returns the result directly (a bool from
+    // inGoal, a Polygon from goalPolygon) — callers read fields, no accessors.
     const applyMove = (pose, move, shapes, step) =>
       simulateMove(pose, move._steer, move._dist, shapes, step);
     const moveTurnRadius = move => turnRadius(move._steer);
@@ -229,11 +213,11 @@ const Physics = (function (G) {
 
     const kernel = {
       config, spec,
-      // low-level kinematic surface (intra-component: the bundled Solver)
-      wheelbase, carRadius, centerOffset,
+      // private intra-component internals (for the bundled Solver / low-level use)
+      _wheelbase: wheelbase, _carRadius: carRadius, _centerOffset: centerOffset,
       advancePose, turnRadius, arcCenter, carPolygon, carShape,
       poseCollides, simulateMove,
-      // opaque gameplay surface
+      // gameplay surface
       goalPolygon, inGoal, applyMove, moveTurnRadius, createSolver,
     };
     return kernel;
@@ -260,17 +244,12 @@ const Physics = (function (G) {
     // math
     rad, deg, clamp, normalizeAngle,
     // (generic 2D geometry lives in Geom2D / geometry2d.js — not re-exported here)
-    // opaque-type accessors
-    poseX, poseY, poseHeading, pointX, pointY, polygonCount, polygonVertex,
-    specLength, specWidth, specWheelbase, specRearOverhang, specFrontOverhang, specMaxSteer,
-    collisionPose, collisionPoint,
+    // (Pose/Point/Polygon/VehicleSpec/Collision/MoveResult are plain structs — read fields)
     // Shape
-    Shape, shapePolygon, shapesCollide,
-    // Move
+    Shape, shapesCollide,
+    // Move (encapsulated — these are its read/serialize surface)
     Move, moveTurnDirection, moveDirection, moveDistance, moveSteeringDegrees,
     moveToString, parseMove, moveSequenceToString, parseMoveSequence,
-    // MoveResult
-    resultPath, resultEndPose, resultCollision,
     // kernel
     physicsConfigForLevel, PhysicsKernel,
   };

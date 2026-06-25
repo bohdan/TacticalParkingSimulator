@@ -33,8 +33,7 @@ const Scene = (function (P) {
     // Parked cars (each uses ITS OWN vehicle dims — pure geometry, no kernel).
     for (const c of (def.cars || [])) {
       const carSpec = P.vehicleSpecFor(c.type);
-      const shape = P.Shape.orientedBox(c.cx, c.cy,
-        P.specLength(carSpec), P.specWidth(carSpec), c.h);
+      const shape = P.Shape.orientedBox(c.cx, c.cy, carSpec.len, carSpec.wid, c.h);
       obstacles.push({ kind: 'car', pose: c, carSpec, shape });
     }
     return Object.assign({}, def, { obstacles });

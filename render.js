@@ -3,30 +3,26 @@
  * render.js — the Renderer component (Component 3).
  *
  * Pure drawing: every function takes `ctx` + explicit args and reads NO physics/game globals.
- * Pose / VehicleSpec / Polygon arguments are opaque physics handles, read ONLY through the
- * `Physics` accessors (poseX/Y/Heading, spec*, polygonVertex). `steeringRadians` is the
- * explicit "turn direction" render slot.
+ * Pose / Point / VehicleSpec / Polygon arguments are plain readable values — fields are read
+ * directly (pose.x/.y/.h, spec.wb/.wid/…, polygon[i].x). `steeringRadians` is the explicit
+ * "turn direction" render slot.
  *
  * Kinematics stays in the kernel: the arc/steering overlays take the caller's
  * advancePose / arcCenter / turnRadius rather than re-deriving motion here. The one
  * remaining simplification is drawCarBody's per-vehicle art (bus/miata/tractor detail,
  * hubs, treads), which draws a plain body box + wheels until that styling is ported.
  *
- * Depends on the `Physics` namespace (physics-kernel.js).
+ * Depends on the `Physics` namespace (physics-kernel.js) only for the rad() helper.
  */
 const Renderer = (function (P) {
 
   // drawPolygon(ctx, polygon) — stroke/fill a wall, border, or goal outline.
   function drawPolygon(ctx, polygon) {
-    const n = P.polygonCount(polygon);
+    const n = polygon.length;
     if (!n) return;
     ctx.beginPath();
-    const v0 = P.polygonVertex(polygon, 0);
-    ctx.moveTo(P.pointX(v0), P.pointY(v0));
-    for (let i = 1; i < n; i++) {
-      const v = P.polygonVertex(polygon, i);
-      ctx.lineTo(P.pointX(v), P.pointY(v));
-    }
+    ctx.moveTo(polygon[0].x, polygon[0].y);
+    for (let i = 1; i < n; i++) ctx.lineTo(polygon[i].x, polygon[i].y);
     ctx.closePath();
   }
 
@@ -37,9 +33,8 @@ const Renderer = (function (P) {
     ctx.strokeStyle = color;
     ctx.lineWidth = 2 * worldPerPixel;
     ctx.beginPath();
-    ctx.moveTo(P.poseX(points[0]), P.poseY(points[0]));
-    for (let i = 1; i < points.length; i++)
-      ctx.lineTo(P.poseX(points[i]), P.poseY(points[i]));
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
     ctx.stroke();
     ctx.restore();
   }
@@ -59,10 +54,10 @@ const Renderer = (function (P) {
     ctx.restore();
   }
 
-  // Local-frame footprint corners from the opaque spec (render legitimately needs dims).
+  // Local-frame footprint corners from the spec (render legitimately needs the dims).
   function footprintLocal(spec) {
-    const x0 = -P.specRearOverhang(spec), x1 = P.specWheelbase(spec) + P.specFrontOverhang(spec);
-    const wy = P.specWidth(spec) / 2;
+    const x0 = -spec.rOver, x1 = spec.wb + spec.fOver;
+    const wy = spec.wid / 2;
     return { x0, x1, y0: -wy, y1: wy };
   }
 
@@ -73,14 +68,14 @@ const Renderer = (function (P) {
     const { pose, spec, steeringRadians, fill = '#5b7', stroke = '#284', wheels = true } = car;
     const f = footprintLocal(spec);
     ctx.save();
-    ctx.translate(P.poseX(pose), P.poseY(pose));
-    ctx.rotate(P.poseHeading(pose));
+    ctx.translate(pose.x, pose.y);
+    ctx.rotate(pose.h);
     // body
     ctx.fillStyle = fill;
     ctx.fillRect(f.x0, f.y0, f.x1 - f.x0, f.y1 - f.y0);
     if (stroke) { ctx.lineWidth = 0.07; ctx.strokeStyle = stroke; ctx.strokeRect(f.x0, f.y0, f.x1 - f.x0, f.y1 - f.y0); }
     if (wheels) {
-      const wb = P.specWheelbase(spec), wy = f.y1 - 0.16;
+      const wb = spec.wb, wy = f.y1 - 0.16;
       const wl = Math.min(0.9, (f.x1 - f.x0) * 0.075), wt = 0.16;
       ctx.fillStyle = '#10131a';
       for (const [wx, a] of [[0, 0], [wb, steeringRadians || 0]])
@@ -98,8 +93,8 @@ const Renderer = (function (P) {
   function drawGhost(ctx, pose, spec, color, steeringRadians = 0) {
     const f = footprintLocal(spec);
     ctx.save();
-    ctx.translate(P.poseX(pose), P.poseY(pose));
-    ctx.rotate(P.poseHeading(pose));
+    ctx.translate(pose.x, pose.y);
+    ctx.rotate(pose.h);
     ctx.setLineDash([0.25, 0.18]);
     ctx.lineWidth = 0.05;
     ctx.strokeStyle = color;
@@ -111,8 +106,8 @@ const Renderer = (function (P) {
 
   // drawSteeringWheels(ctx, pose, spec, steeringRadians, worldPerPixel[, _localFrame])
   function drawSteeringWheels(ctx, pose, spec, steeringRadians, worldPerPixel, _localFrame) {
-    const wb = P.specWheelbase(spec), wy = P.specWidth(spec) / 2 - 0.16;
-    if (!_localFrame) { ctx.save(); ctx.translate(P.poseX(pose), P.poseY(pose)); ctx.rotate(P.poseHeading(pose)); }
+    const wb = spec.wb, wy = spec.wid / 2 - 0.16;
+    if (!_localFrame) { ctx.save(); ctx.translate(pose.x, pose.y); ctx.rotate(pose.h); }
     ctx.fillStyle = '#2bd';
     for (const side of [-wy, wy]) {
       ctx.save(); ctx.translate(wb, side); ctx.rotate(steeringRadians || 0);
@@ -131,8 +126,8 @@ const Renderer = (function (P) {
     ctx.lineWidth = lineWidth;
     if (dashed) ctx.setLineDash([0.35, 0.25]);
     ctx.beginPath();
-    ctx.moveTo(P.pointX(pts[0]), P.pointY(pts[0]));
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(P.pointX(pts[i]), P.pointY(pts[i]));
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
@@ -145,18 +140,18 @@ const Renderer = (function (P) {
   function drawSteeringGeometry(ctx, pose, spec, steeringRadians, turnCenter, turnRadius, previewPose, worldPerPixel) {
     if (!turnCenter || Math.abs(steeringRadians) < P.rad(0.5)) return;   // ~straight: centre at infinity
     const R = turnRadius;                                  // signed: wheelbase / tan(steer)
-    const px = P.poseX(pose), py = P.poseY(pose), h = P.poseHeading(pose);
+    const px = pose.x, py = pose.y, h = pose.h;
     const ux = -Math.sin(h), uy = Math.cos(h);             // rear-axle axis, toward the centre
-    const O = { x: P.pointX(turnCenter), y: P.pointY(turnCenter) };
+    const O = { x: turnCenter.x, y: turnCenter.y };
     const sgn = Math.sign(R);
     const at = t => ({ x: px + t * ux, y: py + t * uy });
-    const half = P.specWidth(spec) / 2 - 0.16;             // matches drawn wheel inset
+    const half = spec.wid / 2 - 0.16;                      // matches drawn wheel inset
     strokeGuide(ctx, [at(-sgn * 1.0), at(R + sgn * 1.0)], 'rgba(255,255,255,0.28)', false, 0.035);
     strokeGuide(ctx, [{ x: px, y: py }, O], 'rgba(120,220,255,0.8)', false, 0.045);
     drawSteeringWheels(ctx, pose, spec, steeringRadians, worldPerPixel);
     const fp = previewPose || pose;
-    const fc = Math.cos(P.poseHeading(fp)), fs = Math.sin(P.poseHeading(fp));
-    const wb = P.specWheelbase(spec), fpx = P.poseX(fp), fpy = P.poseY(fp);
+    const fc = Math.cos(fp.h), fs = Math.sin(fp.h);
+    const wb = spec.wb, fpx = fp.x, fpy = fp.y;
     const fw = ly => ({ x: fpx + wb * fc - ly * fs, y: fpy + wb * fs + ly * fc });
     strokeGuide(ctx, [fw(half), O], 'rgba(255,255,255,0.28)', false, 0.03);
     strokeGuide(ctx, [fw(-half), O], 'rgba(255,255,255,0.28)', false, 0.03);
@@ -175,14 +170,14 @@ const Renderer = (function (P) {
   // implementation; forward/backward limits are precomputed by the caller via the kernel.
   function drawArcGuides(ctx, pose, spec, steeringRadians, forwardLimit, backwardLimit, advancePose, worldPerPixel) {
     const N = 60;
-    const fLen = P.specWheelbase(spec) + P.specFrontOverhang(spec);
-    const rOver = P.specRearOverhang(spec), wb = P.specWheelbase(spec), half = P.specWidth(spec) / 2;
+    const fLen = spec.wb + spec.fOver;
+    const rOver = spec.rOver, wb = spec.wb, half = spec.wid / 2;
     const sample = (limit, dir) => {
       const t = { cFL: [], cFR: [], cRL: [], cRR: [], wFL: [], wFR: [], wRL: [], wRR: [] };
       for (let i = 0; i <= N; i++) {
         const p = advancePose(pose, steeringRadians, dir * limit * i / N);
-        const cs = Math.cos(P.poseHeading(p)), sn = Math.sin(P.poseHeading(p));
-        const px = P.poseX(p), py = P.poseY(p);
+        const cs = Math.cos(p.h), sn = Math.sin(p.h);
+        const px = p.x, py = p.y;
         const w = (lx, ly) => ({ x: px + cs * lx - sn * ly, y: py + sn * lx + cs * ly });
         t.cFL.push(w(fLen, half)); t.cFR.push(w(fLen, -half));
         t.cRL.push(w(-rOver, half)); t.cRR.push(w(-rOver, -half));
