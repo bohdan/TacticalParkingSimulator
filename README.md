@@ -7,9 +7,10 @@ as possible.
 
 ## How it works
 
-- The car uses a kinematic bicycle model (2.7 m wheelbase, steering limited to
-  ±35°), so every move is a true circular arc — exactly like a real car,
-  including the mirrored geometry when reversing.
+- The car uses a kinematic bicycle model, so every move is a true circular arc —
+  exactly like a real car, including the mirrored geometry when reversing.
+  Four vehicle types are available (default sedan, Miata, bus, tractor), each
+  with its own wheelbase and maximum steering angle.
 - A **move** = one steering angle + one signed distance (forward or reverse).
 - While you adjust a move you see a live ghost preview of the path. If the move
   would clip an obstacle the path is shown hitting it; on **Run** each move is
@@ -42,38 +43,34 @@ shared as `#sol=` links and replayed.
 
 ## Project layout
 
-- `index.html` / `game.js` — the game. `physics.js` is the shared engine.
-- `levels.js` — all levels as plain data (`LEVELS`), each with an `id`,
-  geometry, and a verified `solution`.
-- `editor.html` — standalone level editor (reads/writes `levels.js` via the
-  GitHub API behind a PAT) with a beam/A\* **Solve** helper.
+```
+physics-kernel.ts   — bicycle-model kinematics, collision, per-level PhysicsKernel
+geometry2d.ts       — generic 2D geometry (SAT, hull, segment math)
+scene.ts            — obstacle/goal construction from level definitions
+solver.ts           — anytime min-turn A* + brute-force solver (bound to a kernel)
+render.ts           — pure drawing layer (no physics globals)
+game.ts             — game orchestration, input, HUD, animation loop
+editor.ts           — standalone level editor with Solve helper
+levels.ts           — all levels as plain data, each with id, geometry, solution
+leaderboard.ts      — leaderboard UI and Supabase integration
+solver-worker.ts    — Web Worker entry for parallel brute-force search
+```
 
 ## Run it
 
-No build step. Open `index.html` in a browser, or serve the folder:
-
-```sh
-python3 -m http.server 8000   # then open http://localhost:8000
-```
-
-## Build system
-
-This project now includes a Vite + TypeScript build setup for gradual migration.
-
-Install dependencies:
+Install dependencies and start the dev server:
 
 ```sh
 npm install
-```
-
-Run the development server:
-
-```sh
 npm run dev
 ```
 
-Build for production:
+Then open the URL printed by Vite (typically `http://localhost:5173`).
+
+## Build for production
 
 ```sh
 npm run build
 ```
+
+Output goes to `dist/`. Serve any static file host.
