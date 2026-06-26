@@ -5,6 +5,7 @@
 import { CAR, SEDAN, setVehicle, SAMPLE_STEP, advance, carPoly, goalPoly, pointInPoly,
          simulateMove, buildLevel, inGoal, distCarToGoal, normAng, rad, deg, clamp } from './physics-compat.js';
 import { LEVELS } from './levels.js';
+import * as Leaderboard from './leaderboard.js';
 
 /* ===================== Levels ===================== */
 
@@ -96,31 +97,9 @@ let _gameHash = null, _gameHashIsOwn = false;
 })();
 
 // ── Leaderboard (Supabase) ─────────────────────────────────────────────────
-// Schema setup — run once in the Supabase SQL editor:
-//
-//   create table leaderboard (
-//     id bigserial primary key,          -- row id (auto), unrelated to levels
-//     player text not null,
-//     level int, level_id text,          -- level_id = stable per-level key
-//     level_name text,
-//     moves int, dist real,              -- score: moves, then dist as tiebreak
-//     time_s real,                        -- retired metric (kept for compat; sent as 0)
-//     solution text,                     -- encoded moves for replay
-//     submitted_at timestamptz default now()
-//   );
-//   alter table leaderboard enable row level security;
-//   create policy "public read"   on leaderboard for select using (true);
-//   create policy "public insert" on leaderboard for insert
-//     with check (char_length(player) between 1 and 20);
-//
-// If upgrading an existing table:
-//   alter table leaderboard add column if not exists solution text;
-//   alter table leaderboard add column if not exists level_id text;
-//   alter table leaderboard alter column stars drop not null; -- no longer sent
-//   alter table leaderboard alter column mode  drop not null; -- deprecated
-//
-const LB_URL = 'https://qvjorkpzlwvswsptkwyn.supabase.co';
-const LB_KEY = 'sb_publishable_geHaaCkSfPilYWV3fYQHQA_KZdYNrpC';
+// The REST client + table schema live in leaderboard.js. init() applies the default
+// public-project config; pass { url, key } to override.
+Leaderboard.init();
 
 /* ===================== Game state ===================== */
 
@@ -1503,7 +1482,7 @@ $('menuSol').addEventListener('click', () => {
 });
 $('menuLb').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
-  if (!lbEnabled()) toast('Leaderboard not configured — see LB_URL / LB_KEY in game.js');
+  if (!lbEnabled()) toast('Leaderboard not configured — see leaderboard.js');
   else if (!lbAllowed()) toast('No leaderboard for tutorial levels');
   else openLeaderboard(levelIdx);
 });
@@ -1602,7 +1581,7 @@ function selectMove(i) {
 }
 
 // ── Leaderboard functions ────────────────────────────────────────────────────
-const lbEnabled = () => !!(LB_URL && LB_KEY);
+const lbEnabled = () => Leaderboard.isEnabled();
 // Tutorial levels are practice — they don't have a leaderboard.
 const lbAllowed = (def = level) => lbEnabled() && !!def && def.tier !== 'Tutorial';
 
@@ -1614,63 +1593,15 @@ function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Game-side adapters: map the current level/state onto the decoupled leaderboard API.
 async function lbPost(levelIdx, player, stars, st, solutionStr) {
-  const body = {
-    player, level: levelIdx, level_id: levelKey(levelIdx), level_name: level.name,
-    moves: st.moves,
-    dist: +st.dist.toFixed(2),
-    time_s: 0,  // retired metric; column kept so inserts work on the existing schema
-    solution: solutionStr || null,
-    submitted_at: new Date().toISOString(),
-  };
-  let r = await fetch(`${LB_URL}/rest/v1/leaderboard`, {
-    method: 'POST',
-    headers: {
-      apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}`,
-      'Content-Type': 'application/json', Prefer: 'return=minimal',
-    },
-    body: JSON.stringify(body),
+  return Leaderboard.submitToLeaderboard({
+    player, level: levelIdx, levelId: levelKey(levelIdx), levelName: level.name,
+    moves: st.moves, dist: st.dist, solution: solutionStr,
   });
-  if (!r.ok && r.status === 400) {
-    // Newer columns (solution, level_id) may not exist yet — retry without them
-    delete body.solution;
-    delete body.level_id;
-    r = await fetch(`${LB_URL}/rest/v1/leaderboard`, {
-      method: 'POST',
-      headers: {
-        apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}`,
-        'Content-Type': 'application/json', Prefer: 'return=minimal',
-      },
-      body: JSON.stringify(body),
-    });
-  }
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
 }
-
-async function lbGet(levelIdx) {
-  const p = new URLSearchParams({
-    select: 'player,moves,dist,solution,submitted_at',
-    level_id: `eq.${levelKey(levelIdx)}`,
-    order: 'moves.asc,dist.asc,submitted_at.asc', limit: '100',
-  });
-  const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
-    headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
-  });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
-}
-
-async function lbGetAll() {
-  const p = new URLSearchParams({
-    select: 'player,level_id,level_name,moves,dist,solution,submitted_at',
-    order: 'moves.asc,dist.asc,submitted_at.asc', limit: '500',
-  });
-  const r = await fetch(`${LB_URL}/rest/v1/leaderboard?${p}`, {
-    headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
-  });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
-}
+const lbGet    = levelIdx => Leaderboard.loadLevelLeaderboard(levelKey(levelIdx));
+const lbGetAll = () => Leaderboard.loadOverallLeaderboard();
 
 async function renderLbAll(allRows, autoSelectIdx) {
   // Build best-per-level map from already-fetched rows (sorted best-first)
