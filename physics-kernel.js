@@ -62,7 +62,7 @@ export const Physics = (function (G) {
   /* ─── Geometry comes from Geom2D (geometry2d.js) ───────────────────────── */
   // Pulled into locals so the hot loops below call them as flat references.
   const { rectanglePolygon, orientedBoxPolygon, pointInPolygon, polygonsCollide,
-          convexHull, polygonBoundingCircle, contactPoint } = G;
+          convexHull, polygonBoundingCircle, contactPoint, pointToSegmentDistance } = G;
 
   /* ─── Obstacle Shape (pure geometry, vehicle-independent) ───────────────── */
   // Shape = { poly, bc }: poly is the polygon, bc its bounding circle (collision cache).
@@ -158,6 +158,43 @@ export const Physics = (function (G) {
       return carPolygon(pose).every(v => pointInPolygon(v, zone));
     }
 
+    // parkingClearance: smallest distance from any car corner to the goal zone edge.
+    function parkingClearance(pose, goal) {
+      const cp = carPolygon(pose), zone = goalPolygon(goal);
+      let minGap = Infinity;
+      for (const v of cp)
+        for (let j = 0; j < zone.length; j++) {
+          const a = zone[j], b = zone[(j + 1) % zone.length];
+          minGap = Math.min(minGap, pointToSegmentDistance(v.x, v.y, a.x, a.y, b.x, b.y));
+        }
+      return isFinite(minGap) ? minGap : 0;
+    }
+    // distToGoalBoundary: signed distance of the rear-axle point to the goal edge
+    // (positive outside / approaching, negative inside).
+    function distToGoalBoundary(pose, goal) {
+      const zone = goalPolygon(goal);
+      let d = Infinity;
+      for (let j = 0; j < zone.length; j++) {
+        const a = zone[j], b = zone[(j + 1) % zone.length];
+        d = Math.min(d, pointToSegmentDistance(pose.x, pose.y, a.x, a.y, b.x, b.y));
+      }
+      return pointInPolygon({ x: pose.x, y: pose.y }, zone) ? -d : d;
+    }
+    // distCarToGoal: signed distance of the car outline to the goal zone (positive = a
+    // corner is outside, magnitude = nearest edge gap; negative = fully inside).
+    function distCarToGoal(pose, goal) {
+      const cp = carPolygon(pose), zone = goalPolygon(goal);
+      let minD = Infinity, anyOutside = false;
+      for (const v of cp) {
+        if (!pointInPolygon(v, zone)) anyOutside = true;
+        for (let j = 0; j < zone.length; j++) {
+          const a = zone[j], b = zone[(j + 1) % zone.length];
+          minD = Math.min(minD, pointToSegmentDistance(v.x, v.y, a.x, a.y, b.x, b.y));
+        }
+      }
+      return anyOutside ? minD : -minD;
+    }
+
     // ── collision (HOT) ───────────────────────────────────────────────────
     // poseCollides: single-pose broad-phase + SAT. carRadius/centerOffset captured.
     function poseCollides(x, y, h, shapes) {
@@ -220,7 +257,8 @@ export const Physics = (function (G) {
       advancePose, turnRadius, arcCenter, carPolygon, carShape,
       poseCollides, simulateMove,
       // gameplay surface
-      goalPolygon, inGoal, applyMove, moveTurnRadius, createSolver,
+      goalPolygon, inGoal, parkingClearance, distToGoalBoundary, distCarToGoal,
+      applyMove, moveTurnRadius, createSolver,
     };
     return kernel;
   }

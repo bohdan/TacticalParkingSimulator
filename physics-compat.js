@@ -43,6 +43,9 @@ const carPoly      = (p, inf = 0)  => _kernel.carPolygon(p, inf);
 const simulateMove = (start, steer, dist, obstacles, step) => _kernel.simulateMove(start, steer, dist, obstacles, step);
 const inGoal       = (pose, goal)  => _kernel.inGoal(pose, goal);
 const goalPoly     = (g)           => _kernel.goalPolygon(g);
+const parkingClearance   = (pose, goal) => _kernel.parkingClearance(pose, goal);
+const distToGoalBoundary = (pose, goal) => _kernel.distToGoalBoundary(pose, goal);
+const distCarToGoal      = (pose, goal) => _kernel.distCarToGoal(pose, goal);
 
 /* ─── Generic 2D geometry (delegate to Geom2D) ─────────────────────────────── */
 const polysCollide = _Geom.polygonsCollide;
@@ -69,6 +72,7 @@ export {
   CAR, SEDAN, VEHICLES, SAMPLE_STEP, setVehicle,
   rad, deg, clamp, normAng,
   advance, carPoly, simulateMove, inGoal, goalPoly,
+  parkingClearance, distToGoalBoundary, distCarToGoal,
   polysCollide, pointInPoly, ptSegDist, rectPoly, obbPoly,
   centroid, contactPoint, convexHull, polyBC, buildLevel,
 };

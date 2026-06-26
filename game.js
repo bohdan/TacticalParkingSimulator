@@ -2,55 +2,9 @@
 
 // Shared math/physics come from the refactored components via the compat surface
 // (PhysicsKernel / Geom2D / Scene). THREE remains a classic global from three.min.js.
-import { CAR, SEDAN, VEHICLES, setVehicle, SAMPLE_STEP, advance, carPoly, polysCollide,
-         ptSegDist, rectPoly, obbPoly, goalPoly, pointInPoly, centroid, contactPoint,
-         simulateMove, buildLevel, inGoal, normAng, rad, deg, clamp } from './physics-compat.js';
+import { CAR, SEDAN, setVehicle, SAMPLE_STEP, advance, carPoly, goalPoly, pointInPoly,
+         simulateMove, buildLevel, inGoal, distCarToGoal, normAng, rad, deg, clamp } from './physics-compat.js';
 import { LEVELS } from './levels.js';
-
-/* ===================== Game-specific helpers ===================== */
-
-// Min distance from any car corner to the goal zone boundary.
-function parkingClearance(pose) {
-  const cp = carPoly(pose);
-  const zone = goalPoly(level.goal);
-  let minGap = Infinity;
-  for (const v of cp)
-    for (let j = 0; j < zone.length; j++) {
-      const a = zone[j], b = zone[(j+1) % zone.length];
-      minGap = Math.min(minGap, ptSegDist(v.x, v.y, a.x, a.y, b.x, b.y));
-    }
-  return isFinite(minGap) ? minGap : 0;
-}
-
-// Signed distance from the car's rear-axle centre to the goal zone boundary.
-// Positive = outside (approaching); negative = inside (clearance of centre point).
-function distToGoalBoundary(pose) {
-  const zone = goalPoly(level.goal);
-  let d = Infinity;
-  for (let j = 0; j < zone.length; j++) {
-    const a = zone[j], b = zone[(j+1) % zone.length];
-    d = Math.min(d, ptSegDist(pose.x, pose.y, a.x, a.y, b.x, b.y));
-  }
-  return pointInPoly({ x: pose.x, y: pose.y }, zone) ? -d : d;
-}
-
-// Signed distance from the car outline to the goal zone boundary.
-// Positive = outside (min distance any corner is from the goal edge).
-// Negative = all corners inside (magnitude = closest corner's inward clearance).
-function distCarToGoal(pose) {
-  const cp = carPoly(pose);
-  const zone = goalPoly(level.goal);
-  let minD = Infinity;
-  let anyOutside = false;
-  for (const v of cp) {
-    if (!pointInPoly(v, zone)) anyOutside = true;
-    for (let j = 0; j < zone.length; j++) {
-      const a = zone[j], b = zone[(j+1) % zone.length];
-      minD = Math.min(minD, ptSegDist(v.x, v.y, a.x, a.y, b.x, b.y));
-    }
-  }
-  return anyOutside ? minD : -minD;
-}
 
 /* ===================== Levels ===================== */
 
@@ -363,7 +317,7 @@ function updateHUD() {
   $('objective').innerHTML = desc ? escHtml(desc) : '';
 
   const endPose = (editSim && !editSim.hit) ? editSim.end : planEnd();
-  const goalDistHtml = fmtGoalDist(distCarToGoal(endPose));
+  const goalDistHtml = fmtGoalDist(distCarToGoal(endPose, level.goal));
 
   if (planning) {
     const st = planStats();
