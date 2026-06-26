@@ -1,0 +1,2245 @@
+'use strict';
+// ── Vehicle specs ────────────────────────────────────────────────────────────
+const VSPEC = {
+  default:{ len:4.4,  wid:1.8,  rOver:0.85, wb:2.7   },
+  miata:  { len:3.97, wid:1.72, rOver:0.73, wb:2.265  },
+  bus:    { len:12.0, wid:2.55, rOver:2.5,  wb:6.5    },
+  tractor:{ len:3.8,  wid:1.95, rOver:0.45, wb:2.15   },
+};
+
+// ── Level state ──────────────────────────────────────────────────────────────
+// The editor holds the ENTIRE set of levels in memory. `L` is the current
+// level being edited — it is a reference into `levels[curIdx]`, so every edit
+// mutates the in-memory set directly. Nothing is persisted until "Save all".
+let levels = [];
+let curIdx = 0;
+let L = null;
+let dirty = false; // unsaved changes since last GitHub save
+
+function markDirty(){ dirty = true; }
+
+// Parse the compact game-state move format: "steer:dist,steer:dist,…"
+// Also accepts a full game URL or bare hash (e.g. "#abc123/35:-4.9,-35:3.45")
+function movesFromCompact(str) {
+  str = str.trim();
+  // Strip URL prefix down to the hash content
+  const hm = str.match(/[#]([a-z0-9]{6})\/(.*)/i);
+  if (hm) str = hm[2];
+  else {
+    // Maybe it's just the moves part with no level prefix
+    const pm = str.match(/^[a-z0-9]{6}\/(.+)$/i);
+    if (pm) str = pm[1];
+  }
+  return str.split(',').filter(Boolean).map(p => {
+    const i = p.indexOf(':');
+    if (i < 0) throw new Error('bad move: ' + p);
+    return { steer: +p.slice(0, i), dist: +p.slice(i + 1) };
+  });
+}
+
+// Stable unique level id — assigned once, never changed by rename/reorder.
+// The leaderboard keys off this so scores stay attached to the right level.
+function genLevelId(){
+  let id;
+  do { id = Math.random().toString(36).slice(2,8); }
+  while(/^\d/.test(id) || levels.some(l=>l && l.id===id));
+  return id;
+}
+
+function newLevel(){
+  return {
+    id:genLevelId(),
+    name:'New Level', tier:'Easy', mode:'moves', vehicle:'default',
+    w:22, h:13,
+    start:{ x:3, y:7, h:0 },
+    goal:{ cx:11, cy:9.5, w:8, h:2.2, ang:0, heads:[0], tol:45 },
+    walls:[
+      { x:0, y:10.5, w:22, h:2.5, kind:'curb' },
+      { x:0, y:0,    w:22, h:1.6, kind:'curb' },
+    ],
+    cars:[], traffic:[], markings:[],
+    hint:'', solution:[],
+  };
+}
+
+const isCutscene = lv => !!lv && lv.type === 'cutscene';
+
+// Normalize any loaded level into the shape the editor expects (fills defaults).
+// Preserves the stable id, generating one only if the level lacks it.
+function normalizeLevel(lv){
+  if(lv.type==='cutscene'){
+    return { id:lv.id||genLevelId(), ...(lv.draft ? { draft: true } : {}), type:'cutscene', name:lv.name||'Cutscene', message:[...(lv.message||[])] };
+  }
+  return {
+    id:lv.id||genLevelId(),
+    name:lv.name||'',
+    tier:lv.tier||'Easy',
+    mode:lv.mode||'moves',
+    vehicle:lv.vehicle||'default',
+    w:lv.w||22, h:lv.h||13,
+    start:{...lv.start},
+    goal:{...lv.goal, ang:lv.goal.ang||0, heads:[...(lv.goal.heads||[0])], tol:lv.goal.tol||45},
+    walls:(lv.walls||[]).map(w=>({...w})),
+    cars:(lv.cars||[]).map(c=>({...c})),
+    traffic:(lv.traffic||[]).map(t=>({...t})),
+    markings:(lv.markings||[]).map(m=>({...m})),
+    ...(lv.par != null ? { par: lv.par } : {}),
+    ...(lv.draft ? { draft: true } : {}),
+    hint:lv.hint||'',
+    solution:[...(lv.solution||[])],
+    // Author-curated alternative plans; the shown one is mirrored into `solution`.
+    solutions:(lv.solutions||[]).map(s=>s.map(m=>({...m}))),
+  };
+}
+
+// ── View ─────────────────────────────────────────────────────────────────────
+let V = { scale:40, ox:30, oy:30 };
+
+// ── Measurement panel ────────────────────────────────────────────────────────
+let hoveredMeasure = null;
+let hoveredMeasureX = null;
+
+function collectYEdges(){
+  if(!L||isCutscene(L)) return [];
+  const pts=new Set();
+  const add=y=>pts.add(+y.toFixed(3));
+  add(0); add(L.h);
+  function addOBB(cx,cy,ang,hl,hw){const s=Math.abs(Math.sin(ang)),c=Math.abs(Math.cos(ang));add(cy-hl*s-hw*c);add(cy+hl*s+hw*c);}
+  for(const w of L.walls){const b=wallBounds(w);addOBB(b.cx,b.cy,b.ang,b.w/2,b.h/2);}
+  for(const c of L.cars){const sp=carSpec(c);addOBB(c.cx,c.cy,c.h,sp.len/2,sp.wid/2);}
+  {const sc=startCenter(),sp=playerSpec();addOBB(sc.x,sc.y,L.start.h,sp.len/2,sp.wid/2);}
+  {const g=L.goal;addOBB(g.cx,g.cy,g.ang||0,g.w/2,g.h/2);}
+  for(const m of (L.markings||[])){const s=markingSeg(m);add(s.y1);add(s.y2);}
+  return [...pts].map(Number).sort((a,b)=>a-b);
+}
+
+function collectXEdges(){
+  if(!L||isCutscene(L)) return [];
+  const pts=new Set();
+  const add=x=>pts.add(+x.toFixed(3));
+  add(0); add(L.w);
+  function addOBB(cx,cy,ang,hl,hw){const s=Math.abs(Math.sin(ang)),c=Math.abs(Math.cos(ang));add(cx-hl*c-hw*s);add(cx+hl*c+hw*s);}
+  for(const w of L.walls){const b=wallBounds(w);addOBB(b.cx,b.cy,b.ang,b.w/2,b.h/2);}
+  for(const c of L.cars){const sp=carSpec(c);addOBB(c.cx,c.cy,c.h,sp.len/2,sp.wid/2);}
+  {const sc=startCenter(),sp=playerSpec();addOBB(sc.x,sc.y,L.start.h,sp.len/2,sp.wid/2);}
+  {const g=L.goal;addOBB(g.cx,g.cy,g.ang||0,g.w/2,g.h/2);}
+  for(const m of (L.markings||[])){const s=markingSeg(m);add(s.x1);add(s.x2);}
+  return [...pts].map(Number).sort((a,b)=>a-b);
+}
+
+function getSelEdges(){
+  if(!sel||!L) return null;
+  function obb(cx,cy,ang,hl,hw){
+    const s=Math.abs(Math.sin(ang)),c=Math.abs(Math.cos(ang));
+    return{yMin:cy-hl*s-hw*c,yMax:cy+hl*s+hw*c,xMin:cx-hl*c-hw*s,xMax:cx+hl*c+hw*s};
+  }
+  if(sel.kind==='wall'){const b=wallBounds(L.walls[sel.idx]);return obb(b.cx,b.cy,b.ang,b.w/2,b.h/2);}
+  if(sel.kind==='car'){const c=L.cars[sel.idx],sp=carSpec(c);return obb(c.cx,c.cy,c.h,sp.len/2,sp.wid/2);}
+  if(sel.kind==='traffic'){const t=L.traffic[sel.idx];return obb(t.x,t.y,t.h,VSPEC.default.len/2,VSPEC.default.wid/2);}
+  if(sel.kind==='start'){const sc=startCenter(),sp=playerSpec();return obb(sc.x,sc.y,L.start.h,sp.len/2,sp.wid/2);}
+  if(sel.kind==='goal'){const g=L.goal;return obb(g.cx,g.cy,g.ang||0,g.w/2,g.h/2);}
+  if(sel.kind==='marking'){const s=markingSeg(L.markings[sel.idx]);return{yMin:Math.min(s.y1,s.y2),yMax:Math.max(s.y1,s.y2),xMin:Math.min(s.x1,s.x2),xMax:Math.max(s.x1,s.x2)};}
+  return null;
+}
+
+function updateMeasurePanel(){
+  const panel=document.getElementById('measurePanel');
+  if(!panel) return;
+  if(!L||isCutscene(L)){ panel.innerHTML=''; return; }
+  const edges=collectYEdges(), se=getSelEdges();
+  const EPS=0.002;
+  let html='';
+  if(se){
+    const {yMin,yMax}=se;
+    let objDone=false;
+    for(let i=0;i<edges.length-1;i++){
+      const y1=edges[i],y2=edges[i+1];
+      if(y1>=yMin-EPS&&y2<=yMax+EPS){          // inside or spanning the object
+        if(!objDone){
+          const objH=(yMax-yMin)*V.scale, objDist=yMax-yMin;
+          if(objH>=2){
+            const lbl=objH>=14?`${objDist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+            html+=`<div class="meas-item meas-sel" style="top:${V.oy+yMin*V.scale}px;height:${Math.max(objH,2)}px" title="${objDist.toFixed(2)} m" data-y1="${yMin}" data-y2="${yMax}">${lbl}</div>`;
+          }
+          objDone=true;
+        }
+        continue;
+      }
+      let dist;
+      if(y2<=yMin+EPS)       dist=yMin-y1;  // above: distance from strip's top edge to object top
+      else if(y1>=yMax-EPS)  dist=y2-yMax;  // below: distance from strip's bottom edge to object bottom
+      else continue;
+      if(dist<0.04) continue;
+      const top=V.oy+y1*V.scale, h=(y2-y1)*V.scale;
+      if(h<3) continue;
+      const cls='meas-item'+(i%2?' meas-odd':'');
+      const lbl=h>=14?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+      html+=`<div class="${cls}" style="top:${top}px;height:${h}px" title="${dist.toFixed(2)} m" data-y1="${y1}" data-y2="${y2}">${lbl}</div>`;
+    }
+  } else {
+    for(let i=0;i<edges.length-1;i++){
+      const y1=edges[i],y2=edges[i+1],dist=y2-y1;
+      if(dist<0.04) continue;
+      const top=V.oy+y1*V.scale, h=dist*V.scale;
+      if(h<3) continue;
+      const cls='meas-item'+(i%2?' meas-odd':'');
+      const lbl=h>=14?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+      html+=`<div class="${cls}" style="top:${top}px;height:${h}px" title="${dist.toFixed(2)} m" data-y1="${y1}" data-y2="${y2}">${lbl}</div>`;
+    }
+  }
+  panel.innerHTML=html;
+  panel.querySelectorAll('.meas-item').forEach(el=>{
+    el.addEventListener('mouseenter',()=>{ hoveredMeasure={y1:+el.dataset.y1,y2:+el.dataset.y2}; render(); });
+  });
+}
+
+function updateMeasurePanelTop(){
+  const panel=document.getElementById('measurePanelTop');
+  if(!panel) return;
+  if(!L||isCutscene(L)){ panel.innerHTML=''; return; }
+  const edges=collectXEdges(), se=getSelEdges();
+  const EPS=0.002;
+  let html='';
+  if(se){
+    const {xMin,xMax}=se;
+    let objDone=false;
+    for(let i=0;i<edges.length-1;i++){
+      const x1=edges[i],x2=edges[i+1];
+      if(x1>=xMin-EPS&&x2<=xMax+EPS){
+        if(!objDone){
+          const objW=(xMax-xMin)*V.scale, objDist=xMax-xMin;
+          if(objW>=2){
+            const lbl=objW>=30?`${objDist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+            html+=`<div class="meas-item-top meas-sel" style="left:${V.ox+xMin*V.scale}px;width:${Math.max(objW,2)}px" title="${objDist.toFixed(2)} m" data-x1="${xMin}" data-x2="${xMax}">${lbl}</div>`;
+          }
+          objDone=true;
+        }
+        continue;
+      }
+      let dist;
+      if(x2<=xMin+EPS)       dist=xMin-x1;
+      else if(x1>=xMax-EPS)  dist=x2-xMax;
+      else continue;
+      if(dist<0.04) continue;
+      const left=V.ox+x1*V.scale, w=(x2-x1)*V.scale;
+      if(w<3) continue;
+      const cls='meas-item-top'+(i%2?' meas-odd':'');
+      const lbl=w>=30?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+      html+=`<div class="${cls}" style="left:${left}px;width:${w}px" title="${dist.toFixed(2)} m" data-x1="${x1}" data-x2="${x2}">${lbl}</div>`;
+    }
+  } else {
+    for(let i=0;i<edges.length-1;i++){
+      const x1=edges[i],x2=edges[i+1],dist=x2-x1;
+      if(dist<0.04) continue;
+      const left=V.ox+x1*V.scale, w=dist*V.scale;
+      if(w<3) continue;
+      const cls='meas-item-top'+(i%2?' meas-odd':'');
+      const lbl=w>=30?`${dist.toFixed(1)}<span style="font-size:8px">m</span>`:'';
+      html+=`<div class="${cls}" style="left:${left}px;width:${w}px" title="${dist.toFixed(2)} m" data-x1="${x1}" data-x2="${x2}">${lbl}</div>`;
+    }
+  }
+  panel.innerHTML=html;
+  panel.querySelectorAll('[data-x1]').forEach(el=>{
+    el.addEventListener('mouseenter',()=>{ hoveredMeasureX={x1:+el.dataset.x1,x2:+el.dataset.x2}; render(); });
+  });
+}
+
+// One-time panel-level mouseleave — clears hover when mouse exits the ruler,
+// even after innerHTML replacement has destroyed the individual items.
+document.getElementById('measurePanel').addEventListener('mouseleave',()=>{ hoveredMeasure=null; render(); });
+document.getElementById('measurePanelTop').addEventListener('mouseleave',()=>{ hoveredMeasureX=null; render(); });
+
+// ── Tool / selection / drag ──────────────────────────────────────────────────
+let tool = 'select';
+let sel  = null;   // {kind:'start'|'goal'|'wall'|'car'|'traffic', idx?}
+let drag = null;   // {handle:'body'|'corner0-3'|'rotate', startW, orig}
+let drawRect = null; // for wall/curb drawing mode
+let panning = false, panOrigin = null;
+let solSel = null;   // highlighted solution-move index
+
+// ── Canvas ───────────────────────────────────────────────────────────────────
+const cv  = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+function resize(){
+  const wrap = document.getElementById('cvWrap');
+  cv.width  = wrap.clientWidth;
+  cv.height = wrap.clientHeight;
+  // auto-fit level on first resize
+  fitLevel();
+  render();
+}
+function fitLevel(){
+  if(!L || isCutscene(L)) return;
+  const pad = 40;
+  const wrap = document.getElementById('cvWrap');
+  const sx = (wrap.clientWidth  - pad*2) / L.w;
+  const sy = (wrap.clientHeight - pad*2) / L.h;
+  V.scale = Math.min(sx, sy, 80);
+  V.ox = (wrap.clientWidth  - L.w * V.scale) / 2;
+  V.oy = (wrap.clientHeight - L.h * V.scale) / 2;
+}
+new ResizeObserver(resize).observe(document.getElementById('cvWrap'));
+
+// ── Math helpers ─────────────────────────────────────────────────────────────
+// rad() and deg() come from physics-compat.js (loaded first); don't redeclare them.
+const π   = Math.PI;
+const snap = (v,s=0.05) => Math.round(v/s)*s;
+function norm(a){ while(a>π)a-=2*π; while(a<-π)a+=2*π; return a; }
+function fmt(n,d=2){ return +n.toFixed(d); }
+
+function w2c(x,y){ return {x:x*V.scale+V.ox, y:y*V.scale+V.oy}; }
+function c2w(cx,cy){ return {x:(cx-V.ox)/V.scale, y:(cy-V.oy)/V.scale}; }
+
+function ptInRect(px,py,rx,ry,rw,rh){ return px>=rx&&px<=rx+rw&&py>=ry&&py<=ry+rh; }
+function ptInOBB(px,py,cx,cy,w,h,a){
+  const c=Math.cos(-a),s=Math.sin(-a);
+  const lx=(px-cx)*c-(py-cy)*s, ly=(px-cx)*s+(py-cy)*c;
+  return Math.abs(lx)<=w/2&&Math.abs(ly)<=h/2;
+}
+function dist2(ax,ay,bx,by){ return (ax-bx)**2+(ay-by)**2; }
+
+// ── Car helpers ──────────────────────────────────────────────────────────────
+function playerSpec(){ return VSPEC[L.vehicle]||VSPEC.default; }
+function carSpec(c){ return (c.type&&VSPEC[c.type])||VSPEC.default; }
+// Start is stored as rear-axle; compute body center for drawing
+function startCenter(){
+  const s=playerSpec();
+  return {
+    x:L.start.x+(s.len/2-s.rOver)*Math.cos(L.start.h),
+    y:L.start.y+(s.len/2-s.rOver)*Math.sin(L.start.h),
+  };
+}
+
+// ── Drawing ──────────────────────────────────────────────────────────────────
+function applyXf(){ ctx.setTransform(V.scale,0,0,V.scale,V.ox,V.oy); }
+const PX = ()=>1/V.scale;
+
+function rrect(x,y,w,h,r){
+  r=Math.min(r,w/2,h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+
+// Game-accurate car body — mirrors drawCarBody() in game.js so the editor
+// looks like the real game. (cx,cy) = body CENTER, h = heading. Internally
+// converts to the rear-axle frame the game draws from.
+function drawCar(cx,cy,h,sp,opts){
+  const {fill,stroke,alpha=1,detail=true,wheels=true,steer=0,vehicle='default'}=opts;
+  const rx=cx-(sp.len/2-sp.rOver)*Math.cos(h);
+  const ry=cy-(sp.len/2-sp.rOver)*Math.sin(h);
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.translate(rx,ry); ctx.rotate(h);
+  const x0=-sp.rOver, len=sp.len, w=sp.wid;
+  const wy=w/2-0.16, wl=Math.min(0.9,len*0.075), wt=Math.min(0.18,w*0.10);
+  if(wheels && vehicle==='tractor'){
+    const rRad=0.24, rLen=0.65, rCy=w/2-rRad;
+    const fRad=0.10, fLen=0.28, fCy=w/2-fRad;
+    for(const sign of [-1,1]){
+      ctx.save(); ctx.translate(0,sign*rCy);
+      ctx.fillStyle='#0d0f14'; ctx.fillRect(-rLen/2,-rRad,rLen,rRad*2);
+      ctx.fillStyle='#1e2228';
+      for(let g=0;g<5;g++){ const ty=-rRad+rRad*2*(g+0.25)/5; ctx.fillRect(-rLen*0.45,ty,rLen*0.9,rRad*0.22); }
+      ctx.fillStyle='#c8a030'; ctx.beginPath(); ctx.arc(0,0,rRad*0.44,0,2*π); ctx.fill();
+      ctx.fillStyle='#111';    ctx.beginPath(); ctx.arc(0,0,rRad*0.20,0,2*π); ctx.fill();
+      ctx.fillStyle='#c8a030';
+      for(let i=0;i<6;i++){ const a=i*π/3; ctx.beginPath(); ctx.arc(Math.cos(a)*rRad*0.32,Math.sin(a)*rRad*0.32,rRad*0.07,0,2*π); ctx.fill(); }
+      ctx.restore();
+      ctx.save(); ctx.translate(sp.wb,sign*fCy); ctx.rotate(steer);
+      ctx.fillStyle='#0d0f14'; ctx.fillRect(-fLen/2,-fRad,fLen,fRad*2);
+      ctx.fillStyle='#888'; ctx.beginPath(); ctx.arc(0,0,fRad*0.40,0,2*π); ctx.fill();
+      ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(0,0,fRad*0.18,0,2*π); ctx.fill();
+      ctx.restore();
+    }
+    // front axle beam (rotates with steer) — thin pipe
+    ctx.save(); ctx.translate(sp.wb,0); ctx.rotate(steer);
+    ctx.strokeStyle='#3a4050'; ctx.lineWidth=0.04;
+    ctx.beginPath(); ctx.moveTo(0,-fCy); ctx.lineTo(0,fCy); ctx.stroke();
+    ctx.restore();
+  } else if(wheels){
+    ctx.fillStyle='#10131a';
+    const axles=vehicle==='bus'
+      ? [[sp.wb*0.06,0],[sp.wb*0.92,steer],[sp.wb,steer]]
+      : [[0,0],[sp.wb,steer]];
+    for(const [wx,a] of axles) for(const wya of [-wy,wy]){
+      ctx.save(); ctx.translate(wx,wya); ctx.rotate(a); ctx.fillRect(-wl/2,-wt,wl,wt*2); ctx.restore();
+    }
+  }
+  if(vehicle==='tractor'){
+    const jx=x0+len*0.54, cabW=w*0.80, hoodW=w*0.44;
+    const tFill=fill||'#d46020', tStroke=fill?stroke:'#7a3500';
+    ctx.fillStyle=tFill; ctx.lineWidth=0.07; ctx.strokeStyle=tStroke;
+    rrect(x0,-cabW/2,jx-x0,cabW,0.12); ctx.fill(); if(tStroke) ctx.stroke();
+    rrect(jx,-hoodW/2,x0+len-jx,hoodW,0.10); ctx.fill(); if(tStroke) ctx.stroke();
+  } else {
+    const bodyFill=vehicle==='miata'?'#d23b3b':fill;
+    const corner=vehicle==='bus'?Math.min(0.18,w*0.08):Math.min(0.3,w*0.17);
+    rrect(x0,-w/2,len,w,corner);
+    ctx.fillStyle=bodyFill; ctx.fill();
+    if(stroke){ ctx.lineWidth=0.07; ctx.strokeStyle=vehicle==='miata'?'#7d1f1f':stroke; ctx.stroke(); }
+  }
+  if(detail){
+    if(vehicle==='bus') drawBusDetailEd(x0,len,w);
+    else if(vehicle==='miata') drawConvDetailEd(x0,len,w);
+    else if(vehicle==='tractor') drawTractorDetailEd(x0,len,w);
+    else drawSedanDetailEd(x0,len,w);
+  }
+  ctx.restore();
+}
+function drawTractorDetailEd(x0,len,w){
+  const front=x0+len, jx=x0+len*0.54, cabW=w*0.80, hoodW=w*0.44;
+  // ROPS arch
+  ctx.strokeStyle='#9aab8a'; ctx.lineWidth=0.13; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(jx-0.12,-cabW*0.44); ctx.lineTo(jx-0.12,cabW*0.44); ctx.stroke();
+  // Platform floor
+  ctx.fillStyle='rgba(10,8,5,0.58)';
+  rrect(x0+len*0.06,-cabW/2+0.18,len*0.44,cabW-0.36,0.10); ctx.fill();
+  // Seat
+  ctx.fillStyle='#1a1210'; rrect(x0+len*0.10,-0.20,len*0.14,0.40,0.07); ctx.fill();
+  // Steering wheel
+  ctx.strokeStyle='#1a1c20'; ctx.lineWidth=0.07;
+  ctx.beginPath(); ctx.arc(x0+len*0.34,0,0.17,0,2*π); ctx.stroke();
+  // Hood vents
+  ctx.strokeStyle='rgba(0,0,0,0.28)'; ctx.lineWidth=0.04; ctx.lineCap='butt';
+  const vS=jx+(front-jx)*0.12, vE=front-0.28;
+  for(let v=-1;v<=1;v++){ ctx.beginPath(); ctx.moveTo(vS,v*hoodW*0.24); ctx.lineTo(vE,v*hoodW*0.24); ctx.stroke(); }
+  // Exhaust stack
+  const exX=jx+(front-jx)*0.52, exY=hoodW/2-0.13;
+  ctx.fillStyle='#111318'; ctx.beginPath(); ctx.arc(exX,exY,0.09,0,2*π); ctx.fill();
+  ctx.fillStyle='#2d2d2d'; ctx.beginPath(); ctx.arc(exX,exY,0.055,0,2*π); ctx.fill();
+  // Headlights
+  ctx.fillStyle='#ffe9a8';
+  ctx.fillRect(front-0.13,-hoodW/2+0.06,0.09,0.16);
+  ctx.fillRect(front-0.13, hoodW/2-0.22,0.09,0.16);
+  // Taillights
+  ctx.fillStyle='#cc2020';
+  ctx.fillRect(x0,-cabW/2+0.06,0.09,0.14);
+  ctx.fillRect(x0, cabW/2-0.20,0.09,0.14);
+}
+function drawSedanDetailEd(x0,len,w){
+  const wsX=x0+len*0.30, rwX=x0+len*0.09, glH=w-0.44;
+  ctx.fillStyle='rgba(8,12,18,0.45)';
+  rrect(wsX,-w/2+0.22,Math.min(0.85,len*0.20),glH,0.15); ctx.fill();
+  rrect(rwX,-w/2+0.25,Math.min(0.6,len*0.13),glH,0.15); ctx.fill();
+  ctx.fillStyle='#ffe9a8';
+  ctx.fillRect(x0+len-0.18,-w/2+0.15,0.12,Math.min(0.3,w*0.17));
+  ctx.fillRect(x0+len-0.18, w/2-0.45,0.12,Math.min(0.3,w*0.17));
+}
+function drawConvDetailEd(x0,len,w){
+  const cX=x0+len*0.16, cL=len*0.46;
+  ctx.fillStyle='#2a1010'; rrect(cX,-w/2+0.20,cL,w-0.40,0.12); ctx.fill();
+  ctx.fillStyle='#3a2424';
+  const sW=cL*0.42, sH=(w-0.40)/2-0.12;
+  rrect(cX+cL*0.12,-w/2+0.30,sW,sH,0.08); ctx.fill();
+  rrect(cX+cL*0.12, 0.06,       sW,sH,0.08); ctx.fill();
+  ctx.fillStyle='rgba(150,200,230,0.55)';
+  rrect(cX+cL-0.04,-w/2+0.24,0.14,w-0.48,0.06); ctx.fill();
+  ctx.fillStyle='#1a1414'; ctx.fillRect(cX-0.02,-w/2+0.30,0.12,w-0.60);
+  ctx.fillStyle='#ffe9a8';
+  ctx.fillRect(x0+len-0.16,-w/2+0.14,0.10,0.26);
+  ctx.fillRect(x0+len-0.16, w/2-0.40,0.10,0.26);
+}
+function drawBusDetailEd(x0,len,w){
+  const front=x0+len;
+  ctx.fillStyle='rgba(120,170,210,0.55)';
+  rrect(front-0.5,-w/2+0.18,0.34,w-0.36,0.1); ctx.fill();
+  const winX=x0+len*0.12, winLen=len*0.66, strip=0.26;
+  ctx.fillStyle='rgba(120,170,210,0.45)';
+  rrect(winX,-w/2+0.14,winLen,strip,0.08); ctx.fill();
+  rrect(winX, w/2-0.14-strip,winLen,strip,0.08); ctx.fill();
+  ctx.strokeStyle='rgba(20,30,40,0.5)'; ctx.lineWidth=0.04;
+  for(let i=1;i<6;i++){ const mx=winX+winLen*i/6;
+    ctx.beginPath(); ctx.moveTo(mx,-w/2+0.14); ctx.lineTo(mx,-w/2+0.14+strip); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx, w/2-0.14-strip); ctx.lineTo(mx,w/2-0.14); ctx.stroke();
+  }
+  ctx.fillStyle='rgba(30,40,52,0.7)';
+  rrect(front-1.2,w/2-0.16-strip-0.02,0.5,strip+0.04,0.05); ctx.fill();
+  ctx.fillStyle='#ffe9a8';
+  ctx.fillRect(front-0.12,-w/2+0.16,0.10,0.3);
+  ctx.fillRect(front-0.12, w/2-0.46,0.10,0.3);
+}
+
+function drawSelBox(cx,cy,w,h,a){
+  ctx.save();
+  ctx.translate(cx,cy); if(a)ctx.rotate(a);
+  ctx.strokeStyle='#ffe040'; ctx.lineWidth=3*PX();
+  ctx.setLineDash([4*PX(),3*PX()]);
+  ctx.strokeRect(-w/2,-h/2,w,h);
+  ctx.setLineDash([]); ctx.restore();
+}
+
+// Draw a handle dot (in canvas pixels)
+function handle(wx,wy,r,fill='#ffe040'){
+  const p=w2c(wx,wy);
+  ctx.resetTransform();
+  ctx.beginPath(); ctx.arc(p.x,p.y,r,0,2*π);
+  ctx.fillStyle=fill; ctx.fill();
+  ctx.strokeStyle='#0a0c10'; ctx.lineWidth=1.5; ctx.stroke();
+  applyXf();
+}
+
+// Returns {cx,cy,w,h,ang} regardless of wall format
+function wallBounds(w){
+  return w.ang!=null
+    ? {cx:w.cx,cy:w.cy,w:w.w,h:w.h,ang:w.ang}
+    : {cx:w.x+w.w/2,cy:w.y+w.h/2,w:w.w,h:w.h,ang:0};
+}
+
+// Placeholder canvas for cutscene levels — a mock briefing card previewing
+// the message lines (edited in the sidebar). No geometry tools apply here.
+function renderCutscene(){
+  ctx.resetTransform();
+  const W=cv.width, H=cv.height;
+  ctx.fillStyle='#0b0e13'; ctx.fillRect(0,0,W,H);
+  const cw=Math.min(W*0.6,460), ch=Math.min(H*0.7,420);
+  const cx=(W-cw)/2, cy=(H-ch)/2;
+  // CRT-ish card
+  ctx.fillStyle='#0f1a14'; ctx.strokeStyle='#1f5c3a'; ctx.lineWidth=2;
+  rrectPx(cx,cy,cw,ch,10); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#7ee0a8'; ctx.font='600 13px Menlo,Consolas,monospace';
+  ctx.textBaseline='top';
+  ctx.fillText('🎬 CUTSCENE',cx+18,cy+14);
+  ctx.strokeStyle='rgba(126,224,168,0.2)'; ctx.beginPath();
+  ctx.moveTo(cx+14,cy+38); ctx.lineTo(cx+cw-14,cy+38); ctx.stroke();
+  const msg=L.message||[];
+  const pad=18, top=54, bot=30;
+  const longest=msg.reduce((m,l)=>Math.max(m,(l||'').length),1);
+  const fsH=(ch-top-bot)/(Math.max(msg.length,1)*1.5);
+  const fsW=(cw-2*pad)/(longest*0.6);              // monospace ≈ 0.6em/glyph
+  const fs=Math.max(7,Math.min(18,Math.floor(Math.min(fsH,fsW))));
+  ctx.font=`${fs}px Menlo,Consolas,monospace`; ctx.fillStyle='#8affc0';
+  let y=cy+top;
+  for(const line of msg){ ctx.fillText(line||'',cx+18,y); y+=fs*1.5; }
+  ctx.fillStyle='#56708a'; ctx.font='12px system-ui,sans-serif';
+  ctx.fillText('Edit the briefing text in the sidebar →',cx+18,cy+ch-26);
+}
+function rrectPx(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+// Convert {x,y,len,ang} marking to {x1,y1,x2,y2} endpoints
+function markingSeg(m){ return {x1:m.x,y1:m.y,x2:m.x+Math.cos(m.ang)*m.len,y2:m.y+Math.sin(m.ang)*m.len}; }
+
+function render(){
+  ctx.resetTransform();
+  ctx.fillStyle='#0e1117';            // letterbox outside the map
+  ctx.fillRect(0,0,cv.width,cv.height);
+  if(!L) return;
+  if(isCutscene(L)){ renderCutscene(); return; }
+  applyXf();
+  const p=PX();
+
+  // Asphalt (matches game's #23272f)
+  ctx.fillStyle='#23272f';
+  ctx.fillRect(0,0,L.w,L.h);
+  // 1 m grid (matches game)
+  ctx.strokeStyle='rgba(255,255,255,0.05)'; ctx.lineWidth=0.02;
+  ctx.beginPath();
+  for(let x=1;x<L.w;x++){ctx.moveTo(x,0);ctx.lineTo(x,L.h);}
+  for(let y=1;y<L.h;y++){ctx.moveTo(0,y);ctx.lineTo(L.w,y);}
+  ctx.stroke();
+  // Map border (editor aid)
+  ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=2*p;
+  ctx.strokeRect(0,0,L.w,L.h);
+
+  // Lane markings (drawn before goal/obstacles so they appear on the asphalt)
+  if(L.markings&&L.markings.length){
+    ctx.lineCap='butt';
+    for(let i=0;i<L.markings.length;i++){
+      const m=L.markings[i]; if(m.type!=='lane'&&m.type!=='bay') continue;
+      const {x1,y1,x2,y2}=markingSeg(m);
+      const isSel=sel&&sel.kind==='marking'&&sel.idx===i;
+      ctx.strokeStyle=isSel?'#7ec8ff':'rgba(255,255,255,0.85)';
+      ctx.lineWidth=isSel?0.14:0.10;
+      ctx.setLineDash(m.type==='lane'?[1.0,1.0]:[]);
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    }
+    ctx.setLineDash([]); ctx.lineCap='round';
+  }
+
+  // Goal zone (matches game)
+  const g=L.goal, ga=g.ang||0;
+  ctx.save();
+  ctx.translate(g.cx,g.cy); if(ga)ctx.rotate(ga);
+  rrect(-g.w/2,-g.h/2,g.w,g.h,.15);
+  ctx.fillStyle='rgba(242,200,75,0.10)'; ctx.fill();
+  ctx.strokeStyle='#f2c84b'; ctx.lineWidth=0.05;
+  ctx.setLineDash([.4,.28]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+  for(const hd of(g.heads||[0])){
+    const a=rad(hd);
+    ctx.save();
+    ctx.translate(g.cx,g.cy); ctx.rotate(a);
+    const al=Math.min(g.w,g.h)*0.45;
+    ctx.strokeStyle='rgba(242,200,75,0.75)'; ctx.lineWidth=0.12;
+    ctx.beginPath(); ctx.moveTo(-al/2,0); ctx.lineTo(al/2,0);
+    ctx.moveTo(al/2,0);ctx.lineTo(al/2-.45,-.28);ctx.moveTo(al/2,0);ctx.lineTo(al/2-.45,.28);
+    ctx.stroke(); ctx.restore();
+  }
+  if(sel&&sel.kind==='goal'){
+    drawSelBox(g.cx,g.cy,g.w,g.h,ga);
+    const hw2=g.w/2,hh2=g.h/2,c=Math.cos(ga),s=Math.sin(ga);
+    for(const [lx,ly] of [[-hw2,-hh2],[hw2,-hh2],[hw2,hh2],[-hw2,hh2]]){
+      handle(g.cx+lx*c-ly*s,g.cy+lx*s+ly*c,5);
+    }
+    handle(g.cx+(g.w/2+0.6)*c,g.cy+(g.w/2+0.6)*s,6,'#80e0ff');
+  }
+
+  // Walls / curbs (matches game; ground features behind vehicles)
+  for(let i=0;i<L.walls.length;i++){
+    const w=L.walls[i], isCurb=w.kind==='curb';
+    ctx.save();
+    if(w.ang!=null){ctx.translate(w.cx,w.cy);ctx.rotate(w.ang);rrect(-w.w/2,-w.h/2,w.w,w.h,.1);}
+    else rrect(w.x,w.y,w.w,w.h,.1);
+    ctx.fillStyle=isCurb?'#3a4148':'#39404e';
+    ctx.fill();
+    ctx.strokeStyle=isCurb?'#4d565e':'#4a5568';
+    ctx.lineWidth=0.06; ctx.stroke(); ctx.restore();
+    if(sel&&sel.kind==='wall'&&sel.idx===i){
+      const b=wallBounds(w); drawSelBox(b.cx,b.cy,b.w,b.h,b.ang);
+      const hw2=b.w/2,hh2=b.h/2,a=b.ang,c=Math.cos(a),s=Math.sin(a);
+      for(const [lx,ly] of [[-hw2,-hh2],[hw2,-hh2],[hw2,hh2],[-hw2,hh2]]){
+        handle(b.cx+lx*c-ly*s,b.cy+lx*s+ly*c,5);
+      }
+    }
+  }
+
+  // Traffic (decorative; matches game — no detail/wheels)
+  for(let i=0;i<L.traffic.length;i++){
+    const t=L.traffic[i], sp=VSPEC.default;
+    const isSel=sel&&sel.kind==='traffic'&&sel.idx===i;
+    // path arrow
+    ctx.save();ctx.translate(t.x,t.y);ctx.rotate(t.h);
+    ctx.strokeStyle='rgba(80,128,220,.35)';ctx.lineWidth=0.05;
+    ctx.setLineDash([.4,.3]);
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.min(t.loop||20,L.w),0);ctx.stroke();
+    ctx.setLineDash([]);ctx.restore();
+    drawCar(t.x,t.y,t.h,sp,{fill:t.color||'#4e5a6e',stroke:'#3a4255',detail:false,wheels:false,alpha:0.9});
+    if(isSel){
+      drawSelBox(t.x,t.y,sp.len,sp.wid,t.h);
+      handle(t.x+(sp.len/2+.5)*Math.cos(t.h),t.y+(sp.len/2+.5)*Math.sin(t.h),6,'#80e0ff');
+    }
+  }
+
+  // Obstacle cars (matches game — #737d8c body, detail + wheels)
+  for(let i=0;i<L.cars.length;i++){
+    const c=L.cars[i], sp=carSpec(c);
+    const isSel=sel&&sel.kind==='car'&&sel.idx===i;
+    const obstVeh=c.type||'default';
+    // When player and obstacle are both tractors, force gray so they're distinguishable
+    const sameAsTractor=obstVeh==='tractor'&&(L.vehicle||'default')==='tractor';
+    const obstFill=isSel?'#8a94a3':((obstVeh==='tractor'&&!sameAsTractor)?undefined:'#737d8c');
+    drawCar(c.cx,c.cy,c.h,sp,{fill:obstFill,stroke:'#525a66',detail:true,wheels:true,vehicle:obstVeh});
+    if(isSel){
+      drawSelBox(c.cx,c.cy,sp.len,sp.wid,c.h);
+      handle(c.cx+(sp.len/2+0.5)*Math.cos(c.h),c.cy+(sp.len/2+0.5)*Math.sin(c.h),6,'#80e0ff');
+    }
+  }
+
+  // Schematic solution path (under the player car)
+  drawSolutionPath();
+
+  // Start car (player — green, drawn last so it reads on top)
+  {
+    const sp=playerSpec(), sc=startCenter();
+    const isSel=sel&&sel.kind==='start';
+    const veh=L.vehicle||'default';
+    // Tractor body ignores fill and uses its natural orange; non-tractors use green.
+    const startFill=veh==='tractor'?undefined:(isSel?'#2f9b56':'#2e7d46');
+    drawCar(sc.x,sc.y,L.start.h,sp,{fill:startFill,stroke:'#3ddc84',detail:true,wheels:true,vehicle:veh});
+    // rear axle dot
+    ctx.save();ctx.fillStyle='#ffe040';
+    ctx.beginPath();ctx.arc(L.start.x,L.start.y,4*p,0,2*π);ctx.fill();ctx.restore();
+    if(isSel){
+      drawSelBox(sc.x,sc.y,sp.len,sp.wid,L.start.h);
+      handle(sc.x+(sp.len/2+.5)*Math.cos(L.start.h),sc.y+(sp.len/2+.5)*Math.sin(L.start.h),6,'#80e0ff');
+    }
+  }
+
+  // Measurement hover guidelines + object highlights
+  if(hoveredMeasure){
+    const EPS=0.002, {y1:gy1,y2:gy2}=hoveredMeasure;
+    const touches=y=>Math.abs(y-gy1)<EPS||Math.abs(y-gy2)<EPS;
+    // Guidelines
+    ctx.save();
+    ctx.strokeStyle='rgba(100,190,255,0.55)';
+    ctx.lineWidth=p;
+    ctx.setLineDash([0.4,0.25]);
+    ctx.beginPath();
+    ctx.moveTo(0,gy1); ctx.lineTo(L.w,gy1);
+    ctx.moveTo(0,gy2); ctx.lineTo(L.w,gy2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    // Highlight touching objects (glow pass then crisp pass)
+    for(let pass=0;pass<2;pass++){
+      ctx.save();
+      ctx.strokeStyle=pass===0?'rgba(100,220,255,0.22)':'rgba(100,220,255,0.88)';
+      ctx.lineWidth=pass===0?5*p:1.5*p;
+      for(const w of L.walls){
+        const b=wallBounds(w);
+        const hs=Math.abs(Math.sin(b.ang)),hc=Math.abs(Math.cos(b.ang));
+        const hy=b.w/2*hs+b.h/2*hc;
+        if(!touches(b.cy-hy)&&!touches(b.cy+hy)) continue;
+        ctx.save(); ctx.translate(b.cx,b.cy); ctx.rotate(b.ang);
+        rrect(-b.w/2,-b.h/2,b.w,b.h,.1); ctx.stroke(); ctx.restore();
+      }
+      for(const c of L.cars){
+        const sp=carSpec(c);
+        const hs=Math.abs(Math.sin(c.h)),hc=Math.abs(Math.cos(c.h));
+        const hy=sp.len/2*hs+sp.wid/2*hc;
+        if(!touches(c.cy-hy)&&!touches(c.cy+hy)) continue;
+        ctx.save(); ctx.translate(c.cx,c.cy); ctx.rotate(c.h);
+        rrect(-sp.len/2,-sp.wid/2,sp.len,sp.wid,.2); ctx.stroke(); ctx.restore();
+      }
+      for(const m of (L.markings||[])){
+        const s=markingSeg(m);
+        if(!touches(s.y1)&&!touches(s.y2)) continue;
+        ctx.strokeStyle=pass===0?'rgba(100,220,255,0.28)':'rgba(180,240,255,0.92)';
+        ctx.lineWidth=pass===0?0.2:0.12;
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  // X measurement hover guidelines + object highlights
+  if(hoveredMeasureX){
+    const EPS=0.002, {x1:gx1,x2:gx2}=hoveredMeasureX;
+    const touchesX=x=>Math.abs(x-gx1)<EPS||Math.abs(x-gx2)<EPS;
+    ctx.save();
+    ctx.strokeStyle='rgba(100,190,255,0.55)';
+    ctx.lineWidth=p;
+    ctx.setLineDash([0.4,0.25]);
+    ctx.beginPath();
+    ctx.moveTo(gx1,0); ctx.lineTo(gx1,L.h);
+    ctx.moveTo(gx2,0); ctx.lineTo(gx2,L.h);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    for(let pass=0;pass<2;pass++){
+      ctx.save();
+      ctx.strokeStyle=pass===0?'rgba(100,220,255,0.22)':'rgba(100,220,255,0.88)';
+      ctx.lineWidth=pass===0?5*p:1.5*p;
+      for(const w of L.walls){
+        const b=wallBounds(w);
+        const hs=Math.abs(Math.sin(b.ang)),hc=Math.abs(Math.cos(b.ang));
+        const hx=b.w/2*hc+b.h/2*hs;
+        if(!touchesX(b.cx-hx)&&!touchesX(b.cx+hx)) continue;
+        ctx.save(); ctx.translate(b.cx,b.cy); ctx.rotate(b.ang);
+        rrect(-b.w/2,-b.h/2,b.w,b.h,.1); ctx.stroke(); ctx.restore();
+      }
+      for(const c of L.cars){
+        const sp=carSpec(c);
+        const hs=Math.abs(Math.sin(c.h)),hc=Math.abs(Math.cos(c.h));
+        const hx=sp.len/2*hc+sp.wid/2*hs;
+        if(!touchesX(c.cx-hx)&&!touchesX(c.cx+hx)) continue;
+        ctx.save(); ctx.translate(c.cx,c.cy); ctx.rotate(c.h);
+        rrect(-sp.len/2,-sp.wid/2,sp.len,sp.wid,.2); ctx.stroke(); ctx.restore();
+      }
+      for(const m of (L.markings||[])){
+        const s=markingSeg(m);
+        if(!touchesX(s.x1)&&!touchesX(s.x2)) continue;
+        ctx.strokeStyle=pass===0?'rgba(100,220,255,0.28)':'rgba(180,240,255,0.92)';
+        ctx.lineWidth=pass===0?0.2:0.12;
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  // Drawing preview
+  if(drawRect){
+    const {ax,ay,bx,by}=drawRect;
+    ctx.strokeStyle='#ffe040';ctx.lineWidth=2*p;ctx.setLineDash([.3,.2]);
+    if(drawRect.isLine){
+      ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke();
+    } else {
+      const x=Math.min(ax,bx),y=Math.min(ay,by),w=Math.abs(bx-ax),h=Math.abs(by-ay);
+      ctx.strokeRect(x,y,w,h);
+    }
+    ctx.setLineDash([]);
+  }
+
+  updateMeasurePanel();
+  updateMeasurePanelTop();
+}
+
+// Trace the solution as a schematic curve: forward arcs cyan (solid),
+// reverse arcs orange (dashed), white dots at each move boundary, and a
+// numbered label per move. Uses the shared physics engine (advance()).
+function drawSolutionPath(){
+  if(!L || isCutscene(L) || !L.solution || !L.solution.length) return;
+  const saved=Object.assign({},CAR);
+  setVehicle(L.vehicle||'default');
+  let pose={x:L.start.x,y:L.start.y,h:L.start.h};
+  const segs=[];
+  for(const m of L.solution){
+    const steer=rad(m.steer);
+    const n=Math.max(2,Math.ceil(Math.abs(m.dist)/0.12));
+    const pts=[pose];
+    for(let i=1;i<=n;i++) pts.push(advance(pose,steer,m.dist*i/n));
+    segs.push({pts, rev:m.dist<0, end:pts[pts.length-1]});
+    pose=pts[pts.length-1];
+  }
+
+  // Swept envelope per segment as a 6-edge closed polygon:
+  //   trailing edge → outer arc (oT corner start→end) → outer side at end
+  //   → leading edge → inner arc back (iL corner end→start) → close.
+  // carPoly order: [0]=RL, [1]=FL, [2]=FR, [3]=RR
+  ctx.save();
+  ctx.lineJoin='round';
+  for(let si=0;si<segs.length;si++){
+    const seg=segs[si], hot=(solSel===si);
+    const polys=seg.pts.map(p=>carPoly(p));
+    const n=polys.length;
+    // Determine steer side from heading change across first step.
+    // dh>0 (clockwise) = right turn when fwd; left turn when rev.
+    let dh=seg.pts.length>1 ? normAng(seg.pts[1].h-seg.pts[0].h) : 0;
+    const steerRight=Math.abs(dh)<1e-5 ? true : (dh>0)!==seg.rev;
+    // oL/iL = outer/inner corner index at the Leading end (front if fwd, rear if rev)
+    // oT/iT = outer/inner corner index at the Trailing end
+    // Outer arc traces oT (outer-trailing corner sweeps the outer boundary).
+    // Inner arc traces iL (inner-leading corner sweeps the inner boundary).
+    // carPoly: [0]=RL, [1]=FL, [2]=FR, [3]=RR
+    //   fwd+right: oT=RR(3) iT=RL(0) oL=FR(2) iL=FL(1)
+    //   fwd+left:  oT=RL(0) iT=RR(3) oL=FL(1) iL=FR(2)
+    //   bwd+right: oT=FR(2) iT=FL(1) oL=RR(3) iL=RL(0)
+    //   bwd+left:  oT=FL(1) iT=FR(2) oL=RL(0) iL=RR(3)
+    let oL,iL,oT,iT;
+    if(!seg.rev){ if(steerRight){oL=2;iL=1;oT=3;iT=0;}else{oL=1;iL=2;oT=0;iT=3;} }
+    else        { if(steerRight){oL=3;iL=0;oT=2;iT=1;}else{oL=0;iL=3;oT=1;iT=2;} }
+    // For fwd: the rear corners sweep the arcs (oT=rear-outer, iL=front-inner).
+    // For rev: trailing=front, leading=rear, so rear corners are oL and iT.
+    const p0=polys[0], pN=polys[n-1];
+    ctx.beginPath();
+    ctx.moveTo(p0[iT].x,p0[iT].y);               // inner-trailing at start
+    ctx.lineTo(p0[oT].x,p0[oT].y);               // trailing edge
+    if(!seg.rev){
+      for(let i=1;i<n;i++) ctx.lineTo(polys[i][oT].x,polys[i][oT].y); // outer arc (oT=rear-outer)
+      ctx.lineTo(pN[oL].x,pN[oL].y);             // outer side at end
+      ctx.lineTo(pN[iL].x,pN[iL].y);             // leading edge at end
+      for(let i=n-2;i>=0;i--) ctx.lineTo(polys[i][iL].x,polys[i][iL].y); // inner arc (iL=front-inner)
+    } else {
+      ctx.lineTo(p0[oL].x,p0[oL].y);             // outer side at start
+      for(let i=1;i<n;i++) ctx.lineTo(polys[i][oL].x,polys[i][oL].y); // outer arc (oL=rear-outer)
+      ctx.lineTo(pN[iL].x,pN[iL].y);             // leading edge
+      ctx.lineTo(pN[iT].x,pN[iT].y);             // inner side at end
+      for(let i=n-2;i>=0;i--) ctx.lineTo(polys[i][iT].x,polys[i][iT].y); // inner arc (iT=front-inner)
+    }
+    ctx.closePath();
+    ctx.fillStyle=hot?'rgba(255,224,80,0.18)':'rgba(255,200,50,0.09)';
+    ctx.fill();
+    ctx.strokeStyle=hot?'rgba(255,224,80,0.80)':'rgba(255,200,50,0.42)';
+    ctx.lineWidth=Math.min(hot?0.03:0.015, 2*PX());
+    ctx.stroke();
+  }
+  // Ghost car outline at end of each turn
+  for(let si=0;si<segs.length;si++){
+    const seg=segs[si], hot=(solSel===si);
+    const poly=carPoly(seg.pts[seg.pts.length-1]);
+    ctx.beginPath();
+    ctx.moveTo(poly[0].x,poly[0].y);
+    for(let k=1;k<4;k++) ctx.lineTo(poly[k].x,poly[k].y);
+    ctx.closePath();
+    ctx.strokeStyle=hot?'rgba(69,196,255,0.90)':'rgba(69,196,255,0.30)';
+    ctx.lineWidth=Math.min(hot?0.04:0.02, 2*PX());
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  Object.assign(CAR,saved); CAR.fOver=CAR.len-CAR.wb-CAR.rOver;
+
+  for(let si=0;si<segs.length;si++){
+    const seg=segs[si], hot=(solSel===si);
+    ctx.beginPath();
+    ctx.moveTo(seg.pts[0].x,seg.pts[0].y);
+    for(const pt of seg.pts) ctx.lineTo(pt.x,pt.y);
+    ctx.strokeStyle=hot?'#ffe040':(seg.rev?'rgba(255,159,67,0.95)':'rgba(69,196,255,0.95)');
+    ctx.lineWidth=Math.min(hot?0.14:0.09, 5*PX());
+    if(seg.rev) ctx.setLineDash([0.3,0.22]);
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  // boundary dots + move numbers
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(L.start.x,L.start.y,0.13,0,2*π); ctx.fill();
+  for(let si=0;si<segs.length;si++){
+    const e=segs[si].end;
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(e.x,e.y,0.13,0,2*π); ctx.fill();
+  }
+}
+
+// ── Hit testing ──────────────────────────────────────────────────────────────
+const HR = 8; // handle radius in pixels
+
+function hitHandle(wx,wy, hx,hy){
+  const p=w2c(hx,hy), q=w2c(wx,wy);
+  return dist2(p.x,p.y,q.x,q.y) <= HR*HR;
+}
+
+// Returns {handle:'body'|'corner0-3'|'rotate'} or null
+function hitObjHandles(wx,wy){
+  if(!sel) return null;
+
+  if(sel.kind==='goal'){
+    const g=L.goal, ga=g.ang||0, c=Math.cos(ga),s=Math.sin(ga);
+    // rotate handle
+    const rx=g.cx+(g.w/2+.6)*c, ry=g.cy+(g.w/2+.6)*s;
+    if(hitHandle(wx,wy,rx,ry)) return {handle:'rotate'};
+    // corners
+    const corners=[[-g.w/2,-g.h/2],[g.w/2,-g.h/2],[g.w/2,g.h/2],[-g.w/2,g.h/2]];
+    for(let i=0;i<4;i++){
+      const [lx,ly]=corners[i];
+      if(hitHandle(wx,wy,g.cx+lx*c-ly*s,g.cy+lx*s+ly*c)) return {handle:'corner'+i};
+    }
+  }
+  if(sel.kind==='wall'){
+    const b=wallBounds(L.walls[sel.idx]);
+    const c=Math.cos(b.ang),s=Math.sin(b.ang);
+    const corners=[[-b.w/2,-b.h/2],[b.w/2,-b.h/2],[b.w/2,b.h/2],[-b.w/2,b.h/2]];
+    for(let i=0;i<4;i++){
+      const [lx,ly]=corners[i];
+      if(hitHandle(wx,wy,b.cx+lx*c-ly*s,b.cy+lx*s+ly*c)) return {handle:'corner'+i};
+    }
+  }
+  if(sel.kind==='car'){
+    const c=L.cars[sel.idx], sp=carSpec(c);
+    if(hitHandle(wx,wy,c.cx+(sp.len/2+.5)*Math.cos(c.h),c.cy+(sp.len/2+.5)*Math.sin(c.h))) return {handle:'rotate'};
+  }
+  if(sel.kind==='traffic'){
+    const t=L.traffic[sel.idx], sp=VSPEC.default;
+    if(hitHandle(wx,wy,t.x+(sp.len/2+.5)*Math.cos(t.h),t.y+(sp.len/2+.5)*Math.sin(t.h))) return {handle:'rotate'};
+  }
+  if(sel.kind==='start'){
+    const sp=playerSpec(),sc=startCenter();
+    if(hitHandle(wx,wy,sc.x+(sp.len/2+.5)*Math.cos(L.start.h),sc.y+(sp.len/2+.5)*Math.sin(L.start.h))) return {handle:'rotate'};
+  }
+  return null;
+}
+
+function ptToSegDist(px,py,ax,ay,bx,by){
+  const dx=bx-ax,dy=by-ay,len2=dx*dx+dy*dy;
+  if(len2<1e-6) return Math.hypot(px-ax,py-ay);
+  const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/len2));
+  return Math.hypot(px-ax-t*dx,py-ay-t*dy);
+}
+
+function hitTestAll(wx,wy){
+  // cars (reverse order = top first)
+  for(let i=L.cars.length-1;i>=0;i--){
+    const c=L.cars[i], sp=carSpec(c);
+    if(ptInOBB(wx,wy,c.cx,c.cy,sp.len,sp.wid,c.h)) return {kind:'car',idx:i};
+  }
+  // traffic (t.x,t.y is the body center, matching the game)
+  for(let i=L.traffic.length-1;i>=0;i--){
+    const t=L.traffic[i], sp=VSPEC.default;
+    if(ptInOBB(wx,wy,t.x,t.y,sp.len,sp.wid,t.h)) return {kind:'traffic',idx:i};
+  }
+  // start
+  {
+    const sp=playerSpec(),sc=startCenter();
+    if(ptInOBB(wx,wy,sc.x,sc.y,sp.len,sp.wid,L.start.h)) return {kind:'start'};
+  }
+  // goal
+  if(ptInOBB(wx,wy,L.goal.cx,L.goal.cy,L.goal.w,L.goal.h,L.goal.ang||0)) return {kind:'goal'};
+  // walls (reverse)
+  for(let i=L.walls.length-1;i>=0;i--){
+    const b=wallBounds(L.walls[i]);
+    if(ptInOBB(wx,wy,b.cx,b.cy,b.w,b.h,b.ang)) return {kind:'wall',idx:i};
+  }
+  // markings — click within 0.3 m of the line
+  if(L.markings) for(let i=L.markings.length-1;i>=0;i--){
+    const m=L.markings[i];
+    if((m.type==='lane'||m.type==='bay')){const s=markingSeg(m);if(ptToSegDist(wx,wy,s.x1,s.y1,s.x2,s.y2)<0.3)return{kind:'marking',idx:i};}
+  }
+  return null;
+}
+
+// ── Mouse helpers ────────────────────────────────────────────────────────────
+function mouseWorld(e){
+  const r=cv.getBoundingClientRect();
+  return c2w(e.clientX-r.left, e.clientY-r.top);
+}
+function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+
+// Snap to 0.1m grid when near a grid line
+function snapW(v){ return Math.round(v*10)/10; }
+
+// ── Pointer events (mouse + touch) ───────────────────────────────────────────
+// Active pointers, keyed by pointerId — drives two-finger pan/zoom on touch.
+const pointers=new Map();
+let gesture=null;   // {dist, cx, cy} centroid+spread while pinching
+
+function gestureState(){
+  const ps=[...pointers.values()];
+  const r=cv.getBoundingClientRect();
+  let sx=0,sy=0; for(const p of ps){ sx+=p.x; sy+=p.y; }
+  const cx=sx/ps.length-r.left, cy=sy/ps.length-r.top;
+  const dist=ps.length>1?Math.hypot(ps[0].x-ps[1].x, ps[0].y-ps[1].y):0;
+  return {cx,cy,dist};
+}
+
+cv.addEventListener('pointerdown', e=>{
+  e.preventDefault();
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  // Second finger down → switch to pan/zoom gesture, abandon any single-touch edit.
+  if(pointers.size>=2){
+    drag=null; drawRect=null; panning=false;
+    gesture=gestureState(); render(); return;
+  }
+  cv.setPointerCapture(e.pointerId);
+  if(isCutscene(L)) return;   // no geometry on a cutscene card
+  const mw=mouseWorld(e);
+
+  // Pan: middle button or right button (mouse only)
+  if(e.button===1||e.button===2){
+    panning=true; panOrigin={mx:e.clientX,my:e.clientY,ox:V.ox,oy:V.oy}; return;
+  }
+
+  if(tool!=='select'){
+    // Add mode
+    if(tool==='car'){
+      L.cars.push({cx:snapW(mw.x),cy:snapW(mw.y),h:0});
+      sel={kind:'car',idx:L.cars.length-1};
+      markDirty(); updateSidebar(); render(); return;
+    }
+    if(tool==='traffic'){
+      L.traffic.push({x:snapW(mw.x),y:snapW(mw.y),h:0,speed:4,loop:30,offset:0});
+      sel={kind:'traffic',idx:L.traffic.length-1};
+      markDirty(); updateSidebar(); render(); return;
+    }
+    // lane divider / bay separator: start line drag
+    if(tool==='lane'||tool==='bay'){
+      drawRect={ax:mw.x,ay:mw.y,bx:mw.x,by:mw.y,isLine:true,lineType:tool};
+      return;
+    }
+    // wall / curb: start drag
+    drawRect={ax:snapW(mw.x),ay:snapW(mw.y),bx:snapW(mw.x),by:snapW(mw.y)};
+    return;
+  }
+
+  // Select mode
+  const hh=hitObjHandles(mw.x,mw.y);
+  if(hh){
+    // start drag on existing selection
+    drag={...hh, startW:mw, orig:deepClone(sel.kind==='wall'?L.walls[sel.idx]:
+           sel.kind==='car'?L.cars[sel.idx]:sel.kind==='traffic'?L.traffic[sel.idx]:
+           sel.kind==='goal'?L.goal:L.start)};
+    return;
+  }
+  const hit=hitTestAll(mw.x,mw.y);
+  if(hit){
+    sel=hit;
+    drag={handle:'body', startW:mw, orig:deepClone(
+           hit.kind==='wall'?L.walls[hit.idx]:
+           hit.kind==='car'?L.cars[hit.idx]:
+           hit.kind==='traffic'?L.traffic[hit.idx]:
+           hit.kind==='marking'?L.markings[hit.idx]:
+           hit.kind==='goal'?L.goal:L.start)};
+    updateSidebar(); render();
+  } else {
+    sel=null; drag=null; updateSidebar(); render();
+  }
+});
+
+cv.addEventListener('pointermove', e=>{
+  if(pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  // Two-finger pinch/pan
+  if(gesture && pointers.size>=2){
+    const g=gestureState();
+    // pan by centroid movement
+    V.ox+=g.cx-gesture.cx; V.oy+=g.cy-gesture.cy;
+    // zoom by spread change, anchored at the centroid
+    if(gesture.dist>0 && g.dist>0){
+      const f=Math.min(3,Math.max(.33,g.dist/gesture.dist));
+      const ns=Math.min(600,Math.max(5,V.scale*f));
+      const af=ns/V.scale;
+      V.ox=g.cx-(g.cx-V.ox)*af; V.oy=g.cy-(g.cy-V.oy)*af;
+      V.scale=ns;
+    }
+    gesture=g; render(); return;
+  }
+  if(panning){
+    const dx=e.clientX-panOrigin.mx, dy=e.clientY-panOrigin.my;
+    V.ox=panOrigin.ox+dx; V.oy=panOrigin.oy+dy; render(); return;
+  }
+  if(drawRect){
+    const mw=mouseWorld(e);
+    drawRect.bx=snapW(mw.x); drawRect.by=snapW(mw.y); render(); return;
+  }
+  if(!drag) return;
+  const mw=mouseWorld(e);
+  const dx=snapW(mw.x-drag.startW.x), dy=snapW(mw.y-drag.startW.y);
+  const o=drag.orig;
+
+  if(drag.handle==='body'){
+    if(sel.kind==='goal')   { L.goal.cx=snapW(o.cx+dx); L.goal.cy=snapW(o.cy+dy); }
+    else if(sel.kind==='start'){ L.start.x=snapW(o.x+dx); L.start.y=snapW(o.y+dy); }
+    else if(sel.kind==='car')  { L.cars[sel.idx].cx=snapW(o.cx+dx); L.cars[sel.idx].cy=snapW(o.cy+dy); }
+    else if(sel.kind==='traffic'){ L.traffic[sel.idx].x=snapW(o.x+dx); L.traffic[sel.idx].y=snapW(o.y+dy); }
+    else if(sel.kind==='wall'){
+      const w=L.walls[sel.idx];
+      if(w.ang!=null){ w.cx=snapW(o.cx+dx); w.cy=snapW(o.cy+dy); }
+      else { w.x=snapW(o.x+dx); w.y=snapW(o.y+dy); }
+    }
+    else if(sel.kind==='marking'){
+      const m=L.markings[sel.idx];
+      m.x=snapW(o.x+dx); m.y=snapW(o.y+dy);
+    }
+  }
+  else if(drag.handle.startsWith('corner')){
+    const ci=+drag.handle.slice(6);
+    if(sel.kind==='goal'){
+      // drag one corner, opposite stays fixed — update w,h,cx,cy (no rotation)
+      const b=L.goal, ga=b.ang||0, c=Math.cos(ga),s=Math.sin(ga);
+      const corners=[[-1,-1],[1,-1],[1,1],[-1,1]];
+      const opp=(ci+2)%4, [ox2,oy2]=corners[opp];
+      // Opposite corner world pos
+      const fcx=o.cx+ox2*(o.w/2)*c-oy2*(o.h/2)*s;
+      const fcy=o.cy+ox2*(o.w/2)*s+oy2*(o.h/2)*c;
+      // New moving corner
+      const nmx=mw.x, nmy=mw.y;
+      // Center = midpoint
+      b.cx=snapW((nmx+fcx)/2); b.cy=snapW((nmy+fcy)/2);
+      // In local frame
+      const dlx=(nmx-fcx)*c+(nmy-fcy)*s;
+      const dly=-(nmx-fcx)*s+(nmy-fcy)*c;
+      b.w=Math.max(.5,Math.abs(snapW(dlx))); b.h=Math.max(.5,Math.abs(snapW(dly)));
+    }
+    else if(sel.kind==='wall'){
+      const w=L.walls[sel.idx];
+      if(w.ang!=null){
+        // angled wall: same as goal
+        const ga=w.ang, c=Math.cos(ga),s=Math.sin(ga);
+        const corners=[[-1,-1],[1,-1],[1,1],[-1,1]];
+        const opp=(ci+2)%4,[ox2,oy2]=corners[opp];
+        const fcx=o.cx+ox2*(o.w/2)*c-oy2*(o.h/2)*s;
+        const fcy=o.cy+ox2*(o.w/2)*s+oy2*(o.h/2)*c;
+        w.cx=snapW((mw.x+fcx)/2); w.cy=snapW((mw.y+fcy)/2);
+        const dlx=(mw.x-fcx)*c+(mw.y-fcy)*s;
+        const dly=-(mw.x-fcx)*s+(mw.y-fcy)*c;
+        w.w=Math.max(.2,Math.abs(snapW(dlx))); w.h=Math.max(.2,Math.abs(snapW(dly)));
+      } else {
+        // axis-aligned wall: corners [TL,TR,BR,BL]
+        const corners=[[o.x,o.y],[o.x+o.w,o.y],[o.x+o.w,o.y+o.h],[o.x,o.y+o.h]];
+        const opp=(ci+2)%4;
+        const [fx,fy]=corners[opp];
+        const nx=snapW(mw.x), ny=snapW(mw.y);
+        w.x=Math.min(fx,nx); w.y=Math.min(fy,ny);
+        w.w=Math.max(.2,Math.abs(nx-fx)); w.h=Math.max(.2,Math.abs(ny-fy));
+      }
+    }
+  }
+  else if(drag.handle==='rotate'){
+    if(sel.kind==='goal'){
+      const g=L.goal;
+      g.ang=Math.atan2(mw.y-g.cy, mw.x-g.cx);
+    } else {
+      // car / traffic / start: compute heading from center to mouse
+      let cx2,cy2;
+      if(sel.kind==='car'){cx2=L.cars[sel.idx].cx;cy2=L.cars[sel.idx].cy;}
+      else if(sel.kind==='traffic'){cx2=L.traffic[sel.idx].x;cy2=L.traffic[sel.idx].y;}
+      else {cx2=startCenter().x;cy2=startCenter().y;}
+      const a=Math.atan2(mw.y-cy2, mw.x-cx2);
+      if(sel.kind==='car') L.cars[sel.idx].h=a;
+      else if(sel.kind==='traffic'){
+        L.traffic[sel.idx].h=a; // t.x,t.y is the center — only heading changes
+      } else {
+        // start: rear axle = center - (len/2-rOver) in heading
+        const sp=playerSpec();
+        L.start.h=a;
+        L.start.x=cx2-(sp.len/2-sp.rOver)*Math.cos(a);
+        L.start.y=cy2-(sp.len/2-sp.rOver)*Math.sin(a);
+      }
+    }
+  }
+  updateSidebar(); render();
+});
+
+function endPointer(e){
+  pointers.delete(e.pointerId);
+  if(pointers.size<2) gesture=null;
+  if(pointers.size>0) return true;   // gesture still settling — skip edit-finalize
+  return false;
+}
+
+cv.addEventListener('pointerup', e=>{
+  if(endPointer(e)) return;
+  if(panning){panning=false; panOrigin=null; return;}
+  if(drawRect){
+    const {ax,ay,bx,by}=drawRect;
+    if(drawRect.isLine){
+      const rawLen=Math.hypot(bx-ax,by-ay);
+      if(rawLen>0.2){
+        const rawAng=Math.atan2(by-ay,bx-ax);
+        const snap15=Math.PI/12;
+        const ang=Math.round(rawAng/snap15)*snap15;
+        const len=+rawLen.toFixed(2);
+        L.markings.push({type:drawRect.lineType||'lane',x:ax,y:ay,len,ang});
+        sel={kind:'marking',idx:L.markings.length-1};
+        markDirty(); updateSidebar();
+      }
+    } else {
+      const x=Math.min(ax,bx),y=Math.min(ay,by),w=Math.abs(bx-ax),h=Math.abs(by-ay);
+      if(w>.2&&h>.2){
+        const kind=tool==='curb'?'curb':'wall';
+        L.walls.push({x,y,w,h,kind});
+        sel={kind:'wall',idx:L.walls.length-1};
+        markDirty(); updateSidebar();
+      }
+    }
+    drawRect=null; render(); return;
+  }
+  if(drag) markDirty();
+  drag=null;
+});
+
+cv.addEventListener('pointercancel', e=>{
+  pointers.delete(e.pointerId);
+  if(pointers.size<2) gesture=null;
+  if(pointers.size===0){ drag=null; drawRect=null; panning=false; }
+});
+
+cv.addEventListener('contextmenu', e=>e.preventDefault());
+
+cv.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const r=cv.getBoundingClientRect();
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
+  const factor=e.deltaY<0?1.15:.87;
+  const ns=Math.min(600,Math.max(5,V.scale*factor));
+  const af=ns/V.scale;        // actual factor after clamping
+  V.ox=mx-(mx-V.ox)*af;
+  V.oy=my-(my-V.oy)*af;
+  V.scale=ns;
+  render();
+},{passive:false});
+
+// ── Keyboard ─────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if(e.key==='Delete'||e.key==='Backspace') deleteSelected();
+  if(e.key==='Escape'){ sel=null; updateSidebar(); render(); }
+  if(e.key==='v'||e.key==='V') setTool('select');
+  if(e.key==='w'||e.key==='W') setTool('wall');
+  if(e.key==='c'||e.key==='C') setTool('curb');
+  if(e.key==='a'||e.key==='A') setTool('car');
+  if(e.key==='t'||e.key==='T') setTool('traffic');
+  if(e.key==='l'||e.key==='L') setTool('lane');
+  if(e.key==='b'||e.key==='B') setTool('bay');
+  if(e.key==='f'||e.key==='F'){ fitLevel(); render(); }
+});
+
+function deleteSelected(){
+  if(!sel) return;
+  if(sel.kind==='wall')    L.walls.splice(sel.idx,1);
+  if(sel.kind==='car')     L.cars.splice(sel.idx,1);
+  if(sel.kind==='traffic') L.traffic.splice(sel.idx,1);
+  if(sel.kind==='marking') L.markings.splice(sel.idx,1);
+  markDirty();
+  sel=null; drag=null; updateSidebar(); render();
+}
+
+// ── Tool buttons ─────────────────────────────────────────────────────────────
+const ADD_NAMES={wall:'Wall',curb:'Curb',car:'Car',traffic:'Traffic',lane:'Lane div.',bay:'Bay line'};
+function setTool(t){
+  tool=t;
+  document.getElementById('toolSelect').classList.toggle('active',t==='select');
+  const addBtn=document.getElementById('btnAddObj');
+  addBtn.classList.toggle('active',t in ADD_NAMES);
+  addBtn.textContent=t in ADD_NAMES?'+ '+ADD_NAMES[t]+' ▾':'+ Add ▾';
+  cv.style.cursor=t==='select'?'default':'crosshair';
+  document.getElementById('addMenu').style.display='none';
+}
+document.getElementById('toolSelect').onclick=()=>setTool('select');
+{
+  const menu=document.getElementById('addMenu');
+  document.getElementById('btnAddObj').onclick=e=>{
+    e.stopPropagation();
+    if(sel && (sel.kind==='wall'||sel.kind==='car'||sel.kind==='traffic')){
+      cloneSelected(); return;
+    }
+    menu.style.display=menu.style.display==='none'?'block':'none';
+  };
+  document.querySelectorAll('.add-opt').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
+  document.addEventListener('click',()=>{ menu.style.display='none'; });
+}
+
+function cloneSelected(){
+  if(!sel) return;
+  const OFF=0.5;
+  if(sel.kind==='car'){
+    const src=L.cars[sel.idx];
+    L.cars.push({...src,cx:src.cx+OFF,cy:src.cy+OFF});
+    sel={kind:'car',idx:L.cars.length-1};
+  } else if(sel.kind==='traffic'){
+    const src=L.traffic[sel.idx];
+    L.traffic.push({...src,x:src.x+OFF,y:src.y+OFF});
+    sel={kind:'traffic',idx:L.traffic.length-1};
+  } else if(sel.kind==='wall'){
+    const src=L.walls[sel.idx];
+    L.walls.push({...src,x:src.x+OFF,y:src.y+OFF});
+    sel={kind:'wall',idx:L.walls.length-1};
+  }
+  markDirty(); updateSidebar(); render();
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function val(id,v){ const el=document.getElementById(id); if(el&&document.activeElement!==el) el.value=v; }
+
+function updateSidebar(){
+  if(!L) return;
+  const cs=isCutscene(L);
+  document.getElementById('cutscenePanel').style.display=cs?'':'none';
+  document.getElementById('geomPanel').style.display=cs?'none':'';
+  document.getElementById('sDraft').checked = !!L.draft;
+  if(cs){
+    val('csName',L.name);
+    const ta=document.getElementById('csMsg');
+    if(document.activeElement!==ta) ta.value=(L.message||[]).join('\n');
+    return;
+  }
+  val('sId',L.id||'(none)');
+  val('sName',L.name); val('sTier',L.tier); val('sMode',L.mode);
+  val('sVehicle',L.vehicle||'default');
+  val('sW',L.w); val('sH',L.h);
+  val('sPar', L.par != null ? L.par : '');
+  val('sHint',L.hint||'');
+  updateSelPanel();
+  updateSolutionPanel();
+}
+
+// Editable list of solution moves. The ⚙ Solve button populates L.solution;
+// edits here update the schematic curve live and re-derive Par.
+// Deep-ish equality of two move plans (steer/dist within input precision).
+function sameMoves(a,b){
+  if(!a||!b||a.length!==b.length) return false;
+  for(let i=0;i<a.length;i++)
+    if(Math.abs(a[i].steer-b[i].steer)>0.05||Math.abs(a[i].dist-b[i].dist)>0.005) return false;
+  return true;
+}
+
+function updateSolutionPanel(){
+  const el=document.getElementById('solPanel');
+  if(!el) return;
+  const sol=L.solution||[];
+  if(!sol.length){
+    el.innerHTML=`<p class="sel-hint">No solution yet. Click <b>⚙ Solve</b> in the toolbar, or add moves manually.</p>`
+      +`<button id="solAdd" style="margin-top:6px">+ Add move</button>`;
+  } else {
+    el.innerHTML=sol.map((m,i)=>
+      `<div class="row sol-row${solSel===i?' sol-hot':''}" data-i="${i}">`
+      +`<span class="sol-n">${i+1}</span>`
+      +`<input class="sol-steer" type="number" step="1" inputmode="decimal" value="${+(+m.steer).toFixed(1)}" title="steer °">`
+      +`<span class="sol-u">°</span>`
+      +`<input class="sol-dist" type="number" step="0.1" inputmode="decimal" value="${+(+m.dist).toFixed(2)}" title="distance m">`
+      +`<span class="sol-u">m</span>`
+      +`<button class="sol-del" title="Delete move">✕</button>`
+      +`</div>`).join('')
+      +`<div style="display:flex;gap:5px;margin-top:6px">`
+      +`<button id="solAdd">+ Add move</button>`
+      +`<button id="solClear" class="danger">Clear</button>`
+      +`</div>`;
+  }
+  // Saved alternative plans (from ⚙ Solve): pick which one the player sees.
+  const hasSol=!!(L.solution&&L.solution.length);
+  const hasOpts=!!(L.solutions&&L.solutions.length);
+  if(hasSol||hasOpts){
+    const shownIdx=hasOpts?L.solutions.findIndex(s=>sameMoves(s,L.solution)):-1;
+    let cands='';
+    if(hasSol&&shownIdx===-1){
+      const d=L.solution.reduce((a,m)=>a+Math.abs(m.dist),0);
+      cands+=`<div class="row sol-cand sol-cand-on">`
+        +`<span class="sol-n">${L.solution.length}t</span>`
+        +`<span class="sol-cand-d">${Math.round(d*100)} cm · shown</span>`
+        +`<button class="sol-show" disabled title="Currently shown">✓</button>`
+        +`<button class="sol-clear-current" title="Clear this solution">✕</button>`
+        +`</div>`;
+    }
+    if(hasOpts){
+      cands+=L.solutions.map((s,i)=>{
+        const on=i===shownIdx, d=s.reduce((a,m)=>a+Math.abs(m.dist),0);
+        return `<div class="row sol-cand${on?' sol-cand-on':''}" data-ci="${i}">`
+          +`<span class="sol-n">${s.length}t</span>`
+          +`<span class="sol-cand-d">${Math.round(d*100)} cm${on?' · shown':''}</span>`
+          +`<button class="sol-show" data-ci="${i}" title="Show this plan to the player"${on?' disabled':''}>${on?'✓':'Show'}</button>`
+          +`<button class="sol-cand-del" data-ci="${i}" title="Remove this option">✕</button>`
+          +`</div>`;
+      }).join('');
+    }
+    el.insertAdjacentHTML('afterbegin',
+      (hasOpts?`<p class="sel-hint" style="margin:0 0 4px">${L.solutions.length} option${L.solutions.length!==1?'s':''} — fewest turns first:</p>`:'')
+      +`<div class="sol-cands">${cands}</div>`
+      +`<div style="border-top:1px solid #1f2636;margin:8px 0 6px"></div>`);
+    el.querySelectorAll('.sol-show[data-ci]').forEach(b=>b.addEventListener('click',()=>{
+      // If the shown plan isn't already in the list, keep it there before replacing.
+      if(hasSol&&shownIdx===-1) L.solutions.push(L.solution.map(m=>({...m})));
+      L.solution=L.solutions[+b.dataset.ci].map(m=>({...m})); solSel=null; markDirty(); updateSolutionPanel(); render();
+    }));
+    el.querySelectorAll('.sol-cand-del').forEach(b=>b.addEventListener('click',()=>{
+      L.solutions.splice(+b.dataset.ci,1); markDirty(); updateSolutionPanel(); render();
+    }));
+    const cc=el.querySelector('.sol-clear-current');
+    if(cc) cc.addEventListener('click',()=>{ L.solution=[]; solSel=null; markDirty(); updateSolutionPanel(); render(); });
+  }
+  // wire row inputs
+  el.querySelectorAll('.sol-row').forEach(rowEl=>{
+    const i=+rowEl.dataset.i;
+    rowEl.addEventListener('mouseenter',()=>{ solSel=i; render(); });
+    rowEl.addEventListener('mouseleave',()=>{ solSel=null; render(); });
+    rowEl.querySelector('.sol-steer').addEventListener('input',e=>{
+      L.solution[i].steer=+e.target.value||0; markDirty(); render();
+    });
+    rowEl.querySelector('.sol-dist').addEventListener('input',e=>{
+      L.solution[i].dist=+e.target.value||0; markDirty(); render();
+    });
+    rowEl.querySelector('.sol-del').addEventListener('click',()=>{
+      L.solution.splice(i,1); solSel=null; markDirty(); updateSolutionPanel(); render();
+    });
+  });
+  const addBtn=document.getElementById('solAdd');
+  if(addBtn) addBtn.addEventListener('click',()=>{
+    if(!L.solution) L.solution=[];
+    L.solution.push({steer:0,dist:2}); markDirty(); updateSolutionPanel(); render();
+  });
+  const clearBtn=document.getElementById('solClear');
+  if(clearBtn) clearBtn.addEventListener('click',()=>{
+    L.solution=[]; solSel=null; markDirty(); updateSolutionPanel(); render();
+  });
+  // Import from a game URL or compact string
+  el.insertAdjacentHTML('beforeend',
+    `<div style="margin-top:10px;border-top:1px solid #1f2636;padding-top:8px">`
+    +`<p class="sel-hint" style="margin-bottom:4px">Paste game URL or <code>steer:dist,…</code></p>`
+    +`<div style="display:flex;gap:5px">`
+    +`<input id="solImportUrl" type="text" placeholder="index.html#abc123/35:-4.9,…" style="flex:1;min-width:0">`
+    +`<button id="solImportBtn">Load</button>`
+    +`</div><p id="solImportErr" style="color:#e06060;font-size:11px;margin-top:3px;display:none"></p>`
+    +`</div>`);
+  document.getElementById('solImportBtn').addEventListener('click',()=>{
+    const raw=document.getElementById('solImportUrl').value;
+    const errEl=document.getElementById('solImportErr');
+    try {
+      const mvs=movesFromCompact(raw);
+      if(!mvs.length) throw new Error('no moves found');
+      L.solution=mvs; markDirty(); updateSolutionPanel(); render();
+    } catch(e) {
+      errEl.textContent='Error: '+e.message; errEl.style.display='';
+    }
+  });
+}
+
+function row(label,input){ return `<div class="row"><label>${label}</label>${input}</div>`; }
+
+function updateSelPanel(){
+  const panel=document.getElementById('selPanel');
+  const canClone=sel&&(sel.kind==='wall'||sel.kind==='car'||sel.kind==='traffic');
+  const addBtn=document.getElementById('btnAddObj');
+  if(canClone){
+    addBtn.textContent='⊕ Clone';
+  } else {
+    const cur=tool in ADD_NAMES?'+ '+ADD_NAMES[tool]+' ▾':'+ Add ▾';
+    addBtn.textContent=cur;
+  }
+  if(!sel){ panel.innerHTML='<p class="sel-hint">Click an object — including the start car and goal box — to edit it here.<br>Del removes walls / cars / traffic.</p>'; return; }
+  let html='';
+  if(sel.kind==='start'){
+    const s=L.start;
+    html+=`<p class="sel-hint" style="margin:0 0 6px">Start pose <span style="color:#3d8fbf">(rear axle)</span></p>`;
+    html+=row('x',  `<input type=number step=.05 id=seStX value="${fmt(s.x)}">`);
+    html+=row('y',  `<input type=number step=.05 id=seStY value="${fmt(s.y)}">`);
+    html+=row('h°', `<input type=number step=5   id=seStH value="${fmt(deg(s.h),1)}">`);
+    panel.innerHTML=html;
+    const liv=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('input',e=>fn(+e.target.value)); };
+    liv('seStX',v=>{s.x=v;markDirty();render();});
+    liv('seStY',v=>{s.y=v;markDirty();render();});
+    liv('seStH',v=>{s.h=rad(v);markDirty();render();});
+    return;
+  }
+  if(sel.kind==='goal'){
+    const g=L.goal;
+    html+=`<p class="sel-hint" style="margin:0 0 6px">Goal box</p>`;
+    html+=row('cx',  `<input type=number step=.1 id=seGCx value="${fmt(g.cx)}">`);
+    html+=row('cy',  `<input type=number step=.1 id=seGCy value="${fmt(g.cy)}">`);
+    html+=row('w',   `<input type=number step=.1 min=.5 id=seGW value="${fmt(g.w)}">`);
+    html+=row('h',   `<input type=number step=.1 min=.5 id=seGH value="${fmt(g.h)}">`);
+    html+=row('ang°',`<input type=number step=5 id=seGAng value="${fmt(deg(g.ang||0),1)}">`);
+    html+=row('heads',`<input type=text id=seGHeads value="${(g.heads||[0]).join(', ')}" placeholder="0  or  0,180">`);
+    html+=row('tol°',`<input type=number step=1 min=1 id=seGTol value="${g.tol}">`);
+    panel.innerHTML=html;
+    const liv=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('input',e=>fn(+e.target.value)); };
+    liv('seGCx',v=>{g.cx=v;markDirty();render();});
+    liv('seGCy',v=>{g.cy=v;markDirty();render();});
+    liv('seGW',v=>{g.w=v;markDirty();render();});
+    liv('seGH',v=>{g.h=v;markDirty();render();});
+    liv('seGAng',v=>{g.ang=rad(v)||0;markDirty();render();});
+    liv('seGTol',v=>{g.tol=v;markDirty();render();});
+    const he=document.getElementById('seGHeads');
+    if(he) he.addEventListener('input',e=>{ g.heads=e.target.value.split(',').map(s=>+s.trim()).filter(n=>!isNaN(n)); markDirty(); render(); });
+    return;
+  }
+  if(sel.kind==='wall'){
+    const w=L.walls[sel.idx];
+    const kOpts=['wall','curb'].map(k=>`<option${w.kind===k?' selected':''}>${k}</option>`).join('');
+    html+=row('Kind',`<select id="seKind">${kOpts}</select>`);
+    if(w.ang!=null){
+      html+=row('cx',`<input type=number step=.1 id=seCx value="${fmt(w.cx)}">`);
+      html+=row('cy',`<input type=number step=.1 id=seCy value="${fmt(w.cy)}">`);
+      html+=row('w', `<input type=number step=.1 id=seW  value="${fmt(w.w)}">`);
+      html+=row('h', `<input type=number step=.1 id=seH  value="${fmt(w.h)}">`);
+      html+=row('ang°',`<input type=number step=5 id=seAng value="${fmt(deg(w.ang||0),1)}">`);
+    } else {
+      html+=row('x',`<input type=number step=.1 id=seX value="${fmt(w.x)}">`);
+      html+=row('y',`<input type=number step=.1 id=seY value="${fmt(w.y)}">`);
+      html+=row('w',`<input type=number step=.1 id=seW value="${fmt(w.w)}">`);
+      html+=row('h',`<input type=number step=.1 id=seH value="${fmt(w.h)}">`);
+    }
+  } else if(sel.kind==='car'){
+    const c=L.cars[sel.idx];
+    const tOpts=[['','Sedan'],['miata','Miata'],['bus','Bus'],['tractor','Tractor']].map(([v,l])=>`<option value="${v}"${(c.type||'')=== v?' selected':''}>${l}</option>`).join('');
+    html+=row('cx',`<input type=number step=.1 id=seCx value="${fmt(c.cx)}">`);
+    html+=row('cy',`<input type=number step=.1 id=seCy value="${fmt(c.cy)}">`);
+    html+=row('h°', `<input type=number step=5  id=seAng value="${fmt(deg(c.h),1)}">`);
+    html+=row('Type',`<select id=seType>${tOpts}</select>`);
+  } else if(sel.kind==='traffic'){
+    const t=L.traffic[sel.idx];
+    html+=row('x',    `<input type=number step=.1  id=seX      value="${fmt(t.x)}">`);
+    html+=row('y',    `<input type=number step=.1  id=seY      value="${fmt(t.y)}">`);
+    html+=row('h°',   `<input type=number step=5   id=seAng    value="${fmt(deg(t.h),1)}">`);
+    html+=row('speed',`<input type=number step=.5  id=seSpeed  value="${t.speed||4}">`);
+    html+=row('loop', `<input type=number step=1   id=seLoop   value="${t.loop||30}">`);
+    html+=row('offset',`<input type=number step=1  id=seOffset value="${t.offset||0}">`);
+    html+=row('color',`<input type=text id=seColor value="${t.color||''}" placeholder="#4e5a6e">`);
+  } else if(sel.kind==='marking'){
+    const m=L.markings[sel.idx];
+    html+=`<p class="sel-hint" style="margin:0 0 6px">${m.type==='bay'?'Bay separator':'Lane divider'}</p>`;
+    html+=row('x',   `<input type=number step=.1  id=seMx   value="${fmt(m.x)}">`);
+    html+=row('y',   `<input type=number step=.1  id=seMy   value="${fmt(m.y)}">`);
+    html+=row('len', `<input type=number step=.1 min=.1 id=seMLen value="${fmt(m.len)}">`);
+    html+=row('ang°',`<input type=number step=15 id=seMAng value="${fmt(deg(m.ang),0)}">`);
+  }
+  html+=`<button class="danger" style="width:100%;margin-top:8px" id="btnDel">Delete</button>`;
+  panel.innerHTML=html;
+  document.getElementById('btnDel').onclick=deleteSelected;
+  // bind live inputs
+  function liv(id,fn){ const el=document.getElementById(id); if(el) el.addEventListener('input',e=>fn(+e.target.value)); }
+  function lis(id,fn){ const el=document.getElementById(id); if(el) el.addEventListener('input',e=>fn(e.target.value)); }
+  if(sel.kind==='wall'){
+    const w=L.walls[sel.idx];
+    liv('seX',v=>{w.x=v;render();}); liv('seY',v=>{w.y=v;render();});
+    liv('seCx',v=>{w.cx=v;render();}); liv('seCy',v=>{w.cy=v;render();});
+    liv('seW',v=>{w.w=v;render();}); liv('seH',v=>{w.h=v;render();});
+    liv('seAng',v=>{w.ang=rad(v);render();});
+    const ke=document.getElementById('seKind'); if(ke)ke.onchange=e=>{w.kind=e.target.value;render();};
+  } else if(sel.kind==='car'){
+    const c=L.cars[sel.idx];
+    liv('seCx',v=>{c.cx=v;render();}); liv('seCy',v=>{c.cy=v;render();});
+    liv('seAng',v=>{c.h=rad(v);render();});
+    const te=document.getElementById('seType'); if(te)te.onchange=e=>{c.type=e.target.value||undefined;render();};
+  } else if(sel.kind==='traffic'){
+    const t=L.traffic[sel.idx];
+    liv('seX',v=>{t.x=v;}); liv('seY',v=>{t.y=v;});
+    liv('seAng',v=>{t.h=rad(v);render();}); liv('seSpeed',v=>t.speed=v);
+    liv('seLoop',v=>t.loop=v); liv('seOffset',v=>t.offset=v);
+    lis('seColor',v=>{t.color=v;render();});
+  } else if(sel.kind==='marking'){
+    const m=L.markings[sel.idx];
+    liv('seMx',  v=>{m.x=v;  markDirty();render();});
+    liv('seMy',  v=>{m.y=v;  markDirty();render();});
+    liv('seMLen',v=>{m.len=v; markDirty();render();});
+    liv('seMAng',v=>{m.ang=rad(Math.round(v/15)*15); markDirty();render();});
+  }
+}
+
+// Level meta inputs
+function bind(id,fn){ document.getElementById(id).addEventListener('input',fn); }
+// Cutscene inputs
+bind('csName', e=>{ L.name=e.target.value; refreshLevelSelector(); });
+bind('csMsg',  e=>{ L.message=e.target.value.split('\n'); render(); });
+bind('sName',  e=>{ L.name=e.target.value; refreshLevelSelector(); });
+document.getElementById('sDraft').addEventListener('change', e=>{ if(e.target.checked) L.draft=true; else delete L.draft; markDirty(); refreshLevelSelector(); });
+bind('sTier',  e=>{ L.tier=e.target.value; });
+bind('sMode',  e=>{ L.mode=e.target.value; });
+bind('sVehicle',e=>{ L.vehicle=e.target.value; render(); });
+bind('sW',     e=>{ L.w=+e.target.value||L.w; render(); });
+bind('sH',     e=>{ L.h=+e.target.value||L.h; render(); });
+bind('sPar', e=>{ const v=e.target.value.trim(); if(v==='') delete L.par; else L.par=+v; });
+bind('sHint',  e=>{ L.hint=e.target.value; });
+
+// ── Level set: load / navigate / structural edits ─────────────────────────────
+// Safe parser for the LEVELS array literal — NEVER uses eval / new Function, so
+// even though this only ever reads our own levels.js (via GitHub API or a
+// same-origin fetch), no fetched or pasted text can execute code. Handles the
+// JS-literal features levels.js uses: unquoted keys, trailing commas, // and
+// /* */ comments, single/double-quoted strings, and arithmetic over numbers
+// and Math.PI (e.g. -Math.PI / 2). String contents are read verbatim, so
+// colons or commas inside names never affect structure parsing.
+class LiteralParser{
+  constructor(s,pos=0){ this.s=s; this.i=pos; }
+  err(m){ throw new Error('Level parse error at '+this.i+': '+m); }
+  ws(){
+    for(;;){
+      const c=this.s[this.i];
+      if(c===' '||c==='\t'||c==='\n'||c==='\r'){ this.i++; continue; }
+      if(c==='/'&&this.s[this.i+1]==='/'){ while(this.i<this.s.length&&this.s[this.i]!=='\n') this.i++; continue; }
+      if(c==='/'&&this.s[this.i+1]==='*'){ this.i+=2; while(this.i<this.s.length&&!(this.s[this.i]==='*'&&this.s[this.i+1]==='/')) this.i++; this.i+=2; continue; }
+      break;
+    }
+  }
+  value(){
+    this.ws();
+    const c=this.s[this.i];
+    if(c==='{') return this.object();
+    if(c==='[') return this.array();
+    if(c==='"'||c==="'") return this.string();
+    if(c==='t'||c==='f') return this.bool();
+    if(c==='n'){ this.expect('null'); return null; }
+    return this.addExpr();
+  }
+  object(){
+    this.i++; const o={};
+    for(;;){
+      this.ws();
+      if(this.s[this.i]==='}'){ this.i++; break; }
+      const k=this.key(); this.ws();
+      if(this.s[this.i]!==':') this.err('expected :');
+      this.i++; o[k]=this.value(); this.ws();
+      if(this.s[this.i]===','){ this.i++; continue; }
+      if(this.s[this.i]==='}'){ this.i++; break; }
+      this.err('expected , or }');
+    }
+    return o;
+  }
+  array(){
+    this.i++; const a=[];
+    for(;;){
+      this.ws();
+      if(this.s[this.i]===']'){ this.i++; break; }
+      a.push(this.value()); this.ws();
+      if(this.s[this.i]===','){ this.i++; continue; }
+      if(this.s[this.i]===']'){ this.i++; break; }
+      this.err('expected , or ]');
+    }
+    return a;
+  }
+  key(){
+    this.ws();
+    const c=this.s[this.i];
+    if(c==='"'||c==="'") return this.string();
+    let j=this.i;
+    while(j<this.s.length&&/[A-Za-z0-9_$]/.test(this.s[j])) j++;
+    if(j===this.i) this.err('expected key');
+    const k=this.s.slice(this.i,j); this.i=j; return k;
+  }
+  string(){
+    const q=this.s[this.i++]; let out='';
+    while(this.i<this.s.length){
+      const c=this.s[this.i++];
+      if(c===q) return out;
+      if(c==='\\'){
+        const e=this.s[this.i++];
+        if(e==='n') out+='\n'; else if(e==='t') out+='\t'; else if(e==='r') out+='\r';
+        else if(e==='u'){ out+=String.fromCharCode(parseInt(this.s.substr(this.i,4),16)); this.i+=4; }
+        else out+=e;
+      } else out+=c;
+    }
+    this.err('unterminated string');
+  }
+  bool(){
+    if(this.s.startsWith('true',this.i)){ this.i+=4; return true; }
+    if(this.s.startsWith('false',this.i)){ this.i+=5; return false; }
+    this.err('bad literal');
+  }
+  expect(w){ if(!this.s.startsWith(w,this.i)) this.err('expected '+w); this.i+=w.length; }
+  addExpr(){
+    let v=this.mulExpr();
+    for(;;){ this.ws(); const c=this.s[this.i];
+      if(c==='+'){ this.i++; v+=this.mulExpr(); }
+      else if(c==='-'){ this.i++; v-=this.mulExpr(); }
+      else break;
+    }
+    return v;
+  }
+  mulExpr(){
+    let v=this.unary();
+    for(;;){ this.ws(); const c=this.s[this.i];
+      if(c==='*'){ this.i++; v*=this.unary(); }
+      else if(c==='/'){ this.i++; v/=this.unary(); }
+      else break;
+    }
+    return v;
+  }
+  unary(){
+    this.ws();
+    if(this.s[this.i]==='-'){ this.i++; return -this.unary(); }
+    if(this.s[this.i]==='+'){ this.i++; return this.unary(); }
+    return this.primary();
+  }
+  primary(){
+    this.ws();
+    if(this.s[this.i]==='('){ this.i++; const v=this.addExpr(); this.ws(); if(this.s[this.i]!==')') this.err('expected )'); this.i++; return v; }
+    if(this.s.startsWith('Math.PI',this.i)){ this.i+=7; return Math.PI; }
+    const m=/^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(this.s.slice(this.i));
+    if(!m) this.err('expected number');
+    this.i+=m[0].length; return parseFloat(m[0]);
+  }
+}
+function parseLevelsText(text){
+  const idx=text.indexOf('const LEVELS');
+  if(idx<0) throw new Error('LEVELS array not found');
+  const eq=text.indexOf('=',idx);
+  if(eq<0) throw new Error('LEVELS array not found');
+  const out=new LiteralParser(text,eq+1).value();
+  if(!Array.isArray(out)) throw new Error('LEVELS is not an array');
+  return out;
+}
+async function fetchLevels(){
+  // Always read from the authenticated GitHub API (behind the PAT) — never the
+  // deployed Pages copy, which is CDN-cached and lags behind (that made
+  // deleted/duplicate levels keep reappearing). cache:'no-store' (in ghGet) and
+  // a fresh timestamp defeat any client/proxy caching of the API response.
+  if(!ghReady()) throw new Error('NO_GH');
+  const fd=await ghGet(`/contents/levels.js?ref=${GHS.branch}&t=${Date.now()}`);
+  return parseLevelsText(b64decode(fd.content));
+}
+
+// Rebuild the current-level <select> from the in-memory set.
+function refreshLevelSelector(){
+  const selEl=document.getElementById('curSel');
+  selEl.innerHTML=levels.map((lv,i)=>
+    `<option value="${i}">${i+1}. ${isCutscene(lv)?'🎬 ':''}${lv.draft?'📝 ':''}${(lv.name||'(unnamed)')}</option>`).join('');
+  selEl.value=String(curIdx);
+}
+
+// Switch which level is being edited (instant — everything is in memory).
+function setCurrent(i){
+  curIdx=Math.max(0,Math.min(levels.length-1,i));
+  L=levels[curIdx];
+  sel=null; drag=null;
+  refreshLevelSelector();
+  fitLevel();
+  updateSidebar();
+  render();
+  if(L.id) history.replaceState(null,'',location.pathname+location.search+'#sel='+L.id);
+}
+
+async function loadAllLevels(){
+  try{
+    const fetched=await fetchLevels();
+    levels=fetched.map(normalizeLevel);
+    if(!levels.length) levels=[newLevel()];
+  }catch(err){
+    if(err.message==='NO_GH'){
+      // No PAT: fall back to the bundled levels.js (read-only, solver still works).
+      levels=(typeof LEVELS!=='undefined'?[...LEVELS]:[]).map(normalizeLevel);
+      if(!levels.length) levels=[newLevel()];
+      setSaveStatus('Read-only — no GitHub token (⚙ GitHub to enable saving)','warn');
+    } else {
+      levels=[newLevel()];
+      alert('Failed to load levels from GitHub:\n'+err.message);
+    }
+  }
+  curIdx=0;
+  setCurrent(0);
+}
+
+// Structural operations ────────────────────────────────────────────────────────
+function addLevel(){
+  levels.splice(curIdx+1,0,newLevel());
+  markDirty();
+  setCurrent(curIdx+1);
+}
+function addCutscene(){
+  levels.splice(curIdx+1,0,{type:'cutscene',name:'Cutscene',
+    message:['> MSG INCOMING','','  YOUR TEXT','  HERE','','> MISSION: GO.']});
+  markDirty();
+  setCurrent(curIdx+1);
+}
+function duplicateCurrentLevel(){
+  const copy=normalizeLevel(JSON.parse(JSON.stringify(L)));
+  copy.id=genLevelId(); // always assign fresh ID
+  levels.splice(curIdx+1,0,copy);
+  markDirty();
+  setCurrent(curIdx+1);
+}
+function deleteCurrentLevel(){
+  if(levels.length<=1){ alert('Cannot delete the only level.'); return; }
+  if(!confirm(`Delete level ${curIdx+1}: "${L.name}"?`)) return;
+  levels.splice(curIdx,1);
+  markDirty();
+  setCurrent(Math.min(curIdx,levels.length-1));
+}
+function moveCurrentLevel(dir){ // dir = -1 (earlier) or +1 (later)
+  const j=curIdx+dir;
+  if(j<0||j>=levels.length) return;
+  [levels[curIdx],levels[j]]=[levels[j],levels[curIdx]];
+  markDirty();
+  setCurrent(j);
+}
+
+document.getElementById('curSel').onchange=e=>setCurrent(+e.target.value);
+document.getElementById('btnPrev').onclick=()=>setCurrent(curIdx-1);
+document.getElementById('btnNext').onclick=()=>setCurrent(curIdx+1);
+document.getElementById('btnNew').onclick=addLevel;
+document.getElementById('btnNewCutscene').onclick=addCutscene;
+document.getElementById('btnDupLevel').onclick=duplicateCurrentLevel;
+document.getElementById('btnDelLevel').onclick=deleteCurrentLevel;
+document.getElementById('btnMoveUp').onclick=()=>moveCurrentLevel(-1);
+document.getElementById('btnMoveDn').onclick=()=>moveCurrentLevel(1);
+
+// ── Export ────────────────────────────────────────────────────────────────────
+function fmtRad(r){
+  const tbl=[
+    [0,'0'],[Math.PI,'Math.PI'],[-Math.PI,'-Math.PI'],
+    [Math.PI/2,'Math.PI / 2'],[-Math.PI/2,'-Math.PI / 2'],
+    [Math.PI/4,'Math.PI / 4'],[-Math.PI/4,'-Math.PI / 4'],
+    [Math.PI*3/4,'Math.PI * 3 / 4'],[-Math.PI*3/4,'-Math.PI * 3 / 4'],
+    [Math.PI/3,'Math.PI / 3'],[-Math.PI/3,'-Math.PI / 3'],
+    [Math.PI*2/3,'Math.PI * 2 / 3'],[-Math.PI*2/3,'-Math.PI * 2 / 3'],
+    [Math.PI/6,'Math.PI / 6'],[-Math.PI/6,'-Math.PI / 6'],
+    [Math.PI*5/6,'Math.PI * 5 / 6'],[-Math.PI*5/6,'-Math.PI * 5 / 6'],
+    [Math.PI/12,'Math.PI / 12'],[-Math.PI/12,'-Math.PI / 12'],
+  ];
+  for(const [v,s] of tbl) if(Math.abs(r-v)<.0005) return s;
+  const d=Math.round(r*180/Math.PI);
+  if(Math.abs(r-rad(d))<.0005){
+    if(d===0)return '0';
+    if(d%180===0)return d>0?'Math.PI':'-Math.PI';
+    return `${d} * Math.PI / 180`;
+  }
+  return r.toFixed(4);
+}
+function fn(n,d=2){ const s=n.toFixed(d); return parseFloat(s)+''; }
+
+function buildExport(lv=L){
+  const l=lv;
+  if(l.type==='cutscene'){
+    const out=['  {'];
+    if(l.id) out.push(`    id: ${JSON.stringify(l.id)},`);
+    if(l.draft) out.push(`    draft: true,`);
+    out.push(`    type: "cutscene", name: ${JSON.stringify(l.name||'')},`);
+    out.push(`    message: [${(l.message||[]).map(s=>JSON.stringify(s)).join(', ')}],`);
+    out.push('  },');
+    return out.join('\n');
+  }
+  const g=l.goal;
+  const lines=[];
+  lines.push(`  {`);
+  if(l.id) lines.push(`    id: ${JSON.stringify(l.id)},`);
+  lines.push(`    name: ${JSON.stringify(l.name)}, tier: ${JSON.stringify(l.tier)}, mode: ${JSON.stringify(l.mode)}, w: ${l.w}, h: ${l.h},`);
+  if(l.vehicle&&l.vehicle!=='default') lines.push(`    vehicle: ${JSON.stringify(l.vehicle)},`);
+  lines.push(`    start: { x: ${fn(l.start.x)}, y: ${fn(l.start.y)}, h: ${fmtRad(l.start.h)} },`);
+  // goal
+  let gs=`{ cx: ${fn(g.cx)}, cy: ${fn(g.cy)}, w: ${fn(g.w)}, h: ${fn(g.h)}`;
+  if(g.ang) gs+=`, ang: ${fmtRad(g.ang)}`;
+  gs+=`, heads: [${(g.heads||[0]).join(', ')}], tol: ${g.tol} }`;
+  lines.push(`    goal: ${gs},`);
+  // walls
+  if(l.walls.length){
+    lines.push(`    walls: [`);
+    for(const w of l.walls){
+      if(w.ang!=null)
+        lines.push(`      { cx: ${fn(w.cx)}, cy: ${fn(w.cy)}, w: ${fn(w.w)}, h: ${fn(w.h)}, ang: ${fmtRad(w.ang)}, kind: ${JSON.stringify(w.kind||'wall')} },`);
+      else {
+        let ws=`{ x: ${fn(w.x)}, y: ${fn(w.y)}, w: ${fn(w.w)}, h: ${fn(w.h)}`;
+        if(w.kind&&w.kind!=='wall') ws+=`, kind: ${JSON.stringify(w.kind)}`;
+        lines.push(`      ${ws} },`);
+      }
+    }
+    lines.push(`    ],`);
+  } else lines.push(`    walls: [],`);
+  // cars
+  if(l.cars.length){
+    lines.push(`    cars: [`);
+    for(const c of l.cars){
+      let cs=`{ cx: ${fn(c.cx)}, cy: ${fn(c.cy)}, h: ${fmtRad(c.h)}`;
+      if(c.type) cs+=`, type: ${JSON.stringify(c.type)}`;
+      lines.push(`      ${cs} },`);
+    }
+    lines.push(`    ],`);
+  } else lines.push(`    cars: [],`);
+  // traffic
+  if(l.traffic&&l.traffic.length){
+    lines.push(`    traffic: [`);
+    for(const t of l.traffic){
+      let ts=`{ x: ${fn(t.x)}, y: ${fn(t.y)}, h: ${fmtRad(t.h)}, speed: ${t.speed||4}, loop: ${t.loop||30}, offset: ${t.offset||0}`;
+      if(t.color) ts+=`, color: ${JSON.stringify(t.color)}`;
+      lines.push(`      ${ts} },`);
+    }
+    lines.push(`    ],`);
+  }
+  if(l.markings&&l.markings.length){
+    lines.push(`    markings: [`);
+    for(const m of l.markings){
+      if(m.type==='lane'||m.type==='bay')
+        lines.push(`      { type: '${m.type}', x: ${fn(m.x)}, y: ${fn(m.y)}, len: ${fn(m.len)}, ang: ${fmtRad(m.ang)} },`);
+    }
+    lines.push(`    ],`);
+  }
+  if(l.draft) lines.push(`    draft: true,`);
+  if(l.par != null) lines.push(`    par: ${l.par},`);
+  lines.push(`    hint: ${JSON.stringify(l.hint||'')},`);
+  const fmtMoves=s=>'['+s.map(m=>`{ steer: ${m.steer}, dist: ${m.dist} }`).join(', ')+']';
+  if(l.solution&&l.solution.length){
+    lines.push(`    solution: ${fmtMoves(l.solution)},`);
+  } else {
+    lines.push(`    solution: [],`);
+  }
+  if(l.solutions&&l.solutions.length){
+    lines.push(`    solutions: [`);
+    for(const s of l.solutions) lines.push(`      ${fmtMoves(s)},`);
+    lines.push(`    ],`);
+  }
+  lines.push(`  },`);
+  return lines.join('\n');
+}
+
+// ── GitHub save ───────────────────────────────────────────────────────────────
+const GHS = {
+  get pat()   { return localStorage.getItem('gh_pat')||''; },
+  get owner() { return localStorage.getItem('gh_owner')||'bohdan'; },
+  get repo()  { return localStorage.getItem('gh_repo')||'TacticalParkingSimulator'; },
+  get branch(){ return localStorage.getItem('gh_branch')||'main'; },
+  set pat(v)  { localStorage.setItem('gh_pat',v); },
+  set owner(v){ localStorage.setItem('gh_owner',v); },
+  set repo(v) { localStorage.setItem('gh_repo',v); },
+  set branch(v){ localStorage.setItem('gh_branch',v); },
+};
+
+function ghReady(){ return !!(GHS.pat && GHS.owner && GHS.repo); }
+function updateSaveBtn(){
+  const b=document.getElementById('btnSave');
+  b.classList.toggle('ready', ghReady());
+  b.title = ghReady()
+    ? `Save to ${GHS.owner}/${GHS.repo} (${GHS.branch})`
+    : 'Configure GitHub settings first (⚙ GitHub)';
+}
+
+function strToBase64(str){
+  const bytes=new TextEncoder().encode(str);
+  const bin=Array.from(bytes,b=>String.fromCharCode(b)).join('');
+  return btoa(bin);
+}
+
+async function ghGet(path){
+  const url=`https://api.github.com/repos/${GHS.owner}/${GHS.repo}${path}`;
+  const r=await fetch(url,{cache:'no-store',headers:{Authorization:`Bearer ${GHS.pat}`,Accept:'application/vnd.github+json'}});
+  if(!r.ok) throw new Error(`GitHub ${r.status} on GET ${path}: ${await r.text()}`);
+  return r.json();
+}
+async function ghPut(path,body){
+  const url=`https://api.github.com/repos/${GHS.owner}/${GHS.repo}${path}`;
+  const r=await fetch(url,{method:'PUT',headers:{Authorization:`Bearer ${GHS.pat}`,'Content-Type':'application/json',Accept:'application/vnd.github+json'},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(`GitHub ${r.status} on PUT ${path}: ${await r.text()}`);
+  return r.json();
+}
+
+function b64decode(b64str){
+  const bin=atob(b64str.replace(/\n/g,''));
+  return new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)));
+}
+
+function setSaveStatus(msg, cls=''){
+  const el=document.getElementById('saveStatus');
+  el.textContent=msg; el.style.display=''; el.className=cls;
+}
+
+// Commit the entire in-memory level set to levels.js in a single commit.
+async function saveAllToGitHub(){
+  setSaveStatus('Fetching levels.js…');
+  const fd=await ghGet(`/contents/levels.js?ref=${GHS.branch}`);
+
+  const newContent='const LEVELS = [\n'+levels.map(lv=>buildExport(lv)).join('\n')+'\n];\n';
+
+  setSaveStatus(`Committing ${levels.length} levels…`);
+  const putData=await ghPut(`/contents/levels.js`,{message:`Update levels (${levels.length} total)`,content:strToBase64(newContent),sha:fd.sha,branch:GHS.branch});
+  const newSha=putData.commit.sha.slice(0,7);
+
+  // Bump cache-bust in index.html so the deploy refreshes
+  try{
+    setSaveStatus(`Bumping cache to ${newSha}…`);
+    const ifd=await ghGet(`/contents/index.html?ref=${GHS.branch}`);
+    const iText=b64decode(ifd.content).replace(/(\?v=)[a-f0-9]{7,8}/g,`$1${newSha}`);
+    await ghPut(`/contents/index.html`,{message:`Bump cache-bust to ${newSha}`,content:strToBase64(iText),sha:ifd.sha,branch:GHS.branch});
+  }catch(e){ /* non-fatal */ }
+
+  dirty=false;
+  setSaveStatus(`✓ Saved all ${levels.length} levels — commit ${newSha}`, 'ok');
+  document.getElementById('saveBtnRow').style.display='none';
+  setTimeout(()=>{ document.getElementById('saveOverlay').classList.remove('show'); document.getElementById('saveBtnRow').style.display=''; }, 2200);
+}
+
+// GitHub settings overlay
+document.getElementById('btnGH').onclick=()=>{
+  document.getElementById('ghOwner').value=GHS.owner;
+  document.getElementById('ghRepo').value=GHS.repo;
+  document.getElementById('ghBranch').value=GHS.branch;
+  document.getElementById('ghPat').value=GHS.pat;
+  document.getElementById('ghOverlay').classList.add('show');
+};
+document.getElementById('btnGHSave').onclick=()=>{
+  GHS.owner=document.getElementById('ghOwner').value.trim();
+  GHS.repo=document.getElementById('ghRepo').value.trim();
+  GHS.branch=document.getElementById('ghBranch').value.trim()||'main';
+  GHS.pat=document.getElementById('ghPat').value.trim();
+  document.getElementById('ghOverlay').classList.remove('show');
+  updateSaveBtn();
+  // Re-fetch the whole set with the new credentials (only if nothing unsaved)
+  if(!dirty) loadAllLevels();
+};
+document.getElementById('btnGHClose').onclick=()=>document.getElementById('ghOverlay').classList.remove('show');
+document.getElementById('ghOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('ghOverlay'))document.getElementById('ghOverlay').classList.remove('show');});
+
+// Save overlay — commits the whole set at once
+document.getElementById('btnSave').onclick=()=>{
+  if(!ghReady()){ document.getElementById('btnGH').click(); return; }
+  document.getElementById('saveSummary').textContent=
+    `Commit all ${levels.length} levels to ${GHS.owner}/${GHS.repo} (${GHS.branch}). This overwrites levels.js.`;
+  document.getElementById('saveStatus').style.display='none';
+  document.getElementById('saveBtnRow').style.display='';
+  document.getElementById('saveOverlay').classList.add('show');
+};
+document.getElementById('btnSaveGo').onclick=async()=>{
+  document.getElementById('btnSaveGo').disabled=true;
+  document.getElementById('btnSaveClose').disabled=true;
+  try{
+    await saveAllToGitHub();
+  }catch(err){
+    setSaveStatus('Error: '+err.message,'err');
+  }finally{
+    document.getElementById('btnSaveGo').disabled=false;
+    document.getElementById('btnSaveClose').disabled=false;
+  }
+};
+document.getElementById('btnSaveClose').onclick=()=>document.getElementById('saveOverlay').classList.remove('show');
+document.getElementById('saveOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('saveOverlay'))document.getElementById('saveOverlay').classList.remove('show');});
+
+// ── Try level ─────────────────────────────────────────────────────────────────
+// Pass the level via URL hash so it only affects the opened tab (never the
+// persistent game level list).
+document.getElementById('btnTry').onclick=()=>{
+  // Strip solver-only fields the game never reads so the URL stays compact
+  // and edge-cases with large solutions arrays can't silently break decoding.
+  const { solutions: _s, ...lvForTry } = L;
+  window.open('index.html#try='+levelToString(lvForTry), '_blank');
+};
+
+// ── Solver ────────────────────────────────────────────────────────────────────
+// Anytime min-turn solve: streams improving plans and keeps the best at each turn
+// count as a candidate (solutions[]). It does NOT overwrite the author's shown
+// plan (L.solution) — only fills it when the level has none yet; otherwise the
+// author picks an option via "Show this one".
+let solveCancel = false;
+const planDist = s => s.reduce((a, m) => a + Math.abs(m.dist), 0);
+
+document.getElementById('btnStopSolve').onclick = () => { solveCancel = true; };
+
+document.getElementById('btnSolve').onclick = async () => {
+  if (!L || isCutscene(L)) { alert('Select a regular level first.'); return; }
+  const btn = document.getElementById('btnSolve');
+  const stopBtn = document.getElementById('btnStopSolve');
+  const status = document.getElementById('solveStatus');
+  solveCancel = false;
+  btn.disabled = true;
+  stopBtn.style.display = '';
+  status.textContent = '⚙ Starting…';
+  // Diverse solution set keyed by solver-assigned id.
+  // Solver emits each accepted plan with id + replaces (id of plan it superseded).
+  const allSols = new Map();  // id → { turns, dist, moves, poses }
+  const hadSolution = !!(L.solution && L.solution.length);
+  const applyBest = () => {
+    let sols = [...allSols.values()].sort((a, b) =>
+      a.turns !== b.turns ? a.turns - b.turns : a.dist - b.dist);
+    if (sols.length) { const minT = sols[0].turns; sols = sols.filter(s => s.turns <= minT + 2); }
+    // Cross-turn refinement filter: drop a longer solution that is just the same
+    // maneuver as a shorter one with extra fine-tuning turns appended.
+    // A longer solution is NOT a refinement if its extra moves change direction
+    // (f→r or r→f) relative to the shorter solution's last move — that indicates
+    // a genuinely different strategy (e.g. reversing into a spot vs driving in forward).
+    sols = sols.filter((s, i) => {
+      for (let j = 0; j < i; j++) {
+        const prev = sols[j];
+        if (prev.turns >= s.turns) continue;
+        const n = prev.moves ? prev.moves.length : 0;
+        if (n === 0) continue;
+        // If extra moves introduce a direction change it's a new strategy, not a refinement
+        const prevLastDir = prev.moves[n - 1].dist >= 0 ? 'f' : 'r';
+        const extraMoves = s.moves ? s.moves.slice(n) : [];
+        if (extraMoves.some(m => (m.dist >= 0 ? 'f' : 'r') !== prevLastDir)) continue;
+        // Every endpoint of prev must have a nearby match in s (same route, just extended)
+        if (prev.poses && prev.poses.length && s.poses &&
+            prev.poses.every(pp => s.poses.some(sp => Math.hypot(sp.x-pp.x, sp.y-pp.y) < 2.0)))
+          return false;  // s is just a refined continuation of prev
+      }
+      return true;
+    });
+    // Solver candidates for this run (turns/dist sorted, refinements filtered above).
+    const solverSols = sols.map(s => s.moves.map(m => ({ ...m })));
+    // Merge with any manually-pinned entries already in L.solutions that the solver
+    // doesn't cover — this preserves the author's original solution (or any choice
+    // made via "Show") even when applyBest() fires repeatedly while solving.
+    const movePat = ms => ms.map(m=>(m.steer>1?'L':m.steer<-1?'R':'S')+(m.dist>=0?'f':'r')).join(',');
+    const solverPats = new Set(solverSols.map(movePat));
+    const pinnedExtra = (L.solutions || []).filter(s => !solverPats.has(movePat(s)));
+    L.solutions = [...solverSols, ...pinnedExtra];
+    if (!hadSolution)
+      L.solution = L.solutions.length ? L.solutions[0].map(m => ({ ...m })) : (L.solution || []);
+  };
+  try {
+    await solveParkingLevel(L, { idleMs: 6000, shouldStop: () => solveCancel }, ev => {
+      if (ev.type === 'solution') {
+        if (ev.replaces != null) allSols.delete(ev.replaces);
+        allSols.set(ev.id, { turns: ev.turns, dist: ev.dist, moves: ev.moves, poses: ev.poses });
+        applyBest();
+        dirty = true;
+        updateSidebar();
+        render();
+      } else if (ev.type === 'phase') {
+        if (ev.phase === 'astar_quick') status.textContent = `⚙ A* quick pass…`;
+        else if (ev.phase === 'bf') status.textContent = `⚙ BF (${ev.workers} worker${ev.workers !== 1 ? 's' : ''})…`;
+        else if (ev.phase === 'astar') status.textContent = `⚙ A* search…`;
+      } else if (ev.type === 'bf_progress') {
+        const fmtN = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? Math.round(n/1000)+'k' : String(n);
+        const progress = ev.totalIters ? `${fmtN(ev.iters)} / ~${fmtN(ev.totalIters)}` : fmtN(ev.iters);
+        const donePart = ev.done > 0 ? `, ${ev.done}/${ev.total} done` : '';
+        status.textContent = `⚙ BF — ${progress} pairs${donePart}…`;
+      } else if (ev.type === 'depth') {
+        const fmtN = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(n);
+        status.textContent = `⚙ A* — ${fmtN(ev.depth)} poses visited, ${fmtN(ev.beamSize)} queued…`;
+      }
+    });
+    applyBest();
+    if (allSols.size) {
+      const minT = Math.min(...[...allSols.values()].map(s => s.turns));
+      const n = L.solutions.length;
+      status.textContent = `✓ ${minT} turn${minT !== 1 ? 's' : ''}, ${n} option${n !== 1 ? 's' : ''}${solveCancel ? ' (stopped)' : ''}` +
+        (hadSolution ? ' — pick one to show' : ' — save to persist');
+    } else {
+      status.textContent = solveCancel ? '■ Stopped — no solution yet' : '✗ No solution found';
+    }
+    updateSidebar();
+    render();
+  } catch (err) {
+    status.textContent = '✗ Error: ' + err.message;
+  } finally {
+    btn.disabled = false;
+    stopBtn.style.display = 'none';
+  }
+};
+
+// ── Level string encode / decode ──────────────────────────────────────────────
+function levelToString(lv){
+  const json=JSON.stringify(lv);
+  const bytes=new TextEncoder().encode(json);
+  const bin=Array.from(bytes,b=>String.fromCharCode(b)).join('');
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function levelFromString(str){
+  str=str.trim();
+  // Accept full URLs containing #lvl=
+  const hashMatch=str.match(/[#?&]lvl=([A-Za-z0-9\-_]+)/);
+  if(hashMatch) str=hashMatch[1];
+  str=str.replace(/-/g,'+').replace(/_/g,'/');
+  while(str.length%4) str+='=';
+  const bin=atob(str);
+  const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+function copyText(text, btn, label){
+  navigator.clipboard.writeText(text)
+    .then(()=>{ btn.textContent='Copied!'; setTimeout(()=>btn.textContent=label,1500); })
+    .catch(()=>{ /* fallback silent */ });
+}
+
+document.getElementById('btnExport').onclick=()=>{
+  const js=buildExport();
+  const str=levelToString(L);
+  document.getElementById('exportText').value=js;
+  document.getElementById('exportString').value=str;
+  // NOTE: do NOT write the string into the URL hash here. The editor
+  // auto-imports any #lvl= on load, so a hash + reload would duplicate the
+  // level on every refresh. The copyable string above is the share path.
+  document.getElementById('overlay').classList.add('show');
+};
+document.getElementById('btnCloseExport').onclick=()=>{
+  document.getElementById('overlay').classList.remove('show');
+};
+document.getElementById('btnCopy').onclick=function(){
+  copyText(document.getElementById('exportText').value, this, 'Copy JS');
+};
+document.getElementById('btnCopyStr').onclick=function(){
+  copyText(document.getElementById('exportString').value, this, 'Copy string');
+};
+document.getElementById('overlay').addEventListener('click',e=>{
+  if(e.target===document.getElementById('overlay')) document.getElementById('overlay').classList.remove('show');
+});
+
+// ── Import string ─────────────────────────────────────────────────────────────
+document.getElementById('btnImport').onclick=()=>{
+  document.getElementById('importText').value='';
+  document.getElementById('importOverlay').classList.add('show');
+  document.getElementById('importText').focus();
+};
+document.getElementById('btnCloseImport').onclick=()=>{
+  document.getElementById('importOverlay').classList.remove('show');
+};
+document.getElementById('importOverlay').addEventListener('click',e=>{
+  if(e.target===document.getElementById('importOverlay')) document.getElementById('importOverlay').classList.remove('show');
+});
+document.getElementById('btnImportLoad').onclick=()=>{
+  try{
+    const lv=normalizeLevel(levelFromString(document.getElementById('importText').value));
+    lv.id=genLevelId(); // always assign a fresh ID on import
+    levels.splice(curIdx+1,0,lv);
+    markDirty();
+    setCurrent(curIdx+1);
+    document.getElementById('importOverlay').classList.remove('show');
+  } catch(err){
+    alert('Could not decode level string: '+err.message);
+  }
+};
+
+// Warn before leaving with unsaved changes (nothing persists until Save all)
+window.addEventListener('beforeunload', e=>{
+  if(dirty){ e.preventDefault(); e.returnValue=''; }
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById('sidebar').addEventListener('input', markDirty);
+updateSaveBtn();
+(async ()=>{
+  const initialHash=location.hash;
+  await loadAllLevels();
+  // Restore the previously selected level by ID (#sel=<id>).
+  const selM=initialHash.match(/[#&]sel=([a-z0-9]+)/);
+  if(selM){
+    const idx=levels.findIndex(l=>l.id===selM[1]);
+    if(idx>=0) setCurrent(idx);
+  }
+  // Auto-import a level shared via the URL hash (#lvl=...) as a new entry,
+  // then immediately clear the hash so a refresh can't re-import a duplicate.
+  const m=initialHash.match(/[#&]lvl=([A-Za-z0-9\-_]+)/);
+  if(m){
+    history.replaceState(null,'',location.pathname+location.search);
+    try{
+      const lv=normalizeLevel(levelFromString(m[1]));
+      lv.id=genLevelId(); // always assign a fresh ID on import
+      levels.splice(curIdx+1,0,lv);
+      markDirty();
+      setCurrent(curIdx+1);
+    }catch(e){/* ignore bad hash */}
+  }
+  resize();
+})();
