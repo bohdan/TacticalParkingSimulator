@@ -11,8 +11,9 @@
  * VALUE TYPES: Pose {x,y,h}, Point {x,y}, Polygon (array of points), VehicleSpec
  * {len,wid,wb,rOver,fOver,maxSteer}, Collision {pose,point}, MoveResult {pts,end,hit} and
  * Shape {poly,bc} are plain readable structs — read their fields directly. Move is the one
- * encapsulated type: its `_steer` (radians) / `_dist` are private (underscore-prefixed) and
- * read only via the move* helpers (degrees in/out, 'L'|'R'|'S' TurnDirection, wire string).
+ * encapsulated type: its `_sd` (steer, degrees, snapped to STEER_Q) / `_n` (signed integer
+ * step count at DIST_Q m/step) are private (underscore-prefixed) and read only via the
+ * move* helpers (degrees in/out, 'L'|'R'|'S' TurnDirection, wire string).
  *
  * Generic 2D geometry (SAT, hull, point-in-polygon, segment math) lives in geometry2d.js
  * (`Geom2D`); this file owns only the vehicle/kinematics/collision-orchestration layer.
@@ -26,6 +27,8 @@ export const Physics = (function (G) {
   /* ─── PhysicsStatics: constants ────────────────────────────────────────── */
 
   const SAMPLE_STEP = 0.06; // m, default collision sampling step along a path
+  const STEER_Q = 0.2;     // deg, player steering input grid
+  const DIST_Q  = 0.05;    // m,   player distance input grid
 
   // Vehicle registry. `fOver` (front overhang) is derived: len - wb - rOver.
   const VEHICLE_DEFS = {
@@ -77,18 +80,22 @@ export const Physics = (function (G) {
 
   /* ─── Move (control intent; vehicle-independent; encapsulated) ──────────── */
 
-  // Move(steeringDegrees, signedDistanceMeters). One allocation per user move — never hot.
+  // Move(steeringDegrees, signedDistanceMeters).
+  // Internally: _sd = steer snapped to STEER_Q (deg), _n = signed step count at DIST_Q.
+  // This representation enables O(1) integer-key lookup into the kernel's precomputed
+  // steer table without any float-to-int conversion at the call site.
   function Move(steeringDegrees, signedDistanceMeters) {
-    return Object.freeze({ _steer: rad(steeringDegrees), _dist: signedDistanceMeters });
+    const _sd = Math.round(steeringDegrees / STEER_Q) * STEER_Q;
+    const _n  = Math.round(signedDistanceMeters / DIST_Q);
+    return Object.freeze({ _sd, _n });
   }
-  const moveTurnDirection = m => Math.abs(m._steer) < 1e-4 ? 'S' : (m._steer > 0 ? 'L' : 'R');
-  const moveDirection     = m => m._dist >= 0 ? 1 : -1;
-  const moveDistance      = m => m._dist;
-  const moveSteeringDegrees = m => deg(m._steer);
+  const moveTurnDirection   = m => Math.abs(m._sd) < 0.1 ? 'S' : (m._sd > 0 ? 'L' : 'R');
+  const moveDirection       = m => m._n >= 0 ? 1 : -1;
+  const moveDistance        = m => Math.round(m._n * DIST_Q * 100) / 100;
+  const moveSteeringDegrees = m => m._sd;
 
   // Serialization — format owned by physics; callers treat the string as opaque.
-  const round = (v, q) => Math.round(v * q) / q;
-  const moveToString = m => `${round(deg(m._steer), 10)}:${round(m._dist, 100)}`;
+  const moveToString = m => `${m._sd}:${moveDistance(m)}`;
   function parseMove(s) {
     const [d, dist] = s.split(':').map(Number);
     return Move(d, dist);
@@ -141,6 +148,73 @@ export const Physics = (function (G) {
       return [pt(x0, y0), pt(x1, y0), pt(x1, y1), pt(x0, y1)];
     }
     function carShape(p) { return makeShape(carPolygon(p)); }
+
+    // ── Precomputed steer geometry table ──────────────────────────────────
+    // Integer key for steer in degrees: avoids float-equality Map mismatches.
+    // STEER_Q=0.2 → key=Math.round(sd*10), e.g. 0.2→2, 35.0→350, -0.2→-2.
+    const _siKey = sd => Math.round(sd * 10);
+
+    const nSteerSteps = Math.round(spec.maxSteer / STEER_Q);
+    const NS = 2 * nSteerSteps + 1;
+    const steers = new Array(NS);
+    for (let i = 0; i < NS; i++) steers[i] = (i - nSteerSteps) * STEER_Q;
+    const steerMap = new Map(steers.map((sd, si) => [_siKey(sd), si]));
+
+    // Car corners in local frame (rear axle at origin, heading = +x direction).
+    const locCorners = [
+      [-spec.rOver,          -spec.wid / 2],
+      [spec.wb + spec.fOver, -spec.wid / 2],
+      [spec.wb + spec.fOver,  spec.wid / 2],
+      [-spec.rOver,           spec.wid / 2],
+    ];
+    const locEdges = locCorners.map((c, i) => [c, locCorners[(i + 1) % 4]]);
+
+    // Per-steer geometry: R, corner radii from C, true inner/outer radii.
+    // Turn center in local frame for steer s: C_local = (0, R) where R = wb/tan(s).
+    const steerTable = new Array(NS);
+    for (let si = 0; si < NS; si++) {
+      const s = steers[si] * Math.PI / 180;
+      const R = Math.abs(s) < 1e-4 ? Infinity : wheelbase / Math.tan(s);
+      const cornerRadii = locCorners.map(([cx, cy]) =>
+        isFinite(R) ? Math.hypot(cx, cy - R) : Infinity);
+      // True rMin: min distance from C=(0,R) to the car boundary (edge-based, not just corners).
+      // Using only corners would undercount: C can project perpendicularly onto an edge.
+      let trueRMin = isFinite(R) ? Infinity : 0;
+      if (isFinite(R)) {
+        for (const [[ax, ay], [bx, by]] of locEdges)
+          trueRMin = Math.min(trueRMin, pointToSegmentDistance(0, R, ax, ay, bx, by));
+      }
+      steerTable[si] = Object.freeze({
+        R, absR: Math.abs(R),
+        cornerRadii,
+        rMin: trueRMin,
+        rMax: Math.max(...cornerRadii),
+      });
+    }
+
+    // Local-frame delta table for fast arc advancement without per-step trig.
+    // Index: si * MAX_ND + n  (n = 1 .. MAX_ND-1 forward steps).
+    // dDx[si,n] = R*sin(n*DQ/R), dDy[si,n] = R*(1−cos(n*DQ/R)), dDh[si,n] = n*DQ/R.
+    // Reverse: negate dDx and dDh; dDy unchanged (same lateral offset magnitude).
+    const MAX_ND = 250; // covers 12.5 m at 0.05 m/step
+    const dDx = new Float64Array(NS * MAX_ND);
+    const dDy = new Float64Array(NS * MAX_ND);
+    const dDh = new Float64Array(NS * MAX_ND);
+    for (let si = 0; si < NS; si++) {
+      const R = steerTable[si].R, base = si * MAX_ND;
+      if (!isFinite(R)) {
+        for (let n = 1; n < MAX_ND; n++) dDx[base + n] = n * DIST_Q; // dDy, dDh stay 0
+      } else {
+        for (let n = 1; n < MAX_ND; n++) {
+          const a = n * DIST_Q / R;
+          dDx[base + n] = R * Math.sin(a);
+          dDy[base + n] = R * (1 - Math.cos(a));
+          dDh[base + n] = a;
+        }
+      }
+    }
+
+    const _precomp = Object.freeze({ steers, steerTable, steerMap, _siKey, dDx, dDy, dDh, MAX_ND });
 
     // ── goal geometry / fit ───────────────────────────────────────────────
     // goalPolygon: the goal zone as an opaque Polygon (axis-aligned or oriented box).
@@ -209,53 +283,166 @@ export const Physics = (function (G) {
       }
       return false;
     }
-    // simulateMove: swept, continuous collision (convex hull of consecutive poses).
+
+    // ── Analytic swept-arc collision ──────────────────────────────────────
+    // sweepCollides: exact swept-envelope test for one constant-steer sub-step.
+    // Returns the first shape that the car hits (or null). Replaces the convex-hull
+    // approximation: for arc moves the car sweeps an annular sector, not a convex hull.
+    //
+    // Phases:
+    //   0  bounding-circle broad-phase (annular sector outer/inner for arcs)
+    //   1  endpoint SAT at start and end poses (catches initial/final overlap)
+    //   straight only: SAT on convex hull of start+end polygon (exact for straight)
+    //   arc 2a  car corner i traces a circle of radius cornR[i]; find where it crosses
+    //            each obstacle edge and check if the crossing bearing is in the sweep arc
+    //   arc 2b  obstacle vertex j at distance rOv from C; in the co-rotating frame it
+    //            moves backward; find where its orbit (radius rOv) crosses each car edge
+    //            from the start polygon and check if the crossing is in [−Delta] arc
+
+    const TWO_PI = 2 * Math.PI;
+    function inSweepArc(phi, phi0, Delta) {
+      if (Math.abs(Delta) < 1e-9) return false;
+      if (Delta > 0)
+        return ((phi - phi0) % TWO_PI + TWO_PI) % TWO_PI <= Delta + 1e-9;
+      else
+        return ((phi0 - phi) % TWO_PI + TWO_PI) % TWO_PI <= -Delta + 1e-9;
+    }
+
+    function sweepCollides(start, steer, dist, shapes) {
+      if (!shapes.length || Math.abs(dist) < 1e-9) return null;
+      const startPoly = carPolygon(start);
+      const end = advancePose(start, steer, dist);
+      const endPoly = carPolygon(end);
+      const isStr = Math.abs(steer) < 1e-4;
+      const R = isStr ? Infinity : wheelbase / Math.tan(steer);
+      const Delta = isStr ? 0 : dist / R;   // signed arc angle swept (CCW > 0)
+
+      let Cx, Cy, cornBear, cornR, rMin, rMax;
+      if (!isStr) {
+        Cx = start.x - Math.sin(start.h) * R;
+        Cy = start.y + Math.cos(start.h) * R;
+        // Look up precomputed steer geometry (works for any steer on the STEER_Q grid).
+        const si = steerMap.get(_siKey(deg(steer)));
+        const sg = si != null ? steerTable[si] : null;
+        cornBear = startPoly.map(v => Math.atan2(v.y - Cy, v.x - Cx));
+        cornR = sg ? sg.cornerRadii : startPoly.map(v => Math.hypot(v.x - Cx, v.y - Cy));
+        rMin  = sg ? sg.rMin        : cornR.reduce((a, b) => Math.min(a, b), Infinity);
+        rMax  = sg ? sg.rMax        : cornR.reduce((a, b) => Math.max(a, b), 0);
+      }
+
+      for (let oi = 0; oi < shapes.length; oi++) {
+        const shape = shapes[oi], obs = shape.poly, bc = shape.bc;
+
+        // Phase 0: broad-phase
+        if (isStr) {
+          // Straight: obstacle must be within carRadius + |dist| of starting car centre.
+          const ccx = start.x + Math.cos(start.h) * centerOffset;
+          const ccy = start.y + Math.sin(start.h) * centerOffset;
+          const dx = ccx - bc.x, dy = ccy - bc.y;
+          const reach = carRadius + Math.abs(dist);
+          if (dx * dx + dy * dy > (reach + bc.r) * (reach + bc.r)) continue;
+        } else {
+          // Arc: annular-sector outer/inner radius filter around turn centre C.
+          const dx = Cx - bc.x, dy = Cy - bc.y;
+          const distCC = Math.hypot(dx, dy);
+          if (distCC - bc.r > rMax + 0.01) continue;   // all points outside outer arc
+          if (distCC + bc.r < rMin - 0.01) continue;   // all points inside inner arc (not reachable)
+        }
+
+        // Phase 1: endpoint SAT
+        if (polygonsCollide(startPoly, obs)) return shape;
+        if (polygonsCollide(endPoly,   obs)) return shape;
+
+        if (isStr) {
+          // Straight: exact swept region = convex hull of start+end polygon.
+          if (polygonsCollide(convexHull(startPoly.concat(endPoly)), obs)) return shape;
+          continue;
+        }
+
+        // Phase 2a: each car corner traces a circle of radius cornR[ci] around C.
+        // Detect crossings of that circle with each obstacle edge.
+        for (let ci = 0; ci < 4; ci++) {
+          const rk = cornR[ci], phi0 = cornBear[ci];
+          for (let ei = 0; ei < obs.length; ei++) {
+            const A = obs[ei], B = obs[(ei + 1) % obs.length];
+            const ax = A.x - Cx, ay = A.y - Cy;
+            const bx = B.x - A.x, by = B.y - A.y;
+            const qa = bx * bx + by * by; if (qa < 1e-12) continue;
+            const qb = 2 * (ax * bx + ay * by);
+            const qc = ax * ax + ay * ay - rk * rk;
+            const disc = qb * qb - 4 * qa * qc; if (disc < 0) continue;
+            const sq = Math.sqrt(disc);
+            for (const t of [(-qb - sq) / (2 * qa), (-qb + sq) / (2 * qa)]) {
+              if (t < -1e-9 || t > 1 + 1e-9) continue;
+              const phi = Math.atan2(A.y + t * by - Cy, A.x + t * bx - Cx);
+              if (inSweepArc(phi, phi0, Delta)) return shape;
+            }
+          }
+        }
+
+        // Phase 2b: obstacle vertex at distance rOv from C, orbit radius rOv.
+        // In the co-rotating frame the vertex moves backward (−Delta); find where its
+        // orbit crosses a car edge from startPoly, then check if the bearing is in [−Delta].
+        for (let vi = 0; vi < obs.length; vi++) {
+          const Ov = obs[vi];
+          const rOv = Math.hypot(Ov.x - Cx, Ov.y - Cy);
+          if (rOv < rMin - 0.01 || rOv > rMax + 0.01) continue;
+          const phi_Ov = Math.atan2(Ov.y - Cy, Ov.x - Cx);
+          for (let ei = 0; ei < 4; ei++) {
+            const A = startPoly[ei], B = startPoly[(ei + 1) % 4];
+            const ax = A.x - Cx, ay = A.y - Cy;
+            const bx = B.x - A.x, by = B.y - A.y;
+            const qa = bx * bx + by * by; if (qa < 1e-12) continue;
+            const qb = 2 * (ax * bx + ay * by);
+            const qc = ax * ax + ay * ay - rOv * rOv;
+            const disc = qb * qb - 4 * qa * qc; if (disc < 0) continue;
+            const sq = Math.sqrt(disc);
+            for (const t of [(-qb - sq) / (2 * qa), (-qb + sq) / (2 * qa)]) {
+              if (t < -1e-9 || t > 1 + 1e-9) continue;
+              const phi_int = Math.atan2(A.y + t * by - Cy, A.x + t * bx - Cx);
+              if (inSweepArc(phi_int, phi_Ov, -Delta)) return shape;
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    // simulateMove: swept, continuous collision using sweepCollides per sub-step.
     function simulateMove(start, steer, dist, shapes, step) {
       const n = Math.max(2, Math.ceil(Math.abs(dist) / (step || sampleStep)));
       const pts = [start];
       let hit = null;
-      const stepLen = Math.abs(dist) / n;
-      let prevPoly = carPolygon(start);
+      const subDist = dist / n;
+      let prevPose = start;
       for (let i = 1; i <= n; i++) {
-        const p = advancePose(start, steer, dist * i / n);
-        const curPoly = carPolygon(p);
-        let swept = null;
-        const ccx = p.x + Math.cos(p.h) * centerOffset, ccy = p.y + Math.sin(p.h) * centerOffset;
-        for (let oi = 0; oi < shapes.length; oi++) {
-          const o = shapes[oi], bc = o.bc;
-          const dx = ccx - bc.x, dy = ccy - bc.y, rr = carRadius + stepLen + bc.r;
-          if (dx * dx + dy * dy > rr * rr) continue;
-          if (!swept) swept = convexHull(prevPoly.concat(curPoly));
-          if (polygonsCollide(swept, o.poly)) {
-            hit = { pose: p, point: contactPoint(curPoly, o.poly) };
-            break;
-          }
+        const curPose = advancePose(start, steer, dist * i / n);
+        const hitShape = sweepCollides(prevPose, steer, subDist, shapes);
+        if (hitShape) {
+          hit = { pose: curPose, point: contactPoint(carPolygon(curPose), hitShape.poly) };
+          break;
         }
-        if (hit) break;
-        pts.push(p);
-        prevPoly = curPoly;
+        pts.push(curPose);
+        prevPose = curPose;
       }
       return { pts, end: pts[pts.length - 1], hit };
     }
 
     // ── gameplay surface ──────────────────────────────────────────────────
-    // The kernel owns each operation and returns the result directly (a bool from
-    // inGoal, a Polygon from goalPolygon) — callers read fields, no accessors.
     const applyMove = (pose, move, shapes, step) =>
-      simulateMove(pose, move._steer, move._dist, shapes, step);
-    const moveTurnRadius = move => turnRadius(move._steer);
+      simulateMove(pose, move._sd * Math.PI / 180, move._n * DIST_Q, shapes, step);
+    const moveTurnRadius = move => turnRadius(move._sd * Math.PI / 180);
 
     // ── createSolver(): kernel-bound Solver (Component 1c) ────────────────
-    // The search STRATEGY (A*, dock, anytime) is the large deferred port; this is the
-    // interface, bound to THIS kernel and standing on the low-level surface above.
     function createSolver() { return makeSolver(kernel); }
 
     const kernel = {
       config, spec,
       // private intra-component internals (for the bundled Solver / low-level use)
       _wheelbase: wheelbase, _carRadius: carRadius, _centerOffset: centerOffset,
+      _precomp,
       advancePose, turnRadius, arcCenter, carPolygon, carShape,
-      poseCollides, simulateMove,
+      poseCollides, simulateMove, sweepCollides,
       // gameplay surface
       goalPolygon, inGoal, parkingClearance, distToGoalBoundary, distCarToGoal,
       applyMove, moveTurnRadius, createSolver,
@@ -265,10 +452,6 @@ export const Physics = (function (G) {
 
   /* ─── Solver (Component 1c) — bound to a kernel ─────────────────────────── */
 
-  // The weighted-A* / dock-interval search lives in solver.js. To avoid an import cycle
-  // (solver.js imports this module), solver.js registers its factory via _useSolver() on
-  // load; createSolver() then resolves through it. A kernel built for collision-only use
-  // never calls createSolver and so needs no solver.
   let _solverFactory = null;
   const _useSolver = factory => { _solverFactory = factory; };
   function makeSolver(kernel) {
@@ -281,7 +464,7 @@ export const Physics = (function (G) {
 
   return {
     // constants / registry
-    SAMPLE_STEP, VEHICLES, vehicleSpecFor,
+    SAMPLE_STEP, STEER_Q, DIST_Q, VEHICLES, vehicleSpecFor,
     // math
     rad, deg, clamp, normalizeAngle,
     // (generic 2D geometry lives in Geom2D / geometry2d.js — not re-exported here)

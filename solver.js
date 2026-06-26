@@ -33,21 +33,20 @@
 //
 // solveParkingLevel(def, opts, cb) -> Promise<{steer (deg), dist (m)}[] | null>
 
-const STEER_Q = 0.2;   // deg, player steering input grid
-const DIST_Q  = 0.05;  // m,   player distance input grid
-
 // Physics layer.
 import { Physics as P } from './physics-kernel.js';
 import { Geom2D as G } from './geometry2d.js';
 import { Scene as SceneMod } from './scene.js';
+const STEER_Q = P.STEER_Q, DIST_Q = P.DIST_Q;
 const rad = P.rad, deg = P.deg, normAng = P.normalizeAngle, SAMPLE_STEP = P.SAMPLE_STEP;
 const polysCollide = G.polygonsCollide, polyBC = G.polygonBoundingCircle;
 const buildLevel = SceneMod.buildLevel;
-// These five resolve to the active kernel's methods/spec, set by _bindKernel().
-let advance, carPoly, simulateMove, inGoal, CAR;
+// These resolve to the active kernel's methods/spec, set by _bindKernel().
+let advance, carPoly, simulateMove, inGoal, CAR, _precomp;
 function _bindKernel(kernel) {
   advance = kernel.advancePose; carPoly = kernel.carPolygon;
   simulateMove = kernel.simulateMove; inGoal = kernel.inGoal; CAR = kernel.spec;
+  _precomp = kernel._precomp || null;
 }
 // Public surface. makeSolver binds an existing kernel; solveParkingLevel builds one.
 export function makeSolver(kernel) {
@@ -337,8 +336,18 @@ async function bruteForceKernelFast(geom, prm, emit, shouldStop, yieldHook, best
 
   // ── Precompute ─────────────────────────────────────────────────────────────
 
+  // Map each solver steer to the kernel's precomp index (−1 if not on grid).
+  const prec = _precomp;
   const R_tab = new Float64Array(NS), absR_tab = new Float64Array(NS);
   for (let si = 0; si < NS; si++) {
+    if (prec) {
+      const gi = prec.steerMap.get(prec._siKey(STEERS[si]));
+      if (gi != null) {
+        R_tab[si] = prec.steerTable[gi].R;
+        absR_tab[si] = prec.steerTable[gi].absR;
+        continue;
+      }
+    }
     const s = rad(STEERS[si]);
     R_tab[si] = Math.abs(s) < 1e-4 ? Infinity : wb / Math.tan(s);
     absR_tab[si] = Math.abs(R_tab[si]);
