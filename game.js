@@ -6,6 +6,7 @@ import { CAR, SEDAN, setVehicle, SAMPLE_STEP, advance, carPoly, goalPoly, pointI
          simulateMove, buildLevel, inGoal, distCarToGoal, normAng, rad, deg, clamp } from './physics-compat.js';
 import { LEVELS } from './levels.js';
 import * as Leaderboard from './leaderboard.js';
+import { Renderer } from './render.js';
 
 /* ===================== Levels ===================== */
 
@@ -486,213 +487,6 @@ function drawPoly(poly) {
   ctx.closePath();
 }
 
-function roundRect(x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-function drawCarBody(pose, opts, spec) {
-  spec = spec || CAR;
-  const vtype = opts.vehicle || 'default';
-  ctx.save();
-  ctx.translate(pose.x, pose.y);
-  ctx.rotate(pose.h);
-  const x0 = -spec.rOver, len = spec.len, w = spec.wid;
-  // wheel offset from car centerline (inset by ~0.16 m regardless of vehicle width)
-  const wy = w / 2 - 0.16;
-  // wheel box scales with vehicle length; bus wheels are larger
-  const wl = Math.min(0.9, len * 0.075), wt = Math.min(0.18, w * 0.10);
-
-  if (opts.wheels && vtype === 'tractor') {
-    // Rear: large drive wheels with tread and brass hub; outer edge pinned to bounding box.
-    const rRad = 0.24, rLen = 0.65, rCy = w / 2 - rRad;
-    // Front: narrow steered wheels.
-    const fRad = 0.10, fLen = 0.28, fCy = w / 2 - fRad;
-    for (const sign of [-1, 1]) {
-      ctx.save(); ctx.translate(0, sign * rCy);
-      ctx.fillStyle = '#0d0f14'; ctx.fillRect(-rLen / 2, -rRad, rLen, rRad * 2);
-      ctx.fillStyle = '#1e2228';
-      for (let g = 0; g < 5; g++) { // tread bands
-        const ty = -rRad + rRad * 2 * (g + 0.25) / 5;
-        ctx.fillRect(-rLen * 0.45, ty, rLen * 0.9, rRad * 0.22);
-      }
-      ctx.fillStyle = '#c8a030'; ctx.beginPath(); ctx.arc(0, 0, rRad * 0.44, 0, 2 * Math.PI); ctx.fill();
-      ctx.fillStyle = '#111';    ctx.beginPath(); ctx.arc(0, 0, rRad * 0.20, 0, 2 * Math.PI); ctx.fill();
-      ctx.fillStyle = '#c8a030';
-      for (let i = 0; i < 6; i++) { // lug bolts
-        const a = i * Math.PI / 3;
-        ctx.beginPath(); ctx.arc(Math.cos(a) * rRad * 0.32, Math.sin(a) * rRad * 0.32, rRad * 0.07, 0, 2 * Math.PI); ctx.fill();
-      }
-      ctx.restore();
-      ctx.save(); ctx.translate(spec.wb, sign * fCy); ctx.rotate(opts.steer || 0);
-      ctx.fillStyle = '#0d0f14'; ctx.fillRect(-fLen / 2, -fRad, fLen, fRad * 2);
-      ctx.fillStyle = '#888'; ctx.beginPath(); ctx.arc(0, 0, fRad * 0.40, 0, 2 * Math.PI); ctx.fill();
-      ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0, 0, fRad * 0.18, 0, 2 * Math.PI); ctx.fill();
-      ctx.restore();
-    }
-    // front axle beam (rotates with steer) — thin pipe
-    ctx.save(); ctx.translate(spec.wb, 0); ctx.rotate(opts.steer || 0);
-    ctx.strokeStyle = '#3a4050'; ctx.lineWidth = 0.04;
-    ctx.beginPath(); ctx.moveTo(0, -fCy); ctx.lineTo(0, fCy); ctx.stroke();
-    ctx.restore();
-  } else if (opts.wheels) {
-    ctx.fillStyle = '#10131a';
-    // Bus rides on a dual rear axle; others have a single rear pair.
-    const axles = vtype === 'bus'
-      ? [[spec.wb * 0.06, 0], [spec.wb * 0.92, opts.steer || 0], [spec.wb, opts.steer || 0]]
-      : [[0, 0], [spec.wb, opts.steer || 0]];
-    for (const [wx, a] of axles)
-      for (const wya of [-wy, wy]) {
-        ctx.save();
-        ctx.translate(wx, wya);
-        ctx.rotate(a);
-        ctx.fillRect(-wl / 2, -wt, wl, wt * 2);
-        ctx.restore();
-      }
-  }
-
-  // Body — tractor is Lamborghini orange T-shape; Miata red; bus/sedan normal.
-  if (vtype === 'tractor') {
-    const jx = x0 + len * 0.54;
-    const cabW = w * 0.80, hoodW = w * 0.44;
-    const tFill = opts.fill || '#d46020', tStroke = opts.fill ? opts.stroke : '#7a3500';
-    ctx.fillStyle = tFill; ctx.lineWidth = 0.07; ctx.strokeStyle = tStroke;
-    roundRect(x0, -cabW / 2, jx - x0, cabW, 0.12); ctx.fill(); if (tStroke) ctx.stroke();
-    roundRect(jx, -hoodW / 2, x0 + len - jx, hoodW, 0.10); ctx.fill(); if (tStroke) ctx.stroke();
-  } else {
-    const fill = vtype === 'miata' ? '#d23b3b' : opts.fill;
-    const corner = vtype === 'bus' ? Math.min(0.18, w * 0.08) : Math.min(0.3, w * 0.17);
-    roundRect(x0, -w / 2, len, w, corner);
-    ctx.fillStyle = fill; ctx.fill();
-    if (opts.stroke) {
-      ctx.lineWidth = 0.07;
-      ctx.strokeStyle = vtype === 'miata' ? '#7d1f1f' : opts.stroke;
-      ctx.stroke();
-    }
-  }
-
-  if (opts.detail) {
-    if (vtype === 'bus')        drawBusDetail(x0, len, w);
-    else if (vtype === 'miata') drawConvertibleDetail(x0, len, w);
-    else if (vtype === 'tractor') drawTractorDetail(x0, len, w);
-    else                        drawSedanDetail(x0, len, w);
-  }
-  ctx.restore();
-}
-
-// Top-down Lamborghini R480: open cab with ROPS arch, large rear wheels flanking.
-function drawTractorDetail(x0, len, w) {
-  const front = x0 + len;
-  const jx = x0 + len * 0.54;
-  const cabW = w * 0.80, hoodW = w * 0.44;
-
-  // ROPS arch — thick bar across cab just behind the hood junction
-  ctx.strokeStyle = '#9aab8a'; ctx.lineWidth = 0.13; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(jx - 0.12, -cabW * 0.44); ctx.lineTo(jx - 0.12, cabW * 0.44); ctx.stroke();
-
-  // Operator platform floor
-  ctx.fillStyle = 'rgba(10,8,5,0.58)';
-  roundRect(x0 + len * 0.06, -cabW / 2 + 0.18, len * 0.44, cabW - 0.36, 0.10); ctx.fill();
-
-  // Seat
-  ctx.fillStyle = '#1a1210';
-  roundRect(x0 + len * 0.10, -0.20, len * 0.14, 0.40, 0.07); ctx.fill();
-
-  // Steering wheel
-  ctx.strokeStyle = '#1a1c20'; ctx.lineWidth = 0.07;
-  ctx.beginPath(); ctx.arc(x0 + len * 0.34, 0, 0.17, 0, 2 * Math.PI); ctx.stroke();
-
-  // Hood vent slats
-  ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 0.04; ctx.lineCap = 'butt';
-  const vS = jx + (front - jx) * 0.12, vE = front - 0.28;
-  for (let v = -1; v <= 1; v++) {
-    ctx.beginPath(); ctx.moveTo(vS, v * hoodW * 0.24); ctx.lineTo(vE, v * hoodW * 0.24); ctx.stroke();
-  }
-
-  // Exhaust stack (right side, mid-hood)
-  const exX = jx + (front - jx) * 0.52, exY = hoodW / 2 - 0.13;
-  ctx.fillStyle = '#111318'; ctx.beginPath(); ctx.arc(exX, exY, 0.09, 0, 2 * Math.PI); ctx.fill();
-  ctx.fillStyle = '#2d2d2d'; ctx.beginPath(); ctx.arc(exX, exY, 0.055, 0, 2 * Math.PI); ctx.fill();
-
-  // Headlights at front
-  ctx.fillStyle = '#ffe9a8';
-  ctx.fillRect(front - 0.13, -hoodW / 2 + 0.06, 0.09, 0.16);
-  ctx.fillRect(front - 0.13,  hoodW / 2 - 0.22, 0.09, 0.16);
-
-  // Taillights at rear cab corners
-  ctx.fillStyle = '#cc2020';
-  ctx.fillRect(x0, -cabW / 2 + 0.06, 0.09, 0.14);
-  ctx.fillRect(x0,  cabW / 2 - 0.20, 0.09, 0.14);
-}
-
-function drawSedanDetail(x0, len, w) {
-  const wsX = x0 + len * 0.30, rwX = x0 + len * 0.09, glH = w - 0.44;
-  ctx.fillStyle = 'rgba(8,12,18,0.45)';
-  roundRect(wsX, -w / 2 + 0.22, Math.min(0.85, len * 0.20), glH, 0.15); ctx.fill();
-  roundRect(rwX, -w / 2 + 0.25, Math.min(0.6, len * 0.13), glH, 0.15); ctx.fill();
-  ctx.fillStyle = '#ffe9a8';
-  ctx.fillRect(x0 + len - 0.18, -w / 2 + 0.15, 0.12, Math.min(0.3, w * 0.17));
-  ctx.fillRect(x0 + len - 0.18,  w / 2 - 0.45, 0.12, Math.min(0.3, w * 0.17));
-}
-
-// Top-down convertible: open cockpit (no roof), small raked windshield,
-// two seats and a roll hoop behind them.
-function drawConvertibleDetail(x0, len, w) {
-  const cockpitX = x0 + len * 0.16, cockpitLen = len * 0.46;
-  // open interior tub
-  ctx.fillStyle = '#2a1010';
-  roundRect(cockpitX, -w / 2 + 0.20, cockpitLen, w - 0.40, 0.12); ctx.fill();
-  // two seats
-  ctx.fillStyle = '#3a2424';
-  const seatW = cockpitLen * 0.42, seatH = (w - 0.40) / 2 - 0.12;
-  roundRect(cockpitX + cockpitLen * 0.12, -w / 2 + 0.30, seatW, seatH, 0.08); ctx.fill();
-  roundRect(cockpitX + cockpitLen * 0.12,  0.06,          seatW, seatH, 0.08); ctx.fill();
-  // raked windshield at the front of the cockpit
-  ctx.fillStyle = 'rgba(150,200,230,0.55)';
-  roundRect(cockpitX + cockpitLen - 0.04, -w / 2 + 0.24, 0.14, w - 0.48, 0.06); ctx.fill();
-  // roll hoop behind the seats
-  ctx.fillStyle = '#1a1414';
-  ctx.fillRect(cockpitX - 0.02, -w / 2 + 0.30, 0.12, w - 0.60);
-  // headlights
-  ctx.fillStyle = '#ffe9a8';
-  ctx.fillRect(x0 + len - 0.16, -w / 2 + 0.14, 0.10, 0.26);
-  ctx.fillRect(x0 + len - 0.16,  w / 2 - 0.40, 0.10, 0.26);
-}
-
-// Bus: full-width front windscreen, a long row of side windows on each
-// flank, and a door line near the front.
-function drawBusDetail(x0, len, w) {
-  const front = x0 + len;
-  // wraparound windscreen
-  ctx.fillStyle = 'rgba(120,170,210,0.55)';
-  roundRect(front - 0.5, -w / 2 + 0.18, 0.34, w - 0.36, 0.1); ctx.fill();
-  // side window strips
-  const winX = x0 + len * 0.12, winLen = len * 0.66, strip = 0.26;
-  ctx.fillStyle = 'rgba(120,170,210,0.45)';
-  roundRect(winX, -w / 2 + 0.14, winLen, strip, 0.08); ctx.fill();
-  roundRect(winX,  w / 2 - 0.14 - strip, winLen, strip, 0.08); ctx.fill();
-  // window mullions
-  ctx.strokeStyle = 'rgba(20,30,40,0.5)'; ctx.lineWidth = 0.04;
-  const n = 6;
-  for (let i = 1; i < n; i++) {
-    const mx = winX + winLen * i / n;
-    ctx.beginPath(); ctx.moveTo(mx, -w / 2 + 0.14); ctx.lineTo(mx, -w / 2 + 0.14 + strip); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(mx,  w / 2 - 0.14 - strip); ctx.lineTo(mx, w / 2 - 0.14); ctx.stroke();
-  }
-  // front door
-  ctx.fillStyle = 'rgba(30,40,52,0.7)';
-  roundRect(front - 1.2, w / 2 - 0.16 - strip - 0.02, 0.5, strip + 0.04, 0.05); ctx.fill();
-  // headlights
-  ctx.fillStyle = '#ffe9a8';
-  ctx.fillRect(front - 0.12, -w / 2 + 0.16, 0.10, 0.3);
-  ctx.fillRect(front - 0.12,  w / 2 - 0.46, 0.10, 0.3);
-}
-
 function drawGhost(pose, color, steer = 0) {
   const wy = CAR.wid / 2 - 0.13;
   ctx.save();
@@ -955,7 +749,7 @@ function draw(now) {
       const ty = tr.y + Math.sin(tr.h) * d;
       const rearX = tx - Math.cos(tr.h) * (SEDAN.len / 2 - SEDAN.rOver);
       const rearY = ty - Math.sin(tr.h) * (SEDAN.len / 2 - SEDAN.rOver);
-      drawCarBody({ x: rearX, y: rearY, h: tr.h },
+      Renderer.drawCarBody(ctx, { x: rearX, y: rearY, h: tr.h },
                   { fill: tr.color || '#4e5a6e', stroke: '#3a4255', detail: false, wheels: false },
                   SEDAN);
     }
@@ -970,7 +764,7 @@ function draw(now) {
       // Default obstacle color is gray; only a lone tractor (player is NOT a
       // tractor) keeps its natural orange body.
       const obstFill = (obstVeh === 'tractor' && !sameAsTractor) ? undefined : '#737d8c';
-      drawCarBody({ x: o.pose.cx - Math.cos(o.pose.h) * (sp.len / 2 - sp.rOver),
+      Renderer.drawCarBody(ctx, { x: o.pose.cx - Math.cos(o.pose.h) * (sp.len / 2 - sp.rOver),
                     y: o.pose.cy - Math.sin(o.pose.h) * (sp.len / 2 - sp.rOver),
                     h: o.pose.h },
                   { fill: obstFill, stroke: '#525a66', detail: true, wheels: true,
@@ -1068,9 +862,9 @@ function draw(now) {
   }
   const pveh = level.vehicle || 'default';
   // Tractor keeps its natural orange body; other vehicles use the blue player color.
-  drawCarBody(carPose, { fill: pveh === 'tractor' ? undefined : '#4fc3f7',
+  Renderer.drawCarBody(ctx, carPose, { fill: pveh === 'tractor' ? undefined : '#4fc3f7',
                          stroke: '#1c5f80', detail: true,
-                         wheels: true, steer: carSteer, vehicle: pveh });
+                         wheels: true, steer: carSteer, vehicle: pveh }, CAR);
 
   // goal arrows drawn after the car so they're always visible
   for (const hd of g.heads) {
