@@ -4,24 +4,11 @@
 // Reports any entry that now collides or misses the goal.
 //
 // Usage: node tools/validate_leaderboard.js [--step 0.005]
-'use strict';
-const vm   = require('vm');
-const fs   = require('fs');
-const path = require('path');
-const https = require('https');
-
-const ROOT = path.join(__dirname, '..');
-
-// ── Physics engine (refactored components + the legacy compat surface) ───────
-const ctx = vm.createContext({ Math, Infinity, console, Object, Array, JSON, Float64Array, isFinite });
-for (const f of ['geometry2d.js', 'physics-kernel.js', 'scene.js', 'physics-compat.js', 'levels.js'])
-  vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx);
-const { simulateMove, buildLevel, inGoal, rad, deg, setVehicle,
-        carPoly, advance, convexHull, polysCollide } =
-  ['simulateMove','buildLevel','inGoal','rad','deg','setVehicle',
-   'carPoly','advance','convexHull','polysCollide']
-    .reduce((o, k) => (o[k] = vm.runInContext(k, ctx), o), {});
-const LEVELS = vm.runInContext('LEVELS', ctx);
+// ── Physics engine: the refactored components, via the compat surface ────────
+import https from 'node:https';
+import { LEVELS } from '../levels.js';
+import { simulateMove, buildLevel, inGoal, rad, deg, setVehicle,
+         carPoly, advance, convexHull, polysCollide } from '../physics-compat.js';
 
 // ── Config ──────────────────────────────────────────────────────────────────
 const LB_URL = 'https://qvjorkpzlwvswsptkwyn.supabase.co';

@@ -1,4 +1,4 @@
-const LEVELS = [
+export const LEVELS = [
   {
     id: "gvhx9l",
     type: "cutscene", name: "Briefing",

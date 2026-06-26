@@ -1,4 +1,8 @@
 'use strict';
+import { CAR, setVehicle, advance, carPoly, centroid, normAng, rad, deg } from './physics-compat.js';
+import { solveParkingLevel } from './solver.js';
+import { LEVELS } from './levels.js';
+
 // ── Vehicle specs ────────────────────────────────────────────────────────────
 const VSPEC = {
   default:{ len:4.4,  wid:1.8,  rOver:0.85, wb:2.7   },

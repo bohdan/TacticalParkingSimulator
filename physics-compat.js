@@ -4,19 +4,17 @@
  * delegation to the refactored components: PhysicsKernel (physics-kernel.js), Geom2D
  * (geometry2d.js) and Scene (scene.js).
  *
- * It lets the large, unchanged consumers (game.js, editor.html) keep using the flat,
- * mutable-global API they were written against, while the DUPLICATE algorithms that
- * used to live in physics.js are deleted — the single source of truth is now the
- * components. No game/editor logic changes; behaviour is preserved by construction:
- * every function below forwards to the component the smoke/parity tests pin to the old
- * physics.js numerically.
+ * It lets the large consumers (game.js, editor.js) keep using the flat, named API they
+ * were written against — they `import` these names — while the DUPLICATE algorithms that
+ * used to live in physics.js are deleted: the single source of truth is now the
+ * components. Behaviour is preserved by construction: every function below forwards to
+ * the component the parity tests pin to the old physics.js numerically.
  *
- * Load as a classic browser script AFTER geometry2d/physics-kernel/scene (read as
- * globals). Also require()-able in Node (parity tests).
+ * ES module: imports the components and re-exports the legacy surface.
  */
-const _Phys  = (typeof Physics !== 'undefined') ? Physics : require('./physics-kernel.js');
-const _Geom  = (typeof Geom2D  !== 'undefined') ? Geom2D  : require('./geometry2d.js');
-const _Scene = (typeof Scene   !== 'undefined') ? Scene   : require('./scene.js');
+import { Physics as _Phys } from './physics-kernel.js';
+import { Geom2D as _Geom } from './geometry2d.js';
+import { Scene as _Scene } from './scene.js';
 
 /* ─── Vehicle registry / current vehicle ──────────────────────────────────── */
 // CAR is the MUTABLE current-vehicle dims object: game/editor read CAR.wb/len/… and
@@ -67,12 +65,10 @@ function buildLevel(def) {
   return Object.assign({}, lvl, { obstacles });
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    CAR, SEDAN, VEHICLES, SAMPLE_STEP, setVehicle,
-    rad, deg, clamp, normAng,
-    advance, carPoly, simulateMove, inGoal, goalPoly,
-    polysCollide, pointInPoly, ptSegDist, rectPoly, obbPoly,
-    centroid, contactPoint, convexHull, polyBC, buildLevel,
-  };
-}
+export {
+  CAR, SEDAN, VEHICLES, SAMPLE_STEP, setVehicle,
+  rad, deg, clamp, normAng,
+  advance, carPoly, simulateMove, inGoal, goalPoly,
+  polysCollide, pointInPoly, ptSegDist, rectPoly, obbPoly,
+  centroid, contactPoint, convexHull, polyBC, buildLevel,
+};

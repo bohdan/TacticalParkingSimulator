@@ -3,12 +3,13 @@
 // bruteForceParallel) spawns one of these per CPU slice, hands it a contiguous
 // range of turn-1 steering angles, and streams back validated candidate plans.
 //
-// The component stack is pulled in via importScripts so the worker shares the exact
-// same kinematics / collision / inGoal geometry and the brute-force kernel itself —
-// no logic is duplicated here. solver.js binds to the per-vehicle PhysicsKernel built
-// below; its module.exports line is a no-op in a worker (module is undefined), so the
-// import just defines makeSolver/solveParkingLevel and the Solver global.
-importScripts('geometry2d.js', 'physics-kernel.js', 'scene.js', 'solver.js');
+// The component stack is pulled in via ES-module imports (this is a module worker,
+// spawned with { type: 'module' }) so the worker shares the exact same kinematics /
+// collision / inGoal geometry and the brute-force kernel itself — no logic is
+// duplicated here. Importing solver.js registers its makeSolver with the kernel.
+import { Physics } from './physics-kernel.js';
+import { Scene } from './scene.js';
+import './solver.js';
 
 let stopped = false;
 const best = { v: Infinity, dist: Infinity };

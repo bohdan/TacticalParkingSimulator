@@ -14,7 +14,9 @@
  *
  * Depends on the `Physics` namespace (physics-kernel.js) only for the rad() helper.
  */
-const Renderer = (function (P) {
+import { Physics } from './physics-kernel.js';
+
+export const Renderer = (function (P) {
 
   // drawPolygon(ctx, polygon) — stroke/fill a wall, border, or goal outline.
   function drawPolygon(ctx, polygon) {
@@ -202,6 +204,4 @@ const Renderer = (function (P) {
     drawCarBody, drawGhost,
     drawSteeringWheels, drawSteeringGeometry, drawArcGuides,
   };
-})(typeof Physics !== 'undefined' ? Physics : require('./physics-kernel.js'));
-
-if (typeof module !== 'undefined' && module.exports) module.exports = Renderer;
+})(Physics);

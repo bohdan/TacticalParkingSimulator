@@ -1,10 +1,11 @@
 'use strict';
 
-// physics-compat.js (loaded before this file) provides all shared math and physics
-// as the legacy flat globals, delegating to the refactored components (PhysicsKernel,
-// Geom2D, Scene): CAR, SEDAN, VEHICLES, SAMPLE_STEP, rad, deg, clamp, normAng, advance,
-// carPoly, polysCollide, ptSegDist, rectPoly, obbPoly, goalPoly, pointInPoly,
-// centroid, contactPoint, simulateMove, buildLevel, inGoal, setVehicle.
+// Shared math/physics come from the refactored components via the compat surface
+// (PhysicsKernel / Geom2D / Scene). THREE remains a classic global from three.min.js.
+import { CAR, SEDAN, VEHICLES, setVehicle, SAMPLE_STEP, advance, carPoly, polysCollide,
+         ptSegDist, rectPoly, obbPoly, goalPoly, pointInPoly, centroid, contactPoint,
+         simulateMove, buildLevel, inGoal, normAng, rad, deg, clamp } from './physics-compat.js';
+import { LEVELS } from './levels.js';
 
 /* ===================== Game-specific helpers ===================== */
 

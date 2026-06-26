@@ -9,7 +9,7 @@
  * Operates on plain points {x, y} and polygons (arrays of points, convex & CCW for the SAT
  * and hull routines). Browser global + Node module.
  */
-const Geom2D = (function () {
+export const Geom2D = (function () {
 
   // Axis-aligned rectangle → 4-point polygon (CCW).
   function rectanglePolygon(x, y, w, h) {
@@ -125,5 +125,3 @@ const Geom2D = (function () {
     centroid, contactPoint,
   };
 })();
-
-if (typeof module !== 'undefined' && module.exports) module.exports = Geom2D;

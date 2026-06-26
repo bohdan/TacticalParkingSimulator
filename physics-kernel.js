@@ -19,7 +19,9 @@
  *
  * Works as a browser global and as a Node module (for tests).
  */
-const Physics = (function (G) {
+import { Geom2D } from './geometry2d.js';
+
+export const Physics = (function (G) {
 
   /* ─── PhysicsStatics: constants ────────────────────────────────────────── */
 
@@ -225,15 +227,16 @@ const Physics = (function (G) {
 
   /* ─── Solver (Component 1c) — bound to a kernel ─────────────────────────── */
 
-  // The weighted-A* / dock-interval search lives in solver.js, which binds to this kernel
-  // via its makeSolver(kernel). Resolved lazily (at createSolver() time) so solver.js can
-  // load after this file — and so a kernel built for collision-only use needs no solver.
+  // The weighted-A* / dock-interval search lives in solver.js. To avoid an import cycle
+  // (solver.js imports this module), solver.js registers its factory via _useSolver() on
+  // load; createSolver() then resolves through it. A kernel built for collision-only use
+  // never calls createSolver and so needs no solver.
+  let _solverFactory = null;
+  const _useSolver = factory => { _solverFactory = factory; };
   function makeSolver(kernel) {
-    const impl = (typeof Solver !== 'undefined' && Solver.makeSolver) ? Solver
-               : (typeof require !== 'undefined') ? require('./solver.js') : null;
-    if (!impl || !impl.makeSolver)
-      throw new Error('Solver not loaded — include solver.js (browser) or require it (Node).');
-    return impl.makeSolver(kernel);   // → { solve, bruteForce, validateMoves }
+    if (!_solverFactory)
+      throw new Error('Solver not loaded — import ./solver.js before calling createSolver().');
+    return _solverFactory(kernel);   // → { solve, bruteForce, validateMoves }
   }
 
   /* ─── Public surface ───────────────────────────────────────────────────── */
@@ -252,7 +255,7 @@ const Physics = (function (G) {
     moveToString, parseMove, moveSequenceToString, parseMoveSequence,
     // kernel
     physicsConfigForLevel, PhysicsKernel,
+    // solver registration hook (solver.js calls this on import)
+    _useSolver,
   };
-})(typeof Geom2D !== 'undefined' ? Geom2D : require('./geometry2d.js'));
-
-if (typeof module !== 'undefined' && module.exports) module.exports = Physics;
+})(Geom2D);

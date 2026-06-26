@@ -9,7 +9,9 @@
  *
  * Depends on `Physics` (physics-kernel.js). Browser + Node.
  */
-const Scene = (function (P) {
+import { Physics } from './physics-kernel.js';
+
+export const Scene = (function (P) {
 
   const BORDER = 0.45; // field is fenced by a border this thick
 
@@ -40,8 +42,4 @@ const Scene = (function (P) {
   }
 
   return { buildLevel };
-})(
-  typeof Physics !== 'undefined' ? Physics : require('./physics-kernel.js'),
-);
-
-if (typeof module !== 'undefined' && module.exports) module.exports = Scene;
+})(Physics);

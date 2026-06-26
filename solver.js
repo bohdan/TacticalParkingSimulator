@@ -36,10 +36,10 @@
 const STEER_Q = 0.2;   // deg, player steering input grid
 const DIST_Q  = 0.05;  // m,   player distance input grid
 
-// Physics layer. In the browser these are globals; in Node (and the worker) they load here.
-const P = (typeof Physics !== 'undefined') ? Physics : require('./physics-kernel.js');
-const G = (typeof Geom2D  !== 'undefined') ? Geom2D  : require('./geometry2d.js');
-const SceneMod = (typeof Scene !== 'undefined') ? Scene : require('./scene.js');
+// Physics layer.
+import { Physics as P } from './physics-kernel.js';
+import { Geom2D as G } from './geometry2d.js';
+import { Scene as SceneMod } from './scene.js';
 const rad = P.rad, deg = P.deg, normAng = P.normalizeAngle, SAMPLE_STEP = P.SAMPLE_STEP;
 const polysCollide = G.polygonsCollide, polyBC = G.polygonBoundingCircle;
 const buildLevel = SceneMod.buildLevel;
@@ -50,14 +50,16 @@ function _bindKernel(kernel) {
   simulateMove = kernel.simulateMove; inGoal = kernel.inGoal; CAR = kernel.spec;
 }
 // Public surface. makeSolver binds an existing kernel; solveParkingLevel builds one.
-function makeSolver(kernel) {
+export function makeSolver(kernel) {
   _bindKernel(kernel);
   return { solve: _solve, bruteForce: bruteForceKernelFast, validateMoves };
 }
-async function solveParkingLevel(def, opts = {}, progressCb = null) {
+export async function solveParkingLevel(def, opts = {}, progressCb = null) {
   _bindKernel(P.PhysicsKernel(P.physicsConfigForLevel(def)));
   return _solve(def, opts, progressCb);
 }
+// Register with the kernel so kernel.createSolver() resolves (breaks the import cycle).
+P._useSolver(makeSolver);
 
 function _heapPush(h, s) {
   h.push(s);
@@ -553,7 +555,7 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
         }, 500);
         for (let w = 0; w < want; w++) {
           const wi = w;
-          const wk = new Worker('solver-worker.js');
+          const wk = new Worker('solver-worker.js', { type: 'module' });
           workers.push(wk);
           wk.onmessage = (e) => {
             const m = e.data;
@@ -930,5 +932,4 @@ async function _solve(def, opts = {}, progressCb = null) {
   return bestEntry ? bestEntry.moves : null;
 }
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { makeSolver, solveParkingLevel };
-else if (typeof self !== 'undefined') self.Solver = { makeSolver, solveParkingLevel };
+// (ESM: makeSolver / solveParkingLevel are exported above; no globals.)
