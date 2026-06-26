@@ -610,7 +610,7 @@ function draw(now) {
     Renderer.drawArcGuides(ctx, gPose, CAR, gSteer,
       driveLimit(gPose, gSteer, 1), driveLimit(gPose, gSteer, -1), advance, drawPX);
     const previewPose = editSim ? (editSim.hit ? editSim.hit.pose : editSim.end) : null;
-    Renderer.drawSteerGeometry(ctx, gPose, CAR, gSteer, previewPose, drawPX);
+    Renderer.drawSteeringGeometry(ctx, gPose, CAR, gSteer, previewPose, drawPX);
   }
 
   // committed plan: paths + ghosts
