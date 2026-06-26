@@ -7,8 +7,9 @@
  * directly (pose.x/.y/.h, spec.wb/.wid/…, polygon[i].x). `steeringRadians` is the explicit
  * "turn direction" render slot.
  *
- * Kinematics stays in the kernel: the arc/steering overlays take the caller's
- * advancePose / arcCenter / turnRadius rather than re-deriving motion here. drawCarBody
+ * Kinematics stays in the kernel: drawArcGuides takes the caller's advancePose to roll the
+ * swept arc, and drive limits are passed in precomputed. (The steering overlay derives its
+ * turn centre from the wheelbase — plain drawing trig, not a simulation.) drawCarBody
  * carries the full per-vehicle art (bus/miata/tractor detail, hubs, treads).
  *
  * Depends on the `Physics` namespace (physics-kernel.js) only for the rad() helper.
@@ -27,32 +28,37 @@ export const Renderer = (function (P) {
     ctx.closePath();
   }
 
-  // drawPath(ctx, points, worldPerPixel, color) — the rear-axle trajectory polyline.
-  function drawPath(ctx, points, worldPerPixel, color) {
-    if (points.length < 2) return;
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2 * worldPerPixel;
+  // drawPath(ctx, pts, color, dashed, lw, worldPerPixel) — styled world-space polyline.
+  // Line width is capped at 3·worldPerPixel so it never gets thinner than a few pixels.
+  function drawPath(ctx, pts, color, dashed, lw = 0.09, worldPerPixel = Infinity) {
+    if (pts.length < 2) return;
     ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.lineWidth = Math.min(lw, 3 * worldPerPixel);
+    ctx.strokeStyle = color;
+    if (dashed) ctx.setLineDash([0.35, 0.25]);
     ctx.stroke();
-    ctx.restore();
+    ctx.setLineDash([]);
   }
 
-  // drawArrow(ctx, x, y, heading, size, color) — forward/reverse direction indicator.
-  function drawArrow(ctx, x, y, heading, size, color) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(heading);
-    ctx.fillStyle = color;
+  // drawArrow(ctx, x, y, ang, len, color) — a line with an arrowhead (direction indicator).
+  function drawArrow(ctx, x, y, ang, len, color) {
+    const c = Math.cos(ang), s = Math.sin(ang);
     ctx.beginPath();
-    ctx.moveTo(size, 0);
-    ctx.lineTo(-size * 0.6, size * 0.6);
-    ctx.lineTo(-size * 0.6, -size * 0.6);
+    ctx.moveTo(x - c * len / 2, y - s * len / 2);
+    ctx.lineTo(x + c * len / 2, y + s * len / 2);
+    ctx.lineWidth = 0.12;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    const tx = x + c * len / 2, ty = y + s * len / 2;
+    ctx.beginPath();
+    ctx.moveTo(tx + c * 0.45, ty + s * 0.45);
+    ctx.lineTo(tx - s * 0.28, ty + c * 0.28);
+    ctx.lineTo(tx + s * 0.28, ty - c * 0.28);
     ctx.closePath();
+    ctx.fillStyle = color;
     ctx.fill();
-    ctx.restore();
   }
 
   // Local-frame footprint corners from the spec (render legitimately needs the dims).
@@ -264,112 +270,129 @@ export const Renderer = (function (P) {
     ctx.fillRect(front - 0.12,  w / 2 - 0.46, 0.10, 0.3);
   }
 
-  // drawGhost(ctx, pose, spec, color, steeringRadians?) — dashed footprint outline.
-  function drawGhost(ctx, pose, spec, color, steeringRadians = 0) {
-    const f = footprintLocal(spec);
+  // drawGhost(ctx, pose, spec, color, steer, worldPerPixel) — dashed footprint outline
+  // with dashed wheel boxes and a filled heading notch at the nose.
+  function drawGhost(ctx, pose, spec, color, steer = 0, worldPerPixel = Infinity) {
+    const wy = spec.wid / 2 - 0.13;
     ctx.save();
     ctx.translate(pose.x, pose.y);
     ctx.rotate(pose.h);
-    ctx.setLineDash([0.25, 0.18]);
-    ctx.lineWidth = 0.05;
+    ctx.lineWidth = Math.min(0.07, 2 * worldPerPixel);
     ctx.strokeStyle = color;
-    ctx.strokeRect(f.x0, f.y0, f.x1 - f.x0, f.y1 - f.y0);
-    ctx.setLineDash([]);
-    drawSteeringWheels(ctx, pose, spec, steeringRadians, 0, true);
-    ctx.restore();
-  }
-
-  // drawSteeringWheels(ctx, pose, spec, steeringRadians, worldPerPixel[, _localFrame])
-  function drawSteeringWheels(ctx, pose, spec, steeringRadians, worldPerPixel, _localFrame) {
-    const wb = spec.wb, wy = spec.wid / 2 - 0.16;
-    if (!_localFrame) { ctx.save(); ctx.translate(pose.x, pose.y); ctx.rotate(pose.h); }
-    ctx.fillStyle = '#2bd';
-    for (const side of [-wy, wy]) {
-      ctx.save(); ctx.translate(wb, side); ctx.rotate(steeringRadians || 0);
-      ctx.fillRect(-0.16, -0.08, 0.32, 0.16);
+    ctx.setLineDash([0.25, 0.18]);
+    for (const [wx, wya, a] of [
+      [0, -wy, 0], [0, wy, 0],
+      [spec.wb, -wy, steer], [spec.wb, wy, steer],
+    ]) {
+      ctx.save();
+      ctx.translate(wx, wya);
+      ctx.rotate(a);
+      ctx.strokeRect(-0.33, -0.13, 0.66, 0.26);
       ctx.restore();
     }
-    if (!_localFrame) ctx.restore();
-    void worldPerPixel;
-  }
+    ctx.restore();
+    ctx.setLineDash([]);
 
-  // Styled world-space polyline (solid/dashed, explicit width) for the guide overlays.
-  function strokeGuide(ctx, pts, color, dashed, lineWidth) {
-    if (pts.length < 2) return;
-    ctx.save();
+    // footprint outline (world frame) — same corners as kernel.carPolygon
+    const f = footprintLocal(spec), c = Math.cos(pose.h), s = Math.sin(pose.h);
+    const pt = (lx, ly) => ({ x: pose.x + c * lx - s * ly, y: pose.y + s * lx + c * ly });
+    drawPolygon(ctx, [pt(f.x0, f.y0), pt(f.x1, f.y0), pt(f.x1, f.y1), pt(f.x0, f.y1)]);
+    ctx.lineWidth = Math.min(0.07, 2 * worldPerPixel);
     ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth;
-    if (dashed) ctx.setLineDash([0.35, 0.25]);
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.setLineDash([0.25, 0.18]);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.restore();
+    // heading notch at the nose
+    const nx = pose.x + c * (spec.wb + spec.fOver), ny = pose.y + s * (spec.wb + spec.fOver);
+    ctx.beginPath();
+    ctx.moveTo(nx + c * 0.45, ny + s * 0.45);
+    ctx.lineTo(nx - s * 0.3, ny + c * 0.3);
+    ctx.lineTo(nx + s * 0.3, ny - c * 0.3);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
   }
 
-  // drawSteeringGeometry(ctx, pose, spec, steeringRadians, turnCenter, turnRadius, previewPose, wpp)
-  // The instantaneous turn centre + radius lines (rear axle and both front wheels → centre),
-  // plus the steered front wheels. turnCenter (= kernel.arcCenter) / turnRadius (signed, =
-  // kernel.turnRadius) come from the caller's kernel so the renderer does no kinematics.
-  function drawSteeringGeometry(ctx, pose, spec, steeringRadians, turnCenter, turnRadius, previewPose, worldPerPixel) {
-    if (!turnCenter || Math.abs(steeringRadians) < P.rad(0.5)) return;   // ~straight: centre at infinity
-    const R = turnRadius;                                  // signed: wheelbase / tan(steer)
-    const px = pose.x, py = pose.y, h = pose.h;
-    const ux = -Math.sin(h), uy = Math.cos(h);             // rear-axle axis, toward the centre
-    const O = { x: turnCenter.x, y: turnCenter.y };
+  // drawSteeringWheels(ctx, pose, spec, steerRad, worldPerPixel) — the two front wheels at
+  // `pose`, rotated to `steerRad`, with a cyan outline (part of the steering overlay).
+  function drawSteeringWheels(ctx, pose, spec, steerRad, worldPerPixel = Infinity) {
+    const c = Math.cos(pose.h), s = Math.sin(pose.h);
+    const wy = spec.wid / 2 - 0.16;
+    const wl = Math.min(0.9, spec.len * 0.075), wt = Math.min(0.18, spec.wid * 0.10);
+    for (const ly of [wy, -wy]) {
+      const wx = pose.x + spec.wb * c - ly * s;
+      const wyp = pose.y + spec.wb * s + ly * c;
+      ctx.save();
+      ctx.translate(wx, wyp);
+      ctx.rotate(pose.h + steerRad);
+      ctx.fillStyle = '#10131a';
+      ctx.fillRect(-wl / 2, -wt, wl, wt * 2);
+      ctx.lineWidth = Math.min(0.03, 1.5 * worldPerPixel);
+      ctx.strokeStyle = 'rgba(120,220,255,0.9)';
+      ctx.strokeRect(-wl / 2, -wt, wl, wt * 2);
+      ctx.restore();
+    }
+  }
+
+  // drawSteeringGeometry(ctx, pose, spec, steerRad, previewPose, worldPerPixel) — the rear-axle
+  // axis, the instantaneous turn centre on it, and the radius lines from the rear axle and
+  // both front wheels to that centre (classic Ackermann), plus the steered front wheels.
+  function drawSteeringGeometry(ctx, pose, spec, steerRad, previewPose, worldPerPixel = Infinity) {
+    if (Math.abs(steerRad) < P.rad(0.5)) return;   // ~straight: centre at infinity
+    const R = spec.wb / Math.tan(steerRad);
+    const c = Math.cos(pose.h), s = Math.sin(pose.h);
+    const ux = -s, uy = c;                         // rear-axle axis direction (toward centre)
+    const O = { x: pose.x + R * ux, y: pose.y + R * uy };
     const sgn = Math.sign(R);
-    const at = t => ({ x: px + t * ux, y: py + t * uy });
-    const half = spec.wid / 2 - 0.16;                      // matches drawn wheel inset
-    strokeGuide(ctx, [at(-sgn * 1.0), at(R + sgn * 1.0)], 'rgba(255,255,255,0.28)', false, 0.035);
-    strokeGuide(ctx, [{ x: px, y: py }, O], 'rgba(120,220,255,0.8)', false, 0.045);
-    drawSteeringWheels(ctx, pose, spec, steeringRadians, worldPerPixel);
+    const at = t => ({ x: pose.x + t * ux, y: pose.y + t * uy });
+    const half = spec.wid / 2 - 0.16;              // matches drawn wheel inset
+    drawPath(ctx, [at(-sgn * 1.0), at(R + sgn * 1.0)], 'rgba(255,255,255,0.28)', false, 0.035, worldPerPixel);
+    drawPath(ctx, [{ x: pose.x, y: pose.y }, O], 'rgba(120,220,255,0.8)', false, 0.045, worldPerPixel);
+    drawSteeringWheels(ctx, pose, spec, steerRad, worldPerPixel);
     const fp = previewPose || pose;
     const fc = Math.cos(fp.h), fs = Math.sin(fp.h);
-    const wb = spec.wb, fpx = fp.x, fpy = fp.y;
-    const fw = ly => ({ x: fpx + wb * fc - ly * fs, y: fpy + wb * fs + ly * fc });
-    strokeGuide(ctx, [fw(half), O], 'rgba(255,255,255,0.28)', false, 0.03);
-    strokeGuide(ctx, [fw(-half), O], 'rgba(255,255,255,0.28)', false, 0.03);
-    ctx.save();
+    const fw = ly => ({ x: fp.x + spec.wb * fc - ly * fs, y: fp.y + spec.wb * fs + ly * fc });
+    drawPath(ctx, [fw(half), O], 'rgba(255,255,255,0.28)', false, 0.03, worldPerPixel);
+    drawPath(ctx, [fw(-half), O], 'rgba(255,255,255,0.28)', false, 0.03, worldPerPixel);
     ctx.beginPath();
     ctx.arc(O.x, O.y, 0.12, 0, 2 * Math.PI);
     ctx.fillStyle = 'rgba(120,220,255,0.9)';
     ctx.fill();
-    ctx.restore();
-    void worldPerPixel;
   }
 
-  // drawArcGuides(ctx, pose, spec, steeringRadians, forwardLimit, backwardLimit, advancePose, wpp)
-  // Swept tracks of the 4 footprint corners (solid) and 4 wheels (dashed) over the drivable
-  // arc. The caller supplies its kernel's advancePose so the rollout uses the one kinematics
-  // implementation; forward/backward limits are precomputed by the caller via the kernel.
-  function drawArcGuides(ctx, pose, spec, steeringRadians, forwardLimit, backwardLimit, advancePose, worldPerPixel) {
+  // drawArcGuides(ctx, pose, spec, steerRad, forwardLimit, backwardLimit, advancePose, wpp) —
+  // swept tracks of the 4 footprint corners (solid) and 4 wheels (dashed) over the drivable
+  // arc. The caller supplies its kernel's advancePose and the precomputed drive limits.
+  function drawArcGuides(ctx, pose, spec, steerRad, forwardLimit, backwardLimit, advancePose, worldPerPixel = Infinity) {
     const N = 60;
-    const fLen = spec.wb + spec.fOver;
-    const rOver = spec.rOver, wb = spec.wb, half = spec.wid / 2;
+    const fLen = spec.wb + spec.fOver, half = spec.wid / 2;
     const sample = (limit, dir) => {
-      const t = { cFL: [], cFR: [], cRL: [], cRR: [], wFL: [], wFR: [], wRL: [], wRR: [] };
+      const cFL = [], cFR = [], cRL = [], cRR = [], wFL = [], wFR = [], wRL = [], wRR = [];
       for (let i = 0; i <= N; i++) {
-        const p = advancePose(pose, steeringRadians, dir * limit * i / N);
+        const p = advancePose(pose, steerRad, dir * limit * i / N);
         const cs = Math.cos(p.h), sn = Math.sin(p.h);
-        const px = p.x, py = p.y;
-        const w = (lx, ly) => ({ x: px + cs * lx - sn * ly, y: py + sn * lx + cs * ly });
-        t.cFL.push(w(fLen, half)); t.cFR.push(w(fLen, -half));
-        t.cRL.push(w(-rOver, half)); t.cRR.push(w(-rOver, -half));
-        t.wFL.push(w(wb, half)); t.wFR.push(w(wb, -half));
-        t.wRL.push(w(0, half)); t.wRR.push(w(0, -half));
+        const w = (lx, ly) => ({ x: p.x + cs * lx - sn * ly, y: p.y + sn * lx + cs * ly });
+        cFL.push(w(fLen, half)); cFR.push(w(fLen, -half));
+        cRL.push(w(-spec.rOver, half)); cRR.push(w(-spec.rOver, -half));
+        wFL.push(w(spec.wb, half)); wFR.push(w(spec.wb, -half));
+        wRL.push(w(0, half)); wRR.push(w(0, -half));
       }
-      return t;
+      return { cFL, cFR, cRL, cRR, wFL, wFR, wRL, wRR };
     };
     for (const [limit, dir] of [[forwardLimit, 1], [backwardLimit, -1]]) {
-      if (!(limit > 0.2)) continue;
-      const t = sample(limit, dir);
+      if (limit < 0.2) continue;
+      const { cFL, cFR, cRL, cRR, wFL, wFR, wRL, wRR } = sample(limit, dir);
       const col  = dir > 0 ? 'rgba(69,196,255,0.28)' : 'rgba(255,159,67,0.28)';
       const wCol = dir > 0 ? 'rgba(69,196,255,0.50)' : 'rgba(255,159,67,0.50)';
-      for (const k of ['cFL', 'cFR', 'cRL', 'cRR']) strokeGuide(ctx, t[k], col, false, 0.06);
-      for (const k of ['wFL', 'wFR', 'wRL', 'wRR']) strokeGuide(ctx, t[k], wCol, true, 0.05);
+      drawPath(ctx, cFL, col, false, 0.06, worldPerPixel);
+      drawPath(ctx, cFR, col, false, 0.06, worldPerPixel);
+      drawPath(ctx, cRL, col, false, 0.06, worldPerPixel);
+      drawPath(ctx, cRR, col, false, 0.06, worldPerPixel);
+      drawPath(ctx, wFL, wCol, true, 0.05, worldPerPixel);
+      drawPath(ctx, wFR, wCol, true, 0.05, worldPerPixel);
+      drawPath(ctx, wRL, wCol, true, 0.05, worldPerPixel);
+      drawPath(ctx, wRR, wCol, true, 0.05, worldPerPixel);
     }
-    void worldPerPixel;
   }
 
   return {

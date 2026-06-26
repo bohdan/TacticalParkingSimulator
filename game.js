@@ -480,189 +480,6 @@ function toScreen(p) {
            y: H / 2 + (dx * s + dy * c) * sc };
 }
 
-function drawPoly(poly) {
-  ctx.beginPath();
-  ctx.moveTo(poly[0].x, poly[0].y);
-  for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
-  ctx.closePath();
-}
-
-function drawGhost(pose, color, steer = 0) {
-  const wy = CAR.wid / 2 - 0.13;
-  ctx.save();
-  ctx.translate(pose.x, pose.y);
-  ctx.rotate(pose.h);
-  ctx.lineWidth = Math.min(0.07, 2 * drawPX);
-  ctx.strokeStyle = color;
-  ctx.setLineDash([0.25, 0.18]);
-  for (const [wx, wya, a] of [
-    [0, -wy, 0], [0, wy, 0],
-    [CAR.wb, -wy, steer], [CAR.wb, wy, steer],
-  ]) {
-    ctx.save();
-    ctx.translate(wx, wya);
-    ctx.rotate(a);
-    ctx.strokeRect(-0.33, -0.13, 0.66, 0.26);
-    ctx.restore();
-  }
-  ctx.restore();
-  ctx.setLineDash([]);
-
-  drawPoly(carPoly(pose));
-  ctx.lineWidth = Math.min(0.07, 2 * drawPX);
-  ctx.strokeStyle = color;
-  ctx.setLineDash([0.25, 0.18]);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  // heading notch at the nose
-  const c = Math.cos(pose.h), s = Math.sin(pose.h);
-  const nx = pose.x + c * (CAR.wb + CAR.fOver), ny = pose.y + s * (CAR.wb + CAR.fOver);
-  ctx.beginPath();
-  ctx.moveTo(nx + c * 0.45, ny + s * 0.45);
-  ctx.lineTo(nx - s * 0.3, ny + c * 0.3);
-  ctx.lineTo(nx + s * 0.3, ny - c * 0.3);
-  ctx.closePath();
-  ctx.fillStyle = color;
-  ctx.fill();
-}
-
-function drawPath(pts, color, dashed, lw = 0.09) {
-  if (pts.length < 2) return;
-  ctx.beginPath();
-  ctx.moveTo(pts[0].x, pts[0].y);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.lineWidth = Math.min(lw, 3 * drawPX);
-  ctx.strokeStyle = color;
-  if (dashed) ctx.setLineDash([0.35, 0.25]);
-  ctx.stroke();
-  ctx.setLineDash([]);
-}
-
-// Arc guides: always shown when wheels are turned and no animation running.
-// Four solid curves = all 4 bounding-box corners swept path.
-// Four dashed curves = all 4 wheel tracks (front-left, front-right, rear-left, rear-right).
-function drawArcGuides(pose, steerRad) {
-  const N = 60;
-  const fwdLimit = driveLimit(pose, steerRad, 1);
-  const bwdLimit = driveLimit(pose, steerRad, -1);
-  const fLen = CAR.wb + CAR.fOver;
-  const half = CAR.wid / 2;
-
-  function sampleArc(limit, dir) {
-    const cFL = [], cFR = [], cRL = [], cRR = [];
-    const wFL = [], wFR = [], wRL = [], wRR = [];
-    for (let i = 0; i <= N; i++) {
-      const p = advance(pose, steerRad, dir * limit * i / N);
-      const cs = Math.cos(p.h), sn = Math.sin(p.h);
-      const w = (lx, ly) => ({ x: p.x + cs * lx - sn * ly, y: p.y + sn * lx + cs * ly });
-      cFL.push(w(fLen,        half));
-      cFR.push(w(fLen,       -half));
-      cRL.push(w(-CAR.rOver,  half));
-      cRR.push(w(-CAR.rOver, -half));
-      wFL.push(w(CAR.wb,  half));
-      wFR.push(w(CAR.wb, -half));
-      wRL.push(w(0,        half));
-      wRR.push(w(0,       -half));
-    }
-    return { cFL, cFR, cRL, cRR, wFL, wFR, wRL, wRR };
-  }
-
-  for (const [limit, dir] of [[fwdLimit, 1], [bwdLimit, -1]]) {
-    if (limit < 0.2) continue;
-    const { cFL, cFR, cRL, cRR, wFL, wFR, wRL, wRR } = sampleArc(limit, dir);
-    const col  = dir > 0 ? 'rgba(69,196,255,0.28)' : 'rgba(255,159,67,0.28)';
-    const wCol = dir > 0 ? 'rgba(69,196,255,0.50)' : 'rgba(255,159,67,0.50)';
-    drawPath(cFL, col, false, 0.06);
-    drawPath(cFR, col, false, 0.06);
-    drawPath(cRL, col, false, 0.06);
-    drawPath(cRR, col, false, 0.06);
-    drawPath(wFL, wCol, true, 0.05);
-    drawPath(wFR, wCol, true, 0.05);
-    drawPath(wRL, wCol, true, 0.05);
-    drawPath(wRR, wCol, true, 0.05);
-  }
-}
-
-// Steering geometry overlay: the rear-axle axis (perpendicular to heading),
-// the instantaneous turn centre sitting on it, and the radius lines from the
-// rear axle and both front wheels to that centre. Each front wheel rolls
-// perpendicular to its own radius line (classic Ackermann); the rear-axle →
-// centre segment is the turn radius R = wheelbase / tan(steer).
-function drawSteerGeometry(pose, steerRad, preview) {
-  if (Math.abs(steerRad) < rad(0.5)) return;   // ~straight: centre at infinity
-  const R = CAR.wb / Math.tan(steerRad);
-  const c = Math.cos(pose.h), s = Math.sin(pose.h);
-  const ux = -s, uy = c;                       // rear-axle axis direction (toward centre)
-  const O = { x: pose.x + R * ux, y: pose.y + R * uy };
-  const sgn = Math.sign(R);
-  const at = t => ({ x: pose.x + t * ux, y: pose.y + t * uy });
-  const half = CAR.wid / 2 - 0.16;             // matches drawn wheel inset
-
-  // rear-axle axis — thin, extends just past the centre and the opposite side
-  drawPath([at(-sgn * 1.0), at(R + sgn * 1.0)], 'rgba(255,255,255,0.28)', false, 0.035);
-
-  // the turn radius itself: rear-axle centre → turn centre
-  drawPath([{ x: pose.x, y: pose.y }, O], 'rgba(120,220,255,0.8)', false, 0.045);
-
-  // Front wheels turned to the pending steer at the *current* (move-start)
-  // pose, so the steering angle is visible here too — not only on the preview.
-  drawSteerWheels(pose, steerRad);
-
-  // Radius lines (perpendicular to each front wheel) drawn from the *preview*
-  // pose's front wheels to the shared turn centre. The whole arc orbits the
-  // same O, so these line up with where the car is heading.
-  const fp = preview || pose;
-  const fc = Math.cos(fp.h), fs = Math.sin(fp.h);
-  const fw = ly => ({ x: fp.x + CAR.wb * fc - ly * fs, y: fp.y + CAR.wb * fs + ly * fc });
-  drawPath([fw(half),  O], 'rgba(255,255,255,0.28)', false, 0.03);
-  drawPath([fw(-half), O], 'rgba(255,255,255,0.28)', false, 0.03);
-
-  // turn-centre marker
-  ctx.beginPath();
-  ctx.arc(O.x, O.y, 0.12, 0, 2 * Math.PI);
-  ctx.fillStyle = 'rgba(120,220,255,0.9)';
-  ctx.fill();
-}
-
-// Draw just the two front wheels at `pose`, rotated to `steerRad`, with a
-// cyan outline so they read as part of the steering overlay.
-function drawSteerWheels(pose, steerRad) {
-  const c = Math.cos(pose.h), s = Math.sin(pose.h);
-  const wy = CAR.wid / 2 - 0.16;
-  const wl = Math.min(0.9, CAR.len * 0.075), wt = Math.min(0.18, CAR.wid * 0.10);
-  for (const ly of [wy, -wy]) {
-    const wx = pose.x + CAR.wb * c - ly * s;
-    const wyp = pose.y + CAR.wb * s + ly * c;
-    ctx.save();
-    ctx.translate(wx, wyp);
-    ctx.rotate(pose.h + steerRad);
-    ctx.fillStyle = '#10131a';
-    ctx.fillRect(-wl / 2, -wt, wl, wt * 2);
-    ctx.lineWidth = Math.min(0.03, 1.5 * drawPX);
-    ctx.strokeStyle = 'rgba(120,220,255,0.9)';
-    ctx.strokeRect(-wl / 2, -wt, wl, wt * 2);
-    ctx.restore();
-  }
-}
-
-function drawArrow(x, y, ang, len, color) {
-  const c = Math.cos(ang), s = Math.sin(ang);
-  ctx.beginPath();
-  ctx.moveTo(x - c * len / 2, y - s * len / 2);
-  ctx.lineTo(x + c * len / 2, y + s * len / 2);
-  ctx.lineWidth = 0.12;
-  ctx.strokeStyle = color;
-  ctx.stroke();
-  const tx = x + c * len / 2, ty = y + s * len / 2;
-  ctx.beginPath();
-  ctx.moveTo(tx + c * 0.45, ty + s * 0.45);
-  ctx.lineTo(tx - s * 0.28, ty + c * 0.28);
-  ctx.lineTo(tx + s * 0.28, ty - c * 0.28);
-  ctx.closePath();
-  ctx.fillStyle = color;
-  ctx.fill();
-}
-
 function draw(now) {
   // On a cutscene there's no puzzle to render — the briefing overlay covers
   // the screen. Keep the RAF alive so play resumes when we leave it.
@@ -731,7 +548,7 @@ function draw(now) {
   }
   const parked = inGoal(restPose, g);
   const gStroke = parked ? '#3ddc84' : '#f2c84b';
-  drawPoly(gPoly);
+  Renderer.drawPolygon(ctx, gPoly);
   ctx.fillStyle = parked ? 'rgba(61,220,132,0.12)' : 'rgba(242,200,75,0.10)';
   ctx.fill();
   ctx.lineWidth = 0.05;
@@ -770,7 +587,7 @@ function draw(now) {
                   { fill: obstFill, stroke: '#525a66', detail: true, wheels: true,
                     vehicle: obstVeh }, sp);
     } else {
-      drawPoly(o.poly);
+      Renderer.drawPolygon(ctx, o.poly);
       ctx.fillStyle = o.kind === 'curb' ? '#3a4148' : '#39404e';
       ctx.fill();
       ctx.lineWidth = 0.06;
@@ -780,7 +597,7 @@ function draw(now) {
   }
 
   // start pad
-  drawPoly(carPoly(level.start));
+  Renderer.drawPolygon(ctx, carPoly(level.start));
   ctx.lineWidth = 0.05;
   ctx.strokeStyle = 'rgba(255,255,255,0.22)';
   ctx.setLineDash([0.2, 0.2]);
@@ -789,9 +606,11 @@ function draw(now) {
 
   // arc guides (all 4 corners + all 4 wheels) — drawn first so they sit behind everything
   if (!anim) {
-    drawArcGuides(editStartPose(), rad(editSteer));
+    const gPose = editStartPose(), gSteer = rad(editSteer);
+    Renderer.drawArcGuides(ctx, gPose, CAR, gSteer,
+      driveLimit(gPose, gSteer, 1), driveLimit(gPose, gSteer, -1), advance, drawPX);
     const previewPose = editSim ? (editSim.hit ? editSim.hit.pose : editSim.end) : null;
-    drawSteerGeometry(editStartPose(), rad(editSteer), previewPose);
+    Renderer.drawSteerGeometry(ctx, gPose, CAR, gSteer, previewPose, drawPX);
   }
 
   // committed plan: paths + ghosts
@@ -803,8 +622,8 @@ function draw(now) {
     const dimmed = editIdx !== null && i > editIdx;
     ctx.save();
     if (dimmed) ctx.globalAlpha = 0.3;
-    drawPath(sim.pts, moves[i].dist >= 0 ? 'rgba(69,196,255,0.85)' : 'rgba(255,159,67,0.85)',
-             moves[i].dist < 0);
+    Renderer.drawPath(ctx, sim.pts, moves[i].dist >= 0 ? 'rgba(69,196,255,0.85)' : 'rgba(255,159,67,0.85)',
+             moves[i].dist < 0, 0.09, drawPX);
     ctx.restore();
   }
   for (let i = 0; i < planSims.length; i++) {
@@ -813,8 +632,8 @@ function draw(now) {
     const isAnchor = editIdx !== null ? i === editIdx - 1 : i === planSims.length - 1 && !editSim;
     ctx.save();
     if (dimmed) ctx.globalAlpha = 0.3;
-    drawGhost(planSims[i].end, isAnchor
-      ? 'rgba(233,240,250,0.85)' : 'rgba(160,175,195,0.5)', moves[i].steer);
+    Renderer.drawGhost(ctx, planSims[i].end, CAR, isAnchor
+      ? 'rgba(233,240,250,0.85)' : 'rgba(160,175,195,0.5)', moves[i].steer, drawPX);
     ctx.restore();
   }
 
@@ -822,12 +641,12 @@ function draw(now) {
   let hitInfo = null;
   if (editSim) {
     const bad = !!editSim.hit;
-    drawPath(editSim.pts,
+    Renderer.drawPath(ctx, editSim.pts,
              bad ? 'rgba(255,82,82,0.9)'
                  : editDist >= 0 ? 'rgba(69,196,255,0.95)' : 'rgba(255,159,67,0.95)',
-             editDist < 0);
-    drawGhost(bad ? editSim.hit.pose : editSim.end,
-              bad ? 'rgba(255,82,82,0.95)' : 'rgba(233,240,250,0.95)', rad(editSteer));
+             editDist < 0, 0.09, drawPX);
+    Renderer.drawGhost(ctx, bad ? editSim.hit.pose : editSim.end, CAR,
+              bad ? 'rgba(255,82,82,0.95)' : 'rgba(233,240,250,0.95)', rad(editSteer), drawPX);
     if (bad) hitInfo = editSim.hit;
   }
 
@@ -868,7 +687,7 @@ function draw(now) {
 
   // goal arrows drawn after the car so they're always visible
   for (const hd of g.heads) {
-    drawArrow(g.cx, g.cy, rad(hd), Math.min(g.w, g.h) * 0.45,
+    Renderer.drawArrow(ctx, g.cx, g.cy, rad(hd), Math.min(g.w, g.h) * 0.45,
               parked ? 'rgba(61,220,132,0.7)' : 'rgba(242,200,75,0.75)');
   }
 
