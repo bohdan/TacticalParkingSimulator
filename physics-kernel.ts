@@ -1,6 +1,6 @@
 'use strict';
 /*
- * physics-kernel.js — the PhysicsKernel interface, implemented.
+ * physics-kernel.ts — the PhysicsKernel interface, implemented.
  *
  * This is the refactor's Component 1 (PhysicsStatics + per-level PhysicsKernel + the
  * kernel-bound Solver hook) realised as code. It is ADDITIVE and self-contained: it does
@@ -14,110 +14,125 @@
  * encapsulated type: its `_steer` (radians) / `_dist` are private (underscore-prefixed) and
  * read only via the move* helpers (degrees in/out, 'L'|'R'|'S' TurnDirection, wire string).
  *
- * Generic 2D geometry (SAT, hull, point-in-polygon, segment math) lives in geometry2d.js
+ * Generic 2D geometry (SAT, hull, point-in-polygon, segment math) lives in geometry2d.ts
  * (`Geom2D`); this file owns only the vehicle/kinematics/collision-orchestration layer.
  *
  * Works as a browser global and as a Node module (for tests).
  */
 import { Geom2D } from './geometry2d.js';
 
-export const Physics = (function (G) {
+export class PhysicsCore {
+  private readonly G: typeof Geom2D;
+  readonly SAMPLE_STEP = 0.06;
 
-  /* ─── PhysicsStatics: constants ────────────────────────────────────────── */
-
-  const SAMPLE_STEP = 0.06; // m, default collision sampling step along a path
-
-  // Vehicle registry. `fOver` (front overhang) is derived: len - wb - rOver.
-  const VEHICLE_DEFS = {
+  readonly VEHICLE_DEFS = {
     default: { len: 4.4,  wid: 1.8,  wb: 2.7,   rOver: 0.85, maxSteer: 35 },
     miata:   { len: 3.97, wid: 1.72, wb: 2.265, rOver: 0.73, maxSteer: 40 },
     bus:     { len: 12.0, wid: 2.55, wb: 6.5,   rOver: 2.5,  maxSteer: 45 },
     tractor: { len: 3.8,  wid: 1.95, wb: 2.15,  rOver: 0.45, maxSteer: 52 },
   };
 
+  readonly VEHICLES: Readonly<Record<string, any>>;
+  Shape: any;
+  Move: (steeringDegrees: number, signedDistanceMeters: number) => Readonly<{ _steer: number; _dist: number }>;
+
+  private _solverFactory: ((kernel: any) => any) | null = null;
+
+  constructor(G: typeof Geom2D = Geom2D) {
+    this.G = G;
+    this.VEHICLES = Object.freeze(Object.keys(this.VEHICLE_DEFS).reduce((o: Record<string, any>, k: string) => {
+      o[k] = this.vehicleSpecFor(k);
+      return o;
+    }, {}));
+
+    this.Shape = Object.freeze({
+      rectangle: (x: number, y: number, w: number, h: number) => this.makeShape(this.G.rectanglePolygon(x, y, w, h)),
+      orientedBox: (cx: number, cy: number, w: number, h: number, ang: number) =>
+        this.makeShape(this.G.orientedBoxPolygon(cx, cy, w, h, ang)),
+      polygon: (points: Array<{ x: number; y: number }>) => this.makeShape(points),
+    });
+
+    this.Move = (steeringDegrees: number, signedDistanceMeters: number) =>
+      Object.freeze({ _steer: this.rad(steeringDegrees), _dist: signedDistanceMeters });
+  }
+
   // vehicleSpecFor(type) → VehicleSpec (fOver filled). ⇐ game/editor/scene/kernel.
-  function vehicleSpecFor(type) {
-    const v = VEHICLE_DEFS[type] || VEHICLE_DEFS.default;
+  vehicleSpecFor(type: string) {
+    const v = this.VEHICLE_DEFS[type] || this.VEHICLE_DEFS.default;
     return Object.freeze({
       len: v.len, wid: v.wid, wb: v.wb, rOver: v.rOver,
       fOver: v.len - v.wb - v.rOver, maxSteer: v.maxSteer,
     });
   }
-  const VEHICLES = Object.freeze(Object.keys(VEHICLE_DEFS).reduce((o, k) => {
-    o[k] = vehicleSpecFor(k); return o;
-  }, {}));
 
-  /* ─── PhysicsStatics: math helpers ─────────────────────────────────────── */
-
-  const rad = d => d * Math.PI / 180;
-  const deg = r => r * 180 / Math.PI;
-  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-  function normalizeAngle(a) {
+  // ─── PhysicsStatics: math helpers ───────────────────────────────────────
+  rad(d: number) { return d * Math.PI / 180; }
+  deg(r: number) { return r * 180 / Math.PI; }
+  clamp(v: number, a: number, b: number) { return Math.min(b, Math.max(a, v)); }
+  normalizeAngle(a: number) {
     a %= 2 * Math.PI;
-    if (a >  Math.PI) a -= 2 * Math.PI;
+    if (a > Math.PI) a -= 2 * Math.PI;
     if (a < -Math.PI) a += 2 * Math.PI;
     return a;
   }
 
-  /* ─── Geometry comes from Geom2D (geometry2d.js) ───────────────────────── */
-  // Pulled into locals so the hot loops below call them as flat references.
-  const { rectanglePolygon, orientedBoxPolygon, pointInPolygon, polygonsCollide,
-          convexHull, polygonBoundingCircle, contactPoint, pointToSegmentDistance } = G;
-
-  /* ─── Obstacle Shape (pure geometry, vehicle-independent) ───────────────── */
-  // Shape = { poly, bc }: poly is the polygon, bc its bounding circle (collision cache).
-
-  function makeShape(poly) { return { poly, bc: polygonBoundingCircle(poly) }; }
-  const Shape = Object.freeze({
-    rectangle:   (x, y, w, h)        => makeShape(rectanglePolygon(x, y, w, h)),
-    orientedBox: (cx, cy, w, h, ang) => makeShape(orientedBoxPolygon(cx, cy, w, h, ang)),
-    polygon:     (points)            => makeShape(points),
-  });
-  const shapesCollide = (a, b) => polygonsCollide(a.poly, b.poly);
-
-  /* ─── Move (control intent; vehicle-independent; encapsulated) ──────────── */
-
-  // Move(steeringDegrees, signedDistanceMeters). One allocation per user move — never hot.
-  function Move(steeringDegrees, signedDistanceMeters) {
-    return Object.freeze({ _steer: rad(steeringDegrees), _dist: signedDistanceMeters });
+  // ─── Geometry comes from Geom2D (geometry2d.js) ─────────────────────────
+  private makeShape(poly: Array<{ x: number; y: number }>) {
+    return { poly, bc: this.G.polygonBoundingCircle(poly) };
   }
-  const moveTurnDirection = m => Math.abs(m._steer) < 1e-4 ? 'S' : (m._steer > 0 ? 'L' : 'R');
-  const moveDirection     = m => m._dist >= 0 ? 1 : -1;
-  const moveDistance      = m => m._dist;
-  const moveSteeringDegrees = m => deg(m._steer);
+
+  shapesCollide(a: { poly: any }, b: { poly: any }) {
+    return this.G.polygonsCollide(a.poly, b.poly);
+  }
+
+  // ─── Move (control intent; vehicle-independent; encapsulated) ────────────
+  moveTurnDirection(m: { _steer: number }) { return Math.abs(m._steer) < 1e-4 ? 'S' : (m._steer > 0 ? 'L' : 'R'); }
+  moveDirection(m: { _dist: number }) { return m._dist >= 0 ? 1 : -1; }
+  moveDistance(m: { _dist: number }) { return m._dist; }
+  moveSteeringDegrees(m: { _steer: number }) { return this.deg(m._steer); }
 
   // Serialization — format owned by physics; callers treat the string as opaque.
-  const round = (v, q) => Math.round(v * q) / q;
-  const moveToString = m => `${round(deg(m._steer), 10)}:${round(m._dist, 100)}`;
-  function parseMove(s) {
-    const [d, dist] = s.split(':').map(Number);
-    return Move(d, dist);
+  private round(v: number, q: number) { return Math.round(v * q) / q; }
+  moveToString(m: { _steer: number; _dist: number }) {
+    return `${this.round(this.deg(m._steer), 10)}:${this.round(m._dist, 100)}`;
   }
-  const moveSequenceToString = moves => moves.map(moveToString).join(';');
-  const parseMoveSequence = s => (s ? s.split(';').filter(Boolean).map(parseMove) : []);
+  parseMove(s: string) {
+    const [d, dist] = s.split(':').map(Number);
+    return this.Move(d, dist);
+  }
+  moveSequenceToString(moves: Array<{ _steer: number; _dist: number }>) {
+    return moves.map((m) => this.moveToString(m)).join(';');
+  }
+  parseMoveSequence(s: string) {
+    return s ? s.split(';').filter(Boolean).map((value) => this.parseMove(value)) : [];
+  }
 
-  /* ─── Per-level kernel config ──────────────────────────────────────────── */
-
-  // physicsConfigForLevel(def) → PhysicsConfig chosen by the level's vehicle type.
-  function physicsConfigForLevel(def) {
+  // ─── Per-level kernel config ────────────────────────────────────────────
+  physicsConfigForLevel(def: { vehicle?: string } | null | undefined) {
     return Object.freeze({
-      vehicle: vehicleSpecFor(def && def.vehicle),
-      sampleStep: SAMPLE_STEP,
+      vehicle: this.vehicleSpecFor(def && def.vehicle),
+      sampleStep: this.SAMPLE_STEP,
     });
   }
 
-  /* ─── PhysicsKernel(config): the per-level instance (Component 1b) ──────── */
-
-  function PhysicsKernel(config) {
+  // ─── PhysicsKernel(config): the per-level instance (Component 1b) ────────
+  PhysicsKernel(config: { vehicle: any; sampleStep?: number }) {
     const spec = config.vehicle;
-    const sampleStep = config.sampleStep || SAMPLE_STEP;
-    // Spec-derived constants, computed ONCE (captured by the closures below).
+    const sampleStep = config.sampleStep || this.SAMPLE_STEP;
     const wheelbase = spec.wb;
-    const carRadius = 0.5 * Math.hypot(spec.len, spec.wid) + 0.02;   // broad-phase radius
-    const centerOffset = (spec.wb + spec.fOver - spec.rOver) / 2;     // body centre ahead of rear axle
+    const carRadius = 0.5 * Math.hypot(spec.len, spec.wid) + 0.02;
+    const centerOffset = (spec.wb + spec.fOver - spec.rOver) / 2;
+
+    const G = this.G;
+    const rad = this.rad.bind(this);
+    const normalizeAngle = this.normalizeAngle.bind(this);
+    const makeShape = (poly: Array<{ x: number; y: number }>) => ({ poly, bc: G.polygonBoundingCircle(poly) });
+    const { rectanglePolygon, orientedBoxPolygon, pointInPolygon, polygonsCollide,
+      convexHull, polygonBoundingCircle, pointToSegmentDistance } = G;
+    const contactPoint = G.contactPoint.bind(G);
 
     // ── kinematics (HOT) ──────────────────────────────────────────────────
-    function advancePose(p, steer, s) {
+    function advancePose(p: any, steer: number, s: number) {
       if (Math.abs(steer) < 1e-4)
         return { x: p.x + Math.cos(p.h) * s, y: p.y + Math.sin(p.h) * s, h: p.h };
       const R = wheelbase / Math.tan(steer);
@@ -125,41 +140,37 @@ export const Physics = (function (G) {
       const h2 = p.h + s / R;
       return { x: cx + Math.sin(h2) * R, y: cy - Math.cos(h2) * R, h: h2 };
     }
-    function turnRadius(steer) {
+    function turnRadius(steer: number) {
       return Math.abs(steer) < 1e-4 ? Infinity : wheelbase / Math.tan(steer);
     }
-    function arcCenter(p, steer) {
-      if (Math.abs(steer) < 1e-4) return null;       // straight line: no finite centre
+    function arcCenter(p: any, steer: number) {
+      if (Math.abs(steer) < 1e-4) return null;
       const R = wheelbase / Math.tan(steer);
       return { x: p.x - Math.sin(p.h) * R, y: p.y + Math.cos(p.h) * R };
     }
-    function carPolygon(p, inf = 0) {
+    function carPolygon(p: any, inf = 0) {
       const c = Math.cos(p.h), s = Math.sin(p.h);
       const x0 = -spec.rOver - inf, x1 = spec.wb + spec.fOver + inf;
       const y0 = -spec.wid / 2 - inf, y1 = spec.wid / 2 + inf;
-      const pt = (x, y) => ({ x: p.x + c * x - s * y, y: p.y + s * x + c * y });
+      const pt = (x: number, y: number) => ({ x: p.x + c * x - s * y, y: p.y + s * x + c * y });
       return [pt(x0, y0), pt(x1, y0), pt(x1, y1), pt(x0, y1)];
     }
-    function carShape(p) { return makeShape(carPolygon(p)); }
+    function carShape(p: any) { return makeShape(carPolygon(p)); }
 
-    // ── goal geometry / fit ───────────────────────────────────────────────
-    // goalPolygon: the goal zone as an opaque Polygon (axis-aligned or oriented box).
-    function goalPolygon(goal) {
+    function goalPolygon(goal: any) {
       return goal.ang
         ? orientedBoxPolygon(goal.cx, goal.cy, goal.w, goal.h, goal.ang)
         : rectanglePolygon(goal.cx - goal.w / 2, goal.cy - goal.h / 2, goal.w, goal.h);
     }
-    // inGoal: does this vehicle's footprint sit fully inside the goal at an allowed heading?
-    function inGoal(pose, goal) {
+    function inGoal(pose: any, goal: any) {
       const okHead = goal.heads.some(
-        hd => Math.abs(normalizeAngle(pose.h - rad(hd))) <= rad(goal.tol));
+        (hd: number) => Math.abs(normalizeAngle(pose.h - rad(hd))) <= rad(goal.tol));
       if (!okHead) return false;
       const zone = goalPolygon(goal);
-      return carPolygon(pose).every(v => pointInPolygon(v, zone));
+      return carPolygon(pose).every((v: any) => pointInPolygon(v, zone));
     }
 
-    // parkingClearance: smallest distance from any car corner to the goal zone edge.
-    function parkingClearance(pose, goal) {
+    function parkingClearance(pose: any, goal: any) {
       const cp = carPolygon(pose), zone = goalPolygon(goal);
       let minGap = Infinity;
       for (const v of cp)
@@ -169,9 +180,7 @@ export const Physics = (function (G) {
         }
       return isFinite(minGap) ? minGap : 0;
     }
-    // distToGoalBoundary: signed distance of the rear-axle point to the goal edge
-    // (positive outside / approaching, negative inside).
-    function distToGoalBoundary(pose, goal) {
+    function distToGoalBoundary(pose: any, goal: any) {
       const zone = goalPolygon(goal);
       let d = Infinity;
       for (let j = 0; j < zone.length; j++) {
@@ -180,9 +189,7 @@ export const Physics = (function (G) {
       }
       return pointInPolygon({ x: pose.x, y: pose.y }, zone) ? -d : d;
     }
-    // distCarToGoal: signed distance of the car outline to the goal zone (positive = a
-    // corner is outside, magnitude = nearest edge gap; negative = fully inside).
-    function distCarToGoal(pose, goal) {
+    function distCarToGoal(pose: any, goal: any) {
       const cp = carPolygon(pose), zone = goalPolygon(goal);
       let minD = Infinity, anyOutside = false;
       for (const v of cp) {
@@ -195,11 +202,9 @@ export const Physics = (function (G) {
       return anyOutside ? minD : -minD;
     }
 
-    // ── collision (HOT) ───────────────────────────────────────────────────
-    // poseCollides: single-pose broad-phase + SAT. carRadius/centerOffset captured.
-    function poseCollides(x, y, h, shapes) {
+    function poseCollides(x: number, y: number, h: number, shapes: Array<any>) {
       const ccx = x + Math.cos(h) * centerOffset, ccy = y + Math.sin(h) * centerOffset;
-      let poly = null;
+      let poly: any = null;
       for (let i = 0; i < shapes.length; i++) {
         const o = shapes[i], bc = o.bc;
         const dx = ccx - bc.x, dy = ccy - bc.y, rr = carRadius + bc.r;
@@ -209,17 +214,16 @@ export const Physics = (function (G) {
       }
       return false;
     }
-    // simulateMove: swept, continuous collision (convex hull of consecutive poses).
-    function simulateMove(start, steer, dist, shapes, step) {
+    function simulateMove(start: any, steer: number, dist: number, shapes: Array<any>, step: number) {
       const n = Math.max(2, Math.ceil(Math.abs(dist) / (step || sampleStep)));
       const pts = [start];
-      let hit = null;
+      let hit: any = null;
       const stepLen = Math.abs(dist) / n;
       let prevPoly = carPolygon(start);
       for (let i = 1; i <= n; i++) {
         const p = advancePose(start, steer, dist * i / n);
         const curPoly = carPolygon(p);
-        let swept = null;
+        let swept: any = null;
         const ccx = p.x + Math.cos(p.h) * centerOffset, ccy = p.y + Math.sin(p.h) * centerOffset;
         for (let oi = 0; oi < shapes.length; oi++) {
           const o = shapes[oi], bc = o.bc;
@@ -238,62 +242,29 @@ export const Physics = (function (G) {
       return { pts, end: pts[pts.length - 1], hit };
     }
 
-    // ── gameplay surface ──────────────────────────────────────────────────
-    // The kernel owns each operation and returns the result directly (a bool from
-    // inGoal, a Polygon from goalPolygon) — callers read fields, no accessors.
-    const applyMove = (pose, move, shapes, step) =>
+    const applyMove = (pose: any, move: any, shapes: Array<any>, step: number) =>
       simulateMove(pose, move._steer, move._dist, shapes, step);
-    const moveTurnRadius = move => turnRadius(move._steer);
+    const moveTurnRadius = (move: any) => turnRadius(move._steer);
 
-    // ── createSolver(): kernel-bound Solver (Component 1c) ────────────────
-    // The search STRATEGY (A*, dock, anytime) is the large deferred port; this is the
-    // interface, bound to THIS kernel and standing on the low-level surface above.
     function createSolver() { return makeSolver(kernel); }
 
     const kernel = {
       config, spec,
-      // private intra-component internals (for the bundled Solver / low-level use)
       _wheelbase: wheelbase, _carRadius: carRadius, _centerOffset: centerOffset,
       advancePose, turnRadius, arcCenter, carPolygon, carShape,
       poseCollides, simulateMove,
-      // gameplay surface
       goalPolygon, inGoal, parkingClearance, distToGoalBoundary, distCarToGoal,
       applyMove, moveTurnRadius, createSolver,
     };
     return kernel;
   }
 
-  /* ─── Solver (Component 1c) — bound to a kernel ─────────────────────────── */
-
-  // The weighted-A* / dock-interval search lives in solver.js. To avoid an import cycle
-  // (solver.js imports this module), solver.js registers its factory via _useSolver() on
-  // load; createSolver() then resolves through it. A kernel built for collision-only use
-  // never calls createSolver and so needs no solver.
-  let _solverFactory = null;
-  const _useSolver = factory => { _solverFactory = factory; };
-  function makeSolver(kernel) {
-    if (!_solverFactory)
+  _useSolver(factory: (kernel: any) => any) { this._solverFactory = factory; }
+  private makeSolver(kernel: any) {
+    if (!this._solverFactory)
       throw new Error('Solver not loaded — import ./solver.js before calling createSolver().');
-    return _solverFactory(kernel);   // → { solve, bruteForce, validateMoves }
+    return this._solverFactory(kernel);
   }
+}
 
-  /* ─── Public surface ───────────────────────────────────────────────────── */
-
-  return {
-    // constants / registry
-    SAMPLE_STEP, VEHICLES, vehicleSpecFor,
-    // math
-    rad, deg, clamp, normalizeAngle,
-    // (generic 2D geometry lives in Geom2D / geometry2d.js — not re-exported here)
-    // (Pose/Point/Polygon/VehicleSpec/Collision/MoveResult are plain structs — read fields)
-    // Shape
-    Shape, shapesCollide,
-    // Move (encapsulated — these are its read/serialize surface)
-    Move, moveTurnDirection, moveDirection, moveDistance, moveSteeringDegrees,
-    moveToString, parseMove, moveSequenceToString, parseMoveSequence,
-    // kernel
-    physicsConfigForLevel, PhysicsKernel,
-    // solver registration hook (solver.js calls this on import)
-    _useSolver,
-  };
-})(Geom2D);
+export const Physics = new PhysicsCore();
