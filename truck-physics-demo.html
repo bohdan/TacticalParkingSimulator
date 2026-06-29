@@ -34,6 +34,14 @@
   #panel .lrow { display: flex; justify-content: space-between; }
   #panel .val  { color: #4af; }
   #panel input[type=range] { width: 100%; cursor: pointer; accent-color: #4af; }
+  #panel .btns { display: flex; gap: 6px; margin-top: 2px; }
+  #panel button {
+    flex: 1; background: #15212f; color: #9cc; border: 1px solid #284052;
+    padding: 5px 4px; font-family: monospace; font-size: 10px; cursor: pointer;
+    border-radius: 3px;
+  }
+  #panel button:hover { background: #1c2e40; }
+  #panel .note { font-size: 9px; color: #556; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -68,6 +76,10 @@
 
   <div class="sec">Vehicle</div>
   <div class="row">
+    <div class="lrow"><span>Trailers</span><span class="val" id="numTrlVal">1</span></div>
+    <input type="range" id="numTrl" min="1" max="4" step="1" value="1">
+  </div>
+  <div class="row">
     <div class="lrow"><span>Max steer</span><span class="val" id="maxSteerVal">35°</span></div>
     <input type="range" id="maxSteer" min="10" max="55" step="1" value="35">
   </div>
@@ -87,6 +99,13 @@
     <div class="lrow"><span>Hitch offset</span><span class="val" id="hitchOffVal">0.4 m</span></div>
     <input type="range" id="hitchOff" min="0" max="2" step="0.1" value="0.4">
   </div>
+
+  <div class="sec">Obstacles</div>
+  <div class="btns">
+    <button id="addObs">+ Add</button>
+    <button id="clearObs">Clear</button>
+  </div>
+  <div class="note">Drag to move · wheel to rotate · Del removes selected. Truck collides with them.</div>
 </div>
 
 <script>
@@ -104,6 +123,7 @@ let CAB_WB    = 4.0;
 let HITCH_OFF = 0.4;
 let TRL_WB    = 8.0;
 let TRL_LEN   = TRL_WB + TRL_ROVER + 0.2;   // front overhang = 0.2 m fixed
+let NUM_TRAILERS = 1;
 
 let MAX_STEER  = 35 * Math.PI / 180;
 let MAX_ART    = 75 * Math.PI / 180;
@@ -130,17 +150,34 @@ resize();
 window.addEventListener('resize', resize);
 
 // ─── state ───────────────────────────────────────────────────────────────────
+// state.trailers: array of { x, y, th } — each segment's REAR AXLE + heading.
+// Segment 0 is towed by the cab; segment i>0 is towed by segment i-1's rear axle.
 let state, keys = {};
+let obstacles = [];
+let selectedObs = null;
 
 function reset() {
   state = {
     cx: WORLD_W * 0.62, cy: WORLD_H * 0.5,
-    th: Math.PI, tt: Math.PI,
-    speed: 0, steer: 0, blocked: false,
+    th: Math.PI,
+    speed: 0, steer: 0,
+    blocked: false, collided: false,
+    trailers: [],
   };
-  const hw = hitch(state);
-  state.trx = hw.x - TRL_WB * Math.cos(state.tt);
-  state.try = hw.y - TRL_WB * Math.sin(state.tt);
+  buildTrailers();
+}
+
+// (Re)create the trailer chain in a straight line behind the cab.
+function buildTrailers() {
+  state.trailers = [];
+  let tow = hitch(state);   // towing point for the next unit
+  let th  = state.th;
+  for (let i = 0; i < NUM_TRAILERS; i++) {
+    const x = tow.x - TRL_WB * Math.cos(th);
+    const y = tow.y - TRL_WB * Math.sin(th);
+    state.trailers.push({ x, y, th });
+    tow = { x, y };         // next unit hitches over this trailer's rear axle
+  }
 }
 
 function hitch(s) {
@@ -154,6 +191,80 @@ function normAngle(a) {
   while (a >  Math.PI) a -= 2 * Math.PI;
   while (a < -Math.PI) a += 2 * Math.PI;
   return a;
+}
+
+// Update every trailer heading/position from the chain ahead of it.
+// Mutates `trailers`. Returns false if any joint exceeds the articulation limit.
+function updateChain(cabX, cabY, cabTh, trailers) {
+  let tow  = { x: cabX - HITCH_OFF * Math.cos(cabTh), y: cabY - HITCH_OFF * Math.sin(cabTh) };
+  let prevTh = cabTh;
+  for (let i = 0; i < trailers.length; i++) {
+    const t  = trailers[i];
+    const th = Math.atan2(tow.y - t.y, tow.x - t.x);
+    if (Math.abs(normAngle(prevTh - th)) > MAX_ART) return false;
+    t.th = th;
+    t.x  = tow.x - TRL_WB * Math.cos(th);
+    t.y  = tow.y - TRL_WB * Math.sin(th);
+    tow    = { x: t.x, y: t.y };
+    prevTh = th;
+  }
+  return true;
+}
+
+// ─── collision (SAT between oriented rectangles) ──────────────────────────────
+function rectCorners(cx, cy, th, w, h) {
+  const c = Math.cos(th), s = Math.sin(th);
+  const hw = w / 2, hh = h / 2;
+  return [
+    { x: cx + (-hw) * c - (-hh) * s, y: cy + (-hw) * s + (-hh) * c },
+    { x: cx + ( hw) * c - (-hh) * s, y: cy + ( hw) * s + (-hh) * c },
+    { x: cx + ( hw) * c - ( hh) * s, y: cy + ( hw) * s + ( hh) * c },
+    { x: cx + (-hw) * c - ( hh) * s, y: cy + (-hw) * s + ( hh) * c },
+  ];
+}
+
+// segIdx: -1 = cab, else trailer index. Returns the 4 world-space corners.
+function segPoly(x, y, th, segIdx) {
+  const d = getSegDims(segIdx);
+  const rear = d.len - d.fo;
+  const cx = x + ((d.fo - rear) / 2) * Math.cos(th);   // body centre along axis
+  const cy = y + ((d.fo - rear) / 2) * Math.sin(th);
+  return rectCorners(cx, cy, th, d.len, d.w);
+}
+
+function axesOf(poly) {
+  const ax = [];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    ax.push({ x: -(b.y - a.y), y: (b.x - a.x) });
+  }
+  return ax;
+}
+function projectPoly(poly, ax) {
+  let mn = Infinity, mx = -Infinity;
+  for (const p of poly) { const d = p.x * ax.x + p.y * ax.y; if (d < mn) mn = d; if (d > mx) mx = d; }
+  return [mn, mx];
+}
+function satOverlap(A, B) {
+  for (const ax of axesOf(A).concat(axesOf(B))) {
+    const [a0, a1] = projectPoly(A, ax), [b0, b1] = projectPoly(B, ax);
+    if (a1 < b0 || b1 < a0) return false;
+  }
+  return true;
+}
+
+function obstaclePolys() {
+  return obstacles.map(o => rectCorners(o.x, o.y, o.th, o.w, o.h));
+}
+
+// Does the rig (cab + trailers) overlap any obstacle?
+function rigCollides(cabX, cabY, cabTh, trailers) {
+  if (obstacles.length === 0) return false;
+  const polys = [segPoly(cabX, cabY, cabTh, -1)];
+  trailers.forEach((t, i) => polys.push(segPoly(t.x, t.y, t.th, i)));
+  const obs = obstaclePolys();
+  for (const op of obs) for (const tp of polys) if (satOverlap(tp, op)) return true;
+  return false;
 }
 
 // ─── physics step ────────────────────────────────────────────────────────────
@@ -172,25 +283,26 @@ function step(dt) {
   const v = state.speed;
   const δ = state.steer;
 
-  const prev = { cx: state.cx, cy: state.cy, th: state.th,
-                 tt: state.tt, trx: state.trx, try: state.try };
+  // snapshot whole rig so we can revert on a blocked move
+  const snap = { cx: state.cx, cy: state.cy, th: state.th,
+                 trailers: state.trailers.map(t => ({ ...t })) };
 
   const dth = (Math.abs(δ) > 0.0001) ? v * Math.tan(δ) / CAB_WB * dt : 0;
   state.th += dth;
   state.cx += v * Math.cos(state.th) * dt;
   state.cy += v * Math.sin(state.th) * dt;
 
-  const hw = hitch(state);
-  state.tt  = Math.atan2(hw.y - state.try, hw.x - state.trx);
-  state.trx = hw.x - TRL_WB * Math.cos(state.tt);
-  state.try = hw.y - TRL_WB * Math.sin(state.tt);
+  const artOk = updateChain(state.cx, state.cy, state.th, state.trailers);
+  const hitObs = artOk && rigCollides(state.cx, state.cy, state.th, state.trailers);
 
-  const β = normAngle(state.th - state.tt);
-  if (Math.abs(β) > MAX_ART) {
-    Object.assign(state, prev);
-    state.blocked = true;
+  if (!artOk || hitObs) {
+    state.cx = snap.cx; state.cy = snap.cy; state.th = snap.th;
+    state.trailers = snap.trailers;
+    state.blocked  = !artOk;
+    state.collided = hitObs;
   } else {
     state.blocked = false;
+    state.collided = false;
   }
 
   state.cx = Math.max(1, Math.min(WORLD_W - 1, state.cx));
@@ -198,32 +310,44 @@ function step(dt) {
 }
 
 // ─── path projection ─────────────────────────────────────────────────────────
+// Returns an array of per-segment point lists: [cabPts, trailer0Pts, ...].
+// Stops early at the articulation limit or an obstacle collision.
 function simPath(s, steer, totalDist, steps) {
-  let p = { cx: s.cx, cy: s.cy, th: s.th, tt: s.tt, trx: s.trx, try: s.try };
+  let cx = s.cx, cy = s.cy, th = s.th;
+  const trailers = s.trailers.map(t => ({ ...t }));
   const ds = totalDist / steps;
-  const cab = [{ x: p.cx,  y: p.cy,  th: p.th }];
-  const trl = [{ x: p.trx, y: p.try, th: p.tt }];
+
+  const paths = [[{ x: cx, y: cy, th }]];
+  trailers.forEach(t => paths.push([{ x: t.x, y: t.y, th: t.th }]));
+
   for (let i = 0; i < steps; i++) {
-    p.th += (Math.abs(steer) > 0.0001 ? Math.tan(steer) / CAB_WB * ds : 0);
-    p.cx += Math.cos(p.th) * ds;
-    p.cy += Math.sin(p.th) * ds;
-    const hw = { x: p.cx - HITCH_OFF * Math.cos(p.th), y: p.cy - HITCH_OFF * Math.sin(p.th) };
-    const tt  = Math.atan2(hw.y - p.try, hw.x - p.trx);
-    if (Math.abs(normAngle(p.th - tt)) > MAX_ART) break;   // stop at articulation limit
-    p.tt  = tt;
-    p.trx = hw.x - TRL_WB * Math.cos(p.tt);
-    p.try = hw.y - TRL_WB * Math.sin(p.tt);
-    cab.push({ x: p.cx,  y: p.cy,  th: p.th });
-    trl.push({ x: p.trx, y: p.try, th: p.tt });
+    th += (Math.abs(steer) > 0.0001 ? Math.tan(steer) / CAB_WB * ds : 0);
+    cx += Math.cos(th) * ds;
+    cy += Math.sin(th) * ds;
+    if (!updateChain(cx, cy, th, trailers)) break;
+    if (rigCollides(cx, cy, th, trailers)) break;
+    paths[0].push({ x: cx, y: cy, th });
+    trailers.forEach((t, k) => paths[k + 1].push({ x: t.x, y: t.y, th: t.th }));
   }
-  return { cab, trl };
+  return paths;
+}
+
+function getSegDims(segIdx) {
+  return segIdx < 0
+    ? { len: CAB_LEN, fo: CAB_LEN - CAB_ROVER, w: CAB_WID }
+    : { len: TRL_LEN, fo: TRL_LEN - TRL_ROVER, w: TRL_WID };
+}
+
+function segColor(dir, segIdx) {
+  if (segIdx < 0) return dir > 0 ? '#4af' : '#f84';       // cab
+  return dir > 0
+    ? `hsl(${152 - segIdx * 16}, 65%, ${46 + segIdx * 5}%)`   // forward greens
+    : `hsl(${8 + segIdx * 14}, 78%, 56%)`;                    // backward reds
 }
 
 function drawTrailWithArrows(pts, color) {
   if (pts.length < 2) return;
   ctx.save();
-
-  // dashed polyline
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
   ctx.setLineDash([3, 5]);
@@ -234,18 +358,16 @@ function drawTrailWithArrows(pts, color) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // direction chevrons every ARROW_EVERY metres
   const stepDist = PROJ_DIST / PROJ_STEPS;
   const gap = Math.max(1, Math.round(ARROW_EVERY / stepDist));
   ctx.globalAlpha = 0.55;
   ctx.fillStyle = color;
   for (let i = gap; i < pts.length; i += gap) {
-    const p   = pts[i];
-    const ang = p.th;
-    const sz  = 0.22 * SCALE;
+    const p  = pts[i];
+    const sz = 0.22 * SCALE;
     ctx.save();
     ctx.translate(wx(p.x), wy(p.y));
-    ctx.rotate(ang);
+    ctx.rotate(p.th);                       // always forward heading
     ctx.beginPath();
     ctx.moveTo(sz, 0);
     ctx.lineTo(-sz * 0.55, -sz * 0.42);
@@ -257,20 +379,20 @@ function drawTrailWithArrows(pts, color) {
   ctx.restore();
 }
 
-function drawGhostRect(x, y, heading, length, frontOver, width, color, alpha, arrowDir) {
-  const rearLen = length - frontOver;
+function drawGhostRect(x, y, heading, dims, color, alpha) {
+  const rearLen = dims.len - dims.fo;
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.translate(wx(x), wy(y));
   ctx.rotate(heading);
   ctx.beginPath();
-  ctx.rect(-rearLen * SCALE, -width / 2 * SCALE, length * SCALE, width * SCALE);
+  ctx.rect(-rearLen * SCALE, -dims.w / 2 * SCALE, dims.len * SCALE, dims.w * SCALE);
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
   ctx.stroke();
-  // direction arrow on the leading face
-  const tipX  = (arrowDir > 0 ? frontOver : -rearLen) * SCALE;
-  const baseX = tipX - arrowDir * 0.55 * SCALE;
+  // forward-pointing chevron on the nose
+  const tipX  = dims.fo * SCALE;
+  const baseX = tipX - 0.55 * SCALE;
   const aw    = 0.26 * SCALE;
   ctx.beginPath();
   ctx.moveTo(tipX, 0);
@@ -283,26 +405,22 @@ function drawGhostRect(x, y, heading, length, frontOver, width, color, alpha, ar
 }
 
 function drawProjection(s) {
-  const cabFront = CAB_LEN  - CAB_ROVER;
-  const trlFront = TRL_LEN  - TRL_ROVER;
-  for (const [dir, cabCol, trlCol] of [[1, '#4af', '#2b8'], [-1, '#f84', '#f42']]) {
-    const path = simPath(s, s.steer, dir * PROJ_DIST, PROJ_STEPS);
-    const n    = path.cab.length;
-
-    if (showTrail) {
-      drawTrailWithArrows(path.cab, cabCol);
-      drawTrailWithArrows(path.trl, trlCol);
-    }
-
-    if (showGhosts && n > 1) {
-      for (let g = 1; g <= GHOST_COUNT; g++) {
-        const idx   = Math.min(Math.round(g / GHOST_COUNT * (n - 1)), n - 1);
-        const alpha = 0.55 - 0.04 * (g - 1);
-        const c = path.cab[idx];
-        const t = path.trl[idx];
-        if (!c || !t) continue;
-        drawGhostRect(c.x, c.y, c.th, CAB_LEN, cabFront, CAB_WID, cabCol, alpha, dir);
-        drawGhostRect(t.x, t.y, t.th, TRL_LEN, trlFront, TRL_WID, trlCol, alpha, dir);
+  for (const dir of [1, -1]) {
+    const paths = simPath(s, s.steer, dir * PROJ_DIST, PROJ_STEPS);
+    for (let seg = 0; seg < paths.length; seg++) {
+      const segIdx = seg - 1;             // -1 = cab
+      const col    = segColor(dir, segIdx);
+      const pts    = paths[seg];
+      if (showTrail) drawTrailWithArrows(pts, col);
+      if (showGhosts && pts.length > 1) {
+        const dims = getSegDims(segIdx);
+        for (let g = 1; g <= GHOST_COUNT; g++) {
+          const idx = Math.min(Math.round(g / GHOST_COUNT * (pts.length - 1)), pts.length - 1);
+          const p   = pts[idx];
+          if (!p) continue;
+          const alpha = Math.max(0.12, 0.5 - 0.03 * (g - 1));
+          drawGhostRect(p.x, p.y, p.th, dims, col, alpha);
+        }
       }
     }
   }
@@ -340,28 +458,48 @@ function drawCab(s) {
   ctx.restore();
 }
 
-function drawTrailer(s) {
+function drawTrailerBody(t) {
   const frontOver = TRL_LEN - TRL_ROVER;
-  drawRect(s.trx, s.try, s.tt, TRL_LEN, frontOver, TRL_WID, '#888880', '#aaa');
+  drawRect(t.x, t.y, t.th, TRL_LEN, frontOver, TRL_WID, '#888880', '#aaa');
   ctx.save();
-  ctx.translate(wx(s.trx), wy(s.try));
-  ctx.rotate(s.tt);
+  ctx.translate(wx(t.x), wy(t.y));
+  ctx.rotate(t.th);
   ctx.strokeStyle = '#555';
   ctx.lineWidth = 1;
-  const hw2 = TRL_WID * 0.5 * SCALE;
+  const hh = TRL_WID * 0.5 * SCALE;
   ctx.beginPath();
-  ctx.moveTo(-TRL_ROVER * SCALE, -hw2);
-  ctx.lineTo(-TRL_ROVER * SCALE,  hw2);
+  ctx.moveTo(-TRL_ROVER * SCALE, -hh);
+  ctx.lineTo(-TRL_ROVER * SCALE,  hh);
   ctx.stroke();
   ctx.restore();
 }
 
-function drawHitch(s) {
-  const hw = hitch(s);
-  ctx.beginPath();
-  ctx.arc(wx(hw.x), wy(hw.y), 4, 0, Math.PI * 2);
+function drawConnections(s) {
+  // hitch behind cab + each inter-trailer joint (towing point = previous rear axle)
+  const pts = [hitch(s)];
+  for (let i = 0; i < s.trailers.length - 1; i++) pts.push(s.trailers[i]);
   ctx.fillStyle = '#f55';
-  ctx.fill();
+  for (const p of pts) {
+    ctx.beginPath();
+    ctx.arc(wx(p.x), wy(p.y), 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawObstacles() {
+  for (const o of obstacles) {
+    ctx.save();
+    ctx.translate(wx(o.x), wy(o.y));
+    ctx.rotate(o.th);
+    ctx.beginPath();
+    ctx.rect(-o.w / 2 * SCALE, -o.h / 2 * SCALE, o.w * SCALE, o.h * SCALE);
+    ctx.fillStyle = o === selectedObs ? 'rgba(230,160,40,0.4)' : 'rgba(180,120,30,0.32)';
+    ctx.fill();
+    ctx.strokeStyle = o === selectedObs ? '#fb3' : '#a86';
+    ctx.lineWidth = o === selectedObs ? 2 : 1;
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function drawGround() {
@@ -378,19 +516,27 @@ function drawGround() {
 }
 
 function jackknife() {
-  let a = (state.th - state.tt) * 180 / Math.PI;
-  while (a >  180) a -= 360;
-  while (a < -180) a += 360;
-  return a;
+  // largest joint angle across the whole chain
+  let maxA = 0;
+  let prevTh = state.th;
+  for (const t of state.trailers) {
+    let a = normAngle(prevTh - t.th) * 180 / Math.PI;
+    if (Math.abs(a) > Math.abs(maxA)) maxA = a;
+    prevTh = t.th;
+  }
+  return maxA;
 }
 
 function updateHUD() {
-  const jk   = jackknife();
+  const jk    = jackknife();
   const warn  = Math.abs(jk) > 30;
   const el    = document.getElementById('hud-text');
-  const suffix = state.blocked ? '  ✖ BLOCKED' : (warn ? '  ⚠ JACKKNIFE' : '');
+  let suffix = '';
+  if (state.collided)     suffix = '  ✖ COLLISION';
+  else if (state.blocked) suffix = '  ✖ BLOCKED';
+  else if (warn)          suffix = '  ⚠ JACKKNIFE';
   el.textContent = `speed: ${state.speed.toFixed(1)} m/s  |  steer: ${(state.steer * 180 / Math.PI).toFixed(0)}°  |  jackknife: ${jk.toFixed(0)}°${suffix}`;
-  el.style.color = state.blocked ? '#f55' : (warn ? '#fa0' : '#888');
+  el.style.color = (state.collided || state.blocked) ? '#f55' : (warn ? '#fa0' : '#888');
 }
 
 // ─── loop ────────────────────────────────────────────────────────────────────
@@ -401,35 +547,70 @@ function loop(ts) {
   step(dt);
   drawGround();
   drawProjection(state);
-  drawTrailer(state);
+  drawObstacles();
+  for (const t of state.trailers) drawTrailerBody(t);
   drawCab(state);
-  drawHitch(state);
+  drawConnections(state);
   updateHUD();
   requestAnimationFrame(loop);
 }
 
-// ─── input ───────────────────────────────────────────────────────────────────
+// ─── keyboard input ──────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedObs) {
+    obstacles = obstacles.filter(o => o !== selectedObs);
+    selectedObs = null;
+    e.preventDefault();
+    return;
+  }
   keys[e.key] = true;
   if (e.key === 'r' || e.key === 'R') reset();
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
 });
 document.addEventListener('keyup', e => { keys[e.key] = false; });
 
-// ─── panel wiring ────────────────────────────────────────────────────────────
-function wire(id, callback) {
-  document.getElementById(id).addEventListener('input', callback);
+// ─── obstacle mouse interaction ──────────────────────────────────────────────
+function pointInObs(px, py, o) {
+  const dx = px - o.x, dy = py - o.y;
+  const lx =  dx * Math.cos(o.th) + dy * Math.sin(o.th);
+  const ly = -dx * Math.sin(o.th) + dy * Math.cos(o.th);
+  return Math.abs(lx) <= o.w / 2 && Math.abs(ly) <= o.h / 2;
+}
+function obsAt(px, py) {
+  for (let i = obstacles.length - 1; i >= 0; i--) if (pointInObs(px, py, obstacles[i])) return obstacles[i];
+  return null;
 }
 
+let dragging = null, dragOff = { x: 0, y: 0 };
+canvas.addEventListener('mousedown', e => {
+  const mx = e.clientX / SCALE, my = e.clientY / SCALE;
+  const o = obsAt(mx, my);
+  selectedObs = o;
+  if (o) { dragging = o; dragOff = { x: mx - o.x, y: my - o.y }; }
+});
+canvas.addEventListener('mousemove', e => {
+  const mx = e.clientX / SCALE, my = e.clientY / SCALE;
+  canvas.style.cursor = (dragging || obsAt(mx, my)) ? 'move' : 'default';
+  if (dragging) { dragging.x = mx - dragOff.x; dragging.y = my - dragOff.y; }
+});
+window.addEventListener('mouseup', () => { dragging = null; });
+canvas.addEventListener('wheel', e => {
+  const mx = e.clientX / SCALE, my = e.clientY / SCALE;
+  const o = dragging || obsAt(mx, my);
+  if (o) { o.th += (e.deltaY > 0 ? 1 : -1) * 5 * Math.PI / 180; e.preventDefault(); }
+}, { passive: false });
+
+// ─── panel wiring ────────────────────────────────────────────────────────────
+function wire(id, cb) { document.getElementById(id).addEventListener('input', cb); }
+
 wire('zoom', e => {
-  SCALE = +e.target.value;
-  resize();
+  SCALE = +e.target.value; resize();
   document.getElementById('zoomVal').textContent = SCALE + ' px/m';
 });
 wire('showGhosts', e => { showGhosts = e.target.checked; });
 wire('showTrail',  e => { showTrail  = e.target.checked; });
 
-wire('projDist',   e => {
+wire('projDist', e => {
   PROJ_DIST  = +e.target.value;
   PROJ_STEPS = Math.round(PROJ_DIST / 0.25);
   document.getElementById('projDistVal').textContent = PROJ_DIST + ' m';
@@ -441,6 +622,11 @@ wire('ghostCount', e => {
 wire('arrowEvery', e => {
   ARROW_EVERY = +e.target.value;
   document.getElementById('arrowEveryVal').textContent = ARROW_EVERY + ' m';
+});
+wire('numTrl', e => {
+  NUM_TRAILERS = +e.target.value;
+  buildTrailers();
+  document.getElementById('numTrlVal').textContent = NUM_TRAILERS;
 });
 wire('maxSteer', e => {
   MAX_STEER = +e.target.value * Math.PI / 180;
@@ -458,15 +644,27 @@ wire('cabWb', e => {
 wire('trlWb', e => {
   TRL_WB  = +e.target.value;
   TRL_LEN = TRL_WB + TRL_ROVER + 0.2;
-  // reposition trailer to match new length
-  const hw = hitch(state);
-  state.trx = hw.x - TRL_WB * Math.cos(state.tt);
-  state.try = hw.y - TRL_WB * Math.sin(state.tt);
+  buildTrailers();
   document.getElementById('trlWbVal').textContent = TRL_WB.toFixed(1) + ' m';
 });
 wire('hitchOff', e => {
   HITCH_OFF = +e.target.value;
   document.getElementById('hitchOffVal').textContent = HITCH_OFF.toFixed(1) + ' m';
+});
+
+let obsCount = 0;
+document.getElementById('addObs').addEventListener('click', () => {
+  const o = {
+    x: WORLD_W * 0.28 + (obsCount % 4) * 1.2,
+    y: WORLD_H * 0.35 + (obsCount % 4) * 1.2,
+    w: 6, h: 3, th: 0,
+  };
+  obsCount++;
+  obstacles.push(o);
+  selectedObs = o;
+});
+document.getElementById('clearObs').addEventListener('click', () => {
+  obstacles = []; selectedObs = null;
 });
 
 // ─── start ───────────────────────────────────────────────────────────────────
