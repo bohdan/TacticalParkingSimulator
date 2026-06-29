@@ -1,4 +1,3 @@
-'use strict';
 /*
  * scene.ts — the Scene component (Component 2).
  *
@@ -10,9 +9,9 @@
  * Depends on `Physics` (physics-kernel.ts). Browser + Node.
  */
 import { Physics } from './physics-kernel.js';
-import type { Pose, VehicleSpec, Goal, KernelInstance } from './physics-kernel.js';
-import type { Point, Shape } from './geometry2d.js';
-import type { LevelDef, PlayableLevelDef, WallDef, CarDef } from './levels.js';
+import type { VehicleSpec } from './physics-kernel.js';
+import type { Shape } from './geometry2d.js';
+import type { PlayableLevelDef, WallDef, CarDef } from './levels.js';
 
 export interface SceneObstacle {
   kind: string;
@@ -26,33 +25,29 @@ export interface BuiltLevel extends PlayableLevelDef {
   obstacles: SceneObstacle[];
 }
 
-export class SceneModule {
-  private readonly BORDER = 0.45;
+const BORDER = 0.45;
 
-  buildLevel(def: PlayableLevelDef): BuiltLevel {
-    const obstacles: SceneObstacle[] = [];
-    const B = this.BORDER;
+export function buildLevel(def: PlayableLevelDef): BuiltLevel {
+  const obstacles: SceneObstacle[] = [];
+  const B = BORDER;
 
-    obstacles.push({ kind: 'border', shape: Physics.Shape.rectangle(-B, -B, def.w + 2 * B, B) });
-    obstacles.push({ kind: 'border', shape: Physics.Shape.rectangle(-B, def.h, def.w + 2 * B, B) });
-    obstacles.push({ kind: 'border', shape: Physics.Shape.rectangle(-B, 0, B, def.h) });
-    obstacles.push({ kind: 'border', shape: Physics.Shape.rectangle(def.w, 0, B, def.h) });
+  obstacles.push({ kind: 'border', shape: Physics.Shape.rectangle(-B, -B, def.w + 2 * B, B) });
+  obstacles.push({ kind: 'border', shape: Physics.Shape.rectangle(-B, def.h, def.w + 2 * B, B) });
+  obstacles.push({ kind: 'border', shape: Physics.Shape.rectangle(-B, 0, B, def.h) });
+  obstacles.push({ kind: 'border', shape: Physics.Shape.rectangle(def.w, 0, B, def.h) });
 
-    for (const r of (def.walls || [])) {
-      const shape = r.ang != null
-        ? Physics.Shape.orientedBox(r.cx, r.cy, r.w, r.h, r.ang)
-        : Physics.Shape.rectangle(r.x, r.y, r.w, r.h);
-      obstacles.push({ kind: r.kind || 'wall', rect: r, shape });
-    }
-
-    for (const c of (def.cars || [])) {
-      const carSpec = Physics.vehicleSpecFor(c.type);
-      const shape = Physics.Shape.orientedBox(c.cx, c.cy, carSpec.len, carSpec.wid, c.h);
-      obstacles.push({ kind: 'car', pose: c, carSpec, shape });
-    }
-
-    return Object.assign({}, def, { obstacles });
+  for (const r of (def.walls || [])) {
+    const shape = r.ang != null
+      ? Physics.Shape.orientedBox(r.cx, r.cy, r.w, r.h, r.ang)
+      : Physics.Shape.rectangle(r.x, r.y, r.w, r.h);
+    obstacles.push({ kind: r.kind || 'wall', rect: r, shape });
   }
-}
 
-export const Scene = new SceneModule();
+  for (const c of (def.cars || [])) {
+    const carSpec = Physics.vehicleSpecFor(c.type);
+    const shape = Physics.Shape.orientedBox(c.cx, c.cy, carSpec.len, carSpec.wid, c.h);
+    obstacles.push({ kind: 'car', pose: c, carSpec, shape });
+  }
+
+  return Object.assign({}, def, { obstacles });
+}

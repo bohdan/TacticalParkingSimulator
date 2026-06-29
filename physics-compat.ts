@@ -1,4 +1,3 @@
-'use strict';
 /*
  * physics-compat.js — the legacy physics.js global surface, reimplemented as thin
  * delegation to the refactored components: PhysicsKernel (physics-kernel.js), Geom2D
@@ -16,7 +15,7 @@ import { Physics as _Phys } from './physics-kernel.js';
 import type { Pose, VehicleSpec, Goal, SimResult, MoveHandle } from './physics-kernel.js';
 import { Geom2D as _Geom } from './geometry2d.js';
 import type { Point, Shape, BoundingCircle } from './geometry2d.js';
-import { Scene as _Scene } from './scene.js';
+import { buildLevel as _sceneBuildLevel } from './scene.js';
 import type { SceneObstacle, BuiltLevel } from './scene.js';
 
 /* ─── Vehicle registry / current vehicle ──────────────────────────────────── */
@@ -64,8 +63,8 @@ const polyBC       = _Geom.polygonBoundingCircle;
 /* ─── Level building (Scene + flatten Shapes to the legacy obstacle shape) ─── */
 // Old buildLevel obstacles exposed `.poly` (and lazily `.bc`); Scene exposes `.shape`.
 // Flatten so game/editor's `o.poly` reads and simulateMove(o.poly/o.bc) keep working.
-function buildLevel(def: Parameters<typeof _Scene.buildLevel>[0]): ReturnType<typeof _Scene.buildLevel> & { obstacles: (SceneObstacle & { poly: Point[]; bc: import('./geometry2d.js').BoundingCircle })[] } {
-  const lvl = _Scene.buildLevel(def);
+function buildLevel(def: Parameters<typeof _sceneBuildLevel>[0]): ReturnType<typeof _sceneBuildLevel> & { obstacles: (SceneObstacle & { poly: Point[]; bc: import('./geometry2d.js').BoundingCircle })[] } {
+  const lvl = _sceneBuildLevel(def);
   const obstacles = lvl.obstacles.map(o =>
     Object.assign({}, o, { poly: o.shape.poly, bc: o.shape.bc }));
   return Object.assign({}, lvl, { obstacles });

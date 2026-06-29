@@ -36,11 +36,10 @@
 // Physics layer.
 import { Physics as P } from './physics-kernel.js';
 import { Geom2D as G } from './geometry2d.js';
-import { Scene as SceneMod } from './scene.js';
+import { buildLevel } from './scene.js';
 const STEER_Q = P.STEER_Q, DIST_Q = P.DIST_Q;
 const rad = P.rad, deg = P.deg, normAng = P.normalizeAngle, SAMPLE_STEP = P.SAMPLE_STEP;
 const polysCollide = G.polygonsCollide, polyBC = G.polygonBoundingCircle;
-const buildLevel = SceneMod.buildLevel;
 export interface RawMove { steer: number; dist: number; }
 export interface SolverOpts {
   weight?: number;

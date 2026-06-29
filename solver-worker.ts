@@ -1,4 +1,3 @@
-'use strict';
 // Web Worker for the parallel brute-force solver. The main thread (solver.js,
 // bruteForceParallel) spawns one of these per CPU slice, hands it a contiguous
 // range of turn-1 steering angles, and streams back validated candidate plans.
@@ -8,7 +7,7 @@
 // collision / inGoal geometry and the brute-force kernel itself — no logic is
 // duplicated here. Importing solver.js registers its makeSolver with the kernel.
 import { Physics } from './physics-kernel.js';
-import { Scene } from './scene.js';
+import { buildLevel } from './scene.js';
 import './solver.js';
 
 let stopped = false;
@@ -28,7 +27,7 @@ onmessage = async (e) => {
   // Build the per-vehicle kernel and bind the solver to it.
   const kernel = Physics.PhysicsKernel(Physics.physicsConfigForLevel({ vehicle: m.vehicle || 'default' }));
   const solver = kernel.createSolver();           // binds the kernel inside solver.js
-  const lvl = Scene.buildLevel(m.def);
+  const lvl = buildLevel(m.def);
   const geom = { obstacles: lvl.obstacles.map(o => o.shape), goal: lvl.goal, start: lvl.start };
 
   // Validate each candidate locally (the kernel has simulateMove + inGoal), then post only
