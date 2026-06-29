@@ -2,5 +2,15 @@
   "type": "module",
   "dependencies": {
     "three": "^0.152.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "concurrently": "^10.0.3",
+    "typescript": "^5.5.4"
+  },
+  "scripts": {
+    "dev": "concurrently \"tsc -p tsconfig.json --watch --pretty false\" \"python3 -m http.server 8000\"",
+    "build": "tsc --pretty false",
+    "typecheck": "tsc --noEmit --pretty false"
   }
 }
