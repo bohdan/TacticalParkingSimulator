@@ -58,16 +58,12 @@
     <div class="lrow"><span>Zoom</span><span class="val" id="zoomVal">21 px/m</span></div>
     <input type="range" id="zoom" min="8" max="42" step="1" value="21">
   </div>
-  <label class="chk"><input type="checkbox" id="showGhosts" checked> Ghost outlines</label>
+  <label class="chk"><input type="checkbox" id="showGhosts" checked> Swept area</label>
   <label class="chk"><input type="checkbox" id="showTrail"  checked> Path lines</label>
 
   <div class="row">
     <div class="lrow"><span>Projection</span><span class="val" id="projDistVal">20 m</span></div>
     <input type="range" id="projDist" min="5" max="40" step="1" value="20">
-  </div>
-  <div class="row">
-    <div class="lrow"><span>Ghost count</span><span class="val" id="ghostCountVal">10</span></div>
-    <input type="range" id="ghostCount" min="2" max="20" step="1" value="10">
   </div>
   <div class="row">
     <div class="lrow"><span>Arrow every</span><span class="val" id="arrowEveryVal">4 m</span></div>
@@ -128,7 +124,6 @@ let NUM_TRAILERS = 1;
 let MAX_STEER  = 35 * Math.PI / 180;
 let MAX_ART    = 75 * Math.PI / 180;
 
-let GHOST_COUNT  = 10;
 let PROJ_DIST    = 20;
 let PROJ_STEPS   = 80;   // recalculated when PROJ_DIST changes
 let ARROW_EVERY  = 4;    // metres between direction arrows on trail
@@ -379,28 +374,43 @@ function drawTrailWithArrows(pts, color) {
   ctx.restore();
 }
 
-function drawGhostRect(x, y, heading, dims, color, alpha) {
-  const rearLen = dims.len - dims.fo;
+// Build the swept-area outline: offset the rear-axle path left/right by half the
+// body width and cap the ends with the nose / tail overhang, giving a curved band.
+function sweptPolygon(pts, dims) {
+  const n = pts.length;
+  if (n < 2) return null;
+  const half = dims.w / 2, rear = dims.len - dims.fo;
+  const left = [], right = [];
+  for (let i = 0; i < n; i++) {
+    const p = pts[i];
+    const lnx = -Math.sin(p.th), lny = Math.cos(p.th);   // left normal
+    left.push({  x: p.x + lnx * half, y: p.y + lny * half });
+    right.push({ x: p.x - lnx * half, y: p.y - lny * half });
+  }
+  const a = pts[n - 1], fwd = { x: Math.cos(a.th), y: Math.sin(a.th) };
+  const noseL = { x: left[n - 1].x  + fwd.x * dims.fo, y: left[n - 1].y  + fwd.y * dims.fo };
+  const noseR = { x: right[n - 1].x + fwd.x * dims.fo, y: right[n - 1].y + fwd.y * dims.fo };
+  const b = pts[0], bwd = { x: -Math.cos(b.th), y: -Math.sin(b.th) };
+  const tailL = { x: left[0].x  + bwd.x * rear, y: left[0].y  + bwd.y * rear };
+  const tailR = { x: right[0].x + bwd.x * rear, y: right[0].y + bwd.y * rear };
+  return [tailL, ...left, noseL, noseR, ...right.slice().reverse(), tailR];
+}
+
+function drawSwept(pts, dims, color) {
+  const poly = sweptPolygon(pts, dims);
+  if (!poly) return;
   ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.translate(wx(x), wy(y));
-  ctx.rotate(heading);
   ctx.beginPath();
-  ctx.rect(-rearLen * SCALE, -dims.w / 2 * SCALE, dims.len * SCALE, dims.w * SCALE);
+  ctx.moveTo(wx(poly[0].x), wy(poly[0].y));
+  for (let i = 1; i < poly.length; i++) ctx.lineTo(wx(poly[i].x), wy(poly[i].y));
+  ctx.closePath();
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.globalAlpha = 0.4;
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
   ctx.stroke();
-  // forward-pointing chevron on the nose
-  const tipX  = dims.fo * SCALE;
-  const baseX = tipX - 0.55 * SCALE;
-  const aw    = 0.26 * SCALE;
-  ctx.beginPath();
-  ctx.moveTo(tipX, 0);
-  ctx.lineTo(baseX, -aw);
-  ctx.lineTo(baseX,  aw);
-  ctx.closePath();
-  ctx.fillStyle = color;
-  ctx.fill();
   ctx.restore();
 }
 
@@ -411,17 +421,8 @@ function drawProjection(s) {
       const segIdx = seg - 1;             // -1 = cab
       const col    = segColor(dir, segIdx);
       const pts    = paths[seg];
-      if (showTrail) drawTrailWithArrows(pts, col);
-      if (showGhosts && pts.length > 1) {
-        const dims = getSegDims(segIdx);
-        for (let g = 1; g <= GHOST_COUNT; g++) {
-          const idx = Math.min(Math.round(g / GHOST_COUNT * (pts.length - 1)), pts.length - 1);
-          const p   = pts[idx];
-          if (!p) continue;
-          const alpha = Math.max(0.12, 0.5 - 0.03 * (g - 1));
-          drawGhostRect(p.x, p.y, p.th, dims, col, alpha);
-        }
-      }
+      if (showGhosts) drawSwept(pts, getSegDims(segIdx), col);
+      if (showTrail)  drawTrailWithArrows(pts, col);
     }
   }
 }
@@ -614,10 +615,6 @@ wire('projDist', e => {
   PROJ_DIST  = +e.target.value;
   PROJ_STEPS = Math.round(PROJ_DIST / 0.25);
   document.getElementById('projDistVal').textContent = PROJ_DIST + ' m';
-});
-wire('ghostCount', e => {
-  GHOST_COUNT = +e.target.value;
-  document.getElementById('ghostCountVal').textContent = GHOST_COUNT;
 });
 wire('arrowEvery', e => {
   ARROW_EVERY = +e.target.value;
