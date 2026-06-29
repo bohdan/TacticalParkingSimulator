@@ -15,11 +15,33 @@
  * Depends on the `Physics` namespace (physics-kernel.js) only for the rad() helper.
  */
 import { Physics } from './physics-kernel.js';
+import type { Pose, VehicleSpec } from './physics-kernel.js';
+import type { Point } from './geometry2d.js';
 
-export const Renderer = (function (P) {
+interface CarOpts {
+  vehicle?: string;
+  wheels?: boolean;
+  steer?: number;
+  fill?: string;
+  stroke?: string | false;
+  detail?: boolean;
+}
+
+interface RendererModule {
+  drawPolygon(ctx: CanvasRenderingContext2D, polygon: Point[]): void;
+  drawPath(ctx: CanvasRenderingContext2D, pts: Point[], color: string, dashed?: boolean, lw?: number, worldPerPixel?: number): void;
+  drawArrow(ctx: CanvasRenderingContext2D, x: number, y: number, ang: number, len: number, color: string): void;
+  drawCarBody(ctx: CanvasRenderingContext2D, pose: Pose, opts: CarOpts, spec: VehicleSpec): void;
+  drawGhost(ctx: CanvasRenderingContext2D, pose: Pose, spec: VehicleSpec, color: string, steer?: number, worldPerPixel?: number): void;
+  drawSteeringWheels(ctx: CanvasRenderingContext2D, pose: Pose, spec: VehicleSpec, steerRad: number, worldPerPixel?: number): void;
+  drawSteeringGeometry(ctx: CanvasRenderingContext2D, pose: Pose, spec: VehicleSpec, steerRad: number, previewPose: Pose | null, worldPerPixel?: number): void;
+  drawArcGuides(ctx: CanvasRenderingContext2D, pose: Pose, spec: VehicleSpec, steerRad: number, forwardLimit: number, backwardLimit: number, advancePose: (p: Pose, steer: number, dist: number) => Pose, worldPerPixel?: number): void;
+}
+
+export const Renderer: RendererModule = (function (P: typeof Physics) {
 
   // drawPolygon(ctx, polygon) — stroke/fill a wall, border, or goal outline.
-  function drawPolygon(ctx, polygon) {
+  function drawPolygon(ctx: CanvasRenderingContext2D, polygon: Point[]): void {
     const n = polygon.length;
     if (!n) return;
     ctx.beginPath();
@@ -30,7 +52,7 @@ export const Renderer = (function (P) {
 
   // drawPath(ctx, pts, color, dashed, lw, worldPerPixel) — styled world-space polyline.
   // Line width is capped at 3·worldPerPixel so it never gets thinner than a few pixels.
-  function drawPath(ctx, pts, color, dashed, lw = 0.09, worldPerPixel = Infinity) {
+  function drawPath(ctx: CanvasRenderingContext2D, pts: Point[], color: string, dashed?: boolean, lw = 0.09, worldPerPixel = Infinity): void {
     if (pts.length < 2) return;
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
@@ -43,7 +65,7 @@ export const Renderer = (function (P) {
   }
 
   // drawArrow(ctx, x, y, ang, len, color) — a line with an arrowhead (direction indicator).
-  function drawArrow(ctx, x, y, ang, len, color) {
+  function drawArrow(ctx: CanvasRenderingContext2D, x: number, y: number, ang: number, len: number, color: string): void {
     const c = Math.cos(ang), s = Math.sin(ang);
     ctx.beginPath();
     ctx.moveTo(x - c * len / 2, y - s * len / 2);
@@ -62,14 +84,14 @@ export const Renderer = (function (P) {
   }
 
   // Local-frame footprint corners from the spec (render legitimately needs the dims).
-  function footprintLocal(spec) {
+  function footprintLocal(spec: VehicleSpec) {
     const x0 = -spec.rOver, x1 = spec.wb + spec.fOver;
     const wy = spec.wid / 2;
     return { x0, x1, y0: -wy, y1: wy };
   }
 
   // Rounded-rect path helper (caller fills/strokes).
-  function roundRect(ctx, x, y, w, h, r) {
+  function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -82,7 +104,7 @@ export const Renderer = (function (P) {
   // drawCarBody(ctx, pose, opts, spec) — full per-vehicle car art, drawn in the car's
   // local frame (the caller sets the world/camera transform). opts = { vehicle, wheels,
   // steer, fill, stroke, detail }. spec supplies the dimensions.
-  function drawCarBody(ctx, pose, opts, spec) {
+  function drawCarBody(ctx: CanvasRenderingContext2D, pose: Pose, opts: CarOpts, spec: VehicleSpec): void {
     const vtype = opts.vehicle || 'default';
     ctx.save();
     ctx.translate(pose.x, pose.y);
@@ -145,7 +167,7 @@ export const Renderer = (function (P) {
     if (vtype === 'tractor') {
       const jx = x0 + len * 0.54;
       const cabW = w * 0.80, hoodW = w * 0.44;
-      const tFill = opts.fill || '#d46020', tStroke = opts.fill ? opts.stroke : '#7a3500';
+      const tFill = opts.fill || '#d46020', tStroke = opts.fill ? (opts.stroke || '#7a3500') : '#7a3500';
       ctx.fillStyle = tFill; ctx.lineWidth = 0.07; ctx.strokeStyle = tStroke;
       roundRect(ctx, x0, -cabW / 2, jx - x0, cabW, 0.12); ctx.fill(); if (tStroke) ctx.stroke();
       roundRect(ctx, jx, -hoodW / 2, x0 + len - jx, hoodW, 0.10); ctx.fill(); if (tStroke) ctx.stroke();
@@ -171,7 +193,7 @@ export const Renderer = (function (P) {
   }
 
   // Top-down Lamborghini R480: open cab with ROPS arch, large rear wheels flanking.
-  function drawTractorDetail(ctx, x0, len, w) {
+  function drawTractorDetail(ctx: CanvasRenderingContext2D, x0: number, len: number, w: number): void {
     const front = x0 + len;
     const jx = x0 + len * 0.54;
     const cabW = w * 0.80, hoodW = w * 0.44;
@@ -207,7 +229,7 @@ export const Renderer = (function (P) {
     ctx.fillRect(x0,  cabW / 2 - 0.20, 0.09, 0.14);
   }
 
-  function drawSedanDetail(ctx, x0, len, w) {
+  function drawSedanDetail(ctx: CanvasRenderingContext2D, x0: number, len: number, w: number): void {
     const wsX = x0 + len * 0.30, rwX = x0 + len * 0.09, glH = w - 0.44;
     ctx.fillStyle = 'rgba(8,12,18,0.45)';
     roundRect(ctx, wsX, -w / 2 + 0.22, Math.min(0.85, len * 0.20), glH, 0.15); ctx.fill();
@@ -219,7 +241,7 @@ export const Renderer = (function (P) {
 
   // Top-down convertible: open cockpit (no roof), small raked windshield,
   // two seats and a roll hoop behind them.
-  function drawConvertibleDetail(ctx, x0, len, w) {
+  function drawConvertibleDetail(ctx: CanvasRenderingContext2D, x0: number, len: number, w: number): void {
     const cockpitX = x0 + len * 0.16, cockpitLen = len * 0.46;
     // open interior tub
     ctx.fillStyle = '#2a1010';
@@ -243,7 +265,7 @@ export const Renderer = (function (P) {
 
   // Bus: full-width front windscreen, a long row of side windows on each
   // flank, and a door line near the front.
-  function drawBusDetail(ctx, x0, len, w) {
+  function drawBusDetail(ctx: CanvasRenderingContext2D, x0: number, len: number, w: number): void {
     const front = x0 + len;
     // wraparound windscreen
     ctx.fillStyle = 'rgba(120,170,210,0.55)';
@@ -272,7 +294,7 @@ export const Renderer = (function (P) {
 
   // drawGhost(ctx, pose, spec, color, steer, worldPerPixel) — dashed footprint outline
   // with dashed wheel boxes and a filled heading notch at the nose.
-  function drawGhost(ctx, pose, spec, color, steer = 0, worldPerPixel = Infinity) {
+  function drawGhost(ctx: CanvasRenderingContext2D, pose: Pose, spec: VehicleSpec, color: string, steer = 0, worldPerPixel = Infinity): void {
     const wy = spec.wid / 2 - 0.13;
     ctx.save();
     ctx.translate(pose.x, pose.y);
@@ -315,7 +337,7 @@ export const Renderer = (function (P) {
 
   // drawSteeringWheels(ctx, pose, spec, steerRad, worldPerPixel) — the two front wheels at
   // `pose`, rotated to `steerRad`, with a cyan outline (part of the steering overlay).
-  function drawSteeringWheels(ctx, pose, spec, steerRad, worldPerPixel = Infinity) {
+  function drawSteeringWheels(ctx: CanvasRenderingContext2D, pose: Pose, spec: VehicleSpec, steerRad: number, worldPerPixel = Infinity): void {
     const c = Math.cos(pose.h), s = Math.sin(pose.h);
     const wy = spec.wid / 2 - 0.16;
     const wl = Math.min(0.9, spec.len * 0.075), wt = Math.min(0.18, spec.wid * 0.10);
@@ -337,7 +359,7 @@ export const Renderer = (function (P) {
   // drawSteeringGeometry(ctx, pose, spec, steerRad, previewPose, worldPerPixel) — the rear-axle
   // axis, the instantaneous turn centre on it, and the radius lines from the rear axle and
   // both front wheels to that centre (classic Ackermann), plus the steered front wheels.
-  function drawSteeringGeometry(ctx, pose, spec, steerRad, previewPose, worldPerPixel = Infinity) {
+  function drawSteeringGeometry(ctx: CanvasRenderingContext2D, pose: Pose, spec: VehicleSpec, steerRad: number, previewPose: Pose | null, worldPerPixel = Infinity): void {
     if (Math.abs(steerRad) < P.rad(0.5)) return;   // ~straight: centre at infinity
     const R = spec.wb / Math.tan(steerRad);
     const c = Math.cos(pose.h), s = Math.sin(pose.h);
@@ -363,7 +385,7 @@ export const Renderer = (function (P) {
   // drawArcGuides(ctx, pose, spec, steerRad, forwardLimit, backwardLimit, advancePose, wpp) —
   // swept tracks of the 4 footprint corners (solid) and 4 wheels (dashed) over the drivable
   // arc. The caller supplies its kernel's advancePose and the precomputed drive limits.
-  function drawArcGuides(ctx, pose, spec, steerRad, forwardLimit, backwardLimit, advancePose, worldPerPixel = Infinity) {
+  function drawArcGuides(ctx: CanvasRenderingContext2D, pose: Pose, spec: VehicleSpec, steerRad: number, forwardLimit: number, backwardLimit: number, advancePose: (p: Pose, steer: number, dist: number) => Pose, worldPerPixel = Infinity): void {
     const N = 60;
     const fLen = spec.wb + spec.fOver, half = spec.wid / 2;
     const sample = (limit, dir) => {
@@ -400,4 +422,4 @@ export const Renderer = (function (P) {
     drawCarBody, drawGhost,
     drawSteeringWheels, drawSteeringGeometry, drawArcGuides,
   };
-})(Physics);
+})(Physics) as RendererModule;

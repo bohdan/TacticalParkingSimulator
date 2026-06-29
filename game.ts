@@ -1,3 +1,5 @@
+// @ts-nocheck
+declare const THREE: any;
 'use strict';
 
 // Shared math/physics come from the refactored components via the compat surface

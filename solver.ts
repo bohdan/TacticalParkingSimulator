@@ -41,19 +41,49 @@ const STEER_Q = P.STEER_Q, DIST_Q = P.DIST_Q;
 const rad = P.rad, deg = P.deg, normAng = P.normalizeAngle, SAMPLE_STEP = P.SAMPLE_STEP;
 const polysCollide = G.polygonsCollide, polyBC = G.polygonBoundingCircle;
 const buildLevel = SceneMod.buildLevel;
+export interface RawMove { steer: number; dist: number; }
+export interface SolverOpts {
+  weight?: number;
+  extraTurns?: number;
+  maxExpand?: number;
+  timeMs?: number;
+  idleMs?: number;
+  posCell?: number;
+  angCellDeg?: number;
+  step?: number;
+  steerSet?: number[] | null;
+  maxArc?: number | null;
+  shouldStop?: (() => boolean) | null;
+  yield?: boolean;
+  diverseN?: number;
+  diverseThresh?: number;
+  diversityBias?: number;
+  dockReach?: number;
+  dock?: boolean;
+  dockBudget?: number;
+  bf?: boolean;
+  bfSteerStep?: number;
+  bfArc1?: number;
+  bfArc2?: number;
+  bfArc3?: number;
+  workers?: number;
+  bfTimeMs?: number;
+  bfQuickExpand?: number;
+}
+export type ProgressCb = (info: object) => void;
 // These resolve to the active kernel's methods/spec, set by _bindKernel().
 let advance, carPoly, simulateMove, inGoal, CAR, _precomp;
-function _bindKernel(kernel) {
+function _bindKernel(kernel: import('./physics-kernel.js').KernelInstance) {
   advance = kernel.advancePose; carPoly = kernel.carPolygon;
   simulateMove = kernel.simulateMove; inGoal = kernel.inGoal; CAR = kernel.spec;
   _precomp = kernel._precomp || null;
 }
 // Public surface. makeSolver binds an existing kernel; solveParkingLevel builds one.
-export function makeSolver(kernel) {
+export function makeSolver(kernel: import('./physics-kernel.js').KernelInstance) {
   _bindKernel(kernel);
   return { solve: _solve, bruteForce: bruteForceKernelFast, validateMoves };
 }
-export async function solveParkingLevel(def, opts = {}, progressCb = null) {
+export async function solveParkingLevel(def: import('./levels.js').PlayableLevelDef, opts: SolverOpts = {}, progressCb: ProgressCb | null = null) {
   _bindKernel(P.PhysicsKernel(P.physicsConfigForLevel(def)));
   return _solve(def, opts, progressCb);
 }
@@ -547,7 +577,7 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
       delete wprm._start; delete wprm._obstacles; delete wprm._goal;   // rebuilt in worker
       const N1est = Math.floor((prm.arc1 || 8) / prm.DIST_Q);
       const totalIters = prm.STEERS.length * 2 * N1est * prm.STEERS.length;
-      await new Promise((resolve) => {
+      await new Promise<void>((resolve) => {
         let done = 0, finished = false;
         const wIters = new Array(want).fill(0);
         const finish = () => { if (finished) return; finished = true;
@@ -601,7 +631,7 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
     onCand, () => (shouldStop && shouldStop()) || (deadline && nowFn() > deadline), yieldHook, best);
 }
 
-async function _solve(def, opts = {}, progressCb = null) {
+async function _solve(def: import('./levels.js').PlayableLevelDef, opts: SolverOpts = {}, progressCb: ProgressCb | null = null) {
   const {
     weight = 1.0,          // heuristic weight: higher = greedier/faster first plan
     extraTurns = 2,        // also keep best plans at K*+1 .. K*+extraTurns

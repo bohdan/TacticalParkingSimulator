@@ -25,7 +25,7 @@ let showGhosts = true;
 let showTrail  = true;
 
 // ─── canvas ──────────────────────────────────────────────────────────────────
-const canvas = document.getElementById('canvas');
+const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx    = canvas.getContext('2d');
 
 function resize() {
@@ -193,8 +193,8 @@ function drawGhostRect(x, y, heading, length, frontOver, width, color, alpha, ar
 function drawProjection(s) {
   const cabFront = CAB_LEN  - CAB_ROVER;
   const trlFront = TRL_LEN  - TRL_ROVER;
-  for (const [dir, cabCol, trlCol] of [[1, '#4af', '#2b8'], [-1, '#f84', '#f42']]) {
-    const path = simPath(s, s.steer, dir * PROJ_DIST, PROJ_STEPS);
+  for (const [dir, cabCol, trlCol] of [[1, '#4af', '#2b8'], [-1, '#f84', '#f42']] as [number, string, string][]) {
+    const path = simPath(s, s.steer, (dir as number) * PROJ_DIST, PROJ_STEPS);
     const n    = path.cab.length;
 
     if (showTrail) {
@@ -344,7 +344,7 @@ wire('projDist',   e => {
 });
 wire('ghostCount', e => {
   GHOST_COUNT = +e.target.value;
-  document.getElementById('ghostCountVal').textContent = GHOST_COUNT;
+  (document.getElementById('ghostCountVal') as HTMLElement).textContent = String(GHOST_COUNT);
 });
 wire('arrowEvery', e => {
   ARROW_EVERY = +e.target.value;

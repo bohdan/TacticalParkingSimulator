@@ -15,6 +15,17 @@ export interface Point {
   y: number;
 }
 
+export interface BoundingCircle {
+  x: number;
+  y: number;
+  r: number;
+}
+
+export interface Shape {
+  poly: Point[];
+  bc: BoundingCircle;
+}
+
 export class Geom2D {
   static rectanglePolygon(x: number, y: number, w: number, h: number): Point[] {
     return [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }];
@@ -86,7 +97,7 @@ export class Geom2D {
     return lo.concat(hi);
   }
 
-  static polygonBoundingCircle(poly: ReadonlyArray<Point>): { x: number; y: number; r: number } {
+  static polygonBoundingCircle(poly: ReadonlyArray<Point>): BoundingCircle {
     let cx = 0, cy = 0;
     for (const v of poly) { cx += v.x; cy += v.y; }
     cx /= poly.length; cy /= poly.length;

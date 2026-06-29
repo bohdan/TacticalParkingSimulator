@@ -10,12 +10,27 @@
  * Depends on `Physics` (physics-kernel.ts). Browser + Node.
  */
 import { Physics } from './physics-kernel.js';
+import type { Pose, VehicleSpec, Goal, KernelInstance } from './physics-kernel.js';
+import type { Point, Shape } from './geometry2d.js';
+import type { LevelDef, PlayableLevelDef, WallDef, CarDef } from './levels.js';
+
+export interface SceneObstacle {
+  kind: string;
+  shape: Shape;
+  rect?: WallDef;
+  pose?: CarDef;
+  carSpec?: VehicleSpec;
+}
+
+export interface BuiltLevel extends PlayableLevelDef {
+  obstacles: SceneObstacle[];
+}
 
 export class SceneModule {
   private readonly BORDER = 0.45;
 
-  buildLevel(def: any) {
-    const obstacles: Array<any> = [];
+  buildLevel(def: PlayableLevelDef): BuiltLevel {
+    const obstacles: SceneObstacle[] = [];
     const B = this.BORDER;
 
     obstacles.push({ kind: 'border', shape: Physics.Shape.rectangle(-B, -B, def.w + 2 * B, B) });

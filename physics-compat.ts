@@ -13,8 +13,11 @@
  * ES module: imports the components and re-exports the legacy surface.
  */
 import { Physics as _Phys } from './physics-kernel.js';
+import type { Pose, VehicleSpec, Goal, SimResult, MoveHandle } from './physics-kernel.js';
 import { Geom2D as _Geom } from './geometry2d.js';
+import type { Point, Shape, BoundingCircle } from './geometry2d.js';
 import { Scene as _Scene } from './scene.js';
+import type { SceneObstacle, BuiltLevel } from './scene.js';
 
 /* ─── Vehicle registry / current vehicle ──────────────────────────────────── */
 // CAR is the MUTABLE current-vehicle dims object: game/editor read CAR.wb/len/… and
@@ -28,7 +31,7 @@ const SAMPLE_STEP = _Phys.SAMPLE_STEP;
 const CAR = Object.assign({}, _Phys.vehicleSpecFor('default'));
 
 let _kernel = _Phys.PhysicsKernel(_Phys.physicsConfigForLevel({ vehicle: 'default' }));
-function setVehicle(name) {
+function setVehicle(name: string): VehicleSpec {
   _kernel = _Phys.PhysicsKernel(_Phys.physicsConfigForLevel({ vehicle: name || 'default' }));
   Object.assign(CAR, _kernel.spec);   // mutate in place so existing CAR references stay valid
   return CAR;
@@ -38,14 +41,14 @@ function setVehicle(name) {
 const rad = _Phys.rad, deg = _Phys.deg, clamp = _Phys.clamp, normAng = _Phys.normalizeAngle;
 
 /* ─── Kinematics / collision / goal (delegate to the CURRENT kernel) ───────── */
-const advance      = (p, steer, s) => _kernel.advancePose(p, steer, s);
-const carPoly      = (p, inf = 0)  => _kernel.carPolygon(p, inf);
-const simulateMove = (start, steer, dist, obstacles, step) => _kernel.simulateMove(start, steer, dist, obstacles, step);
-const inGoal       = (pose, goal)  => _kernel.inGoal(pose, goal);
-const goalPoly     = (g)           => _kernel.goalPolygon(g);
-const parkingClearance   = (pose, goal) => _kernel.parkingClearance(pose, goal);
-const distToGoalBoundary = (pose, goal) => _kernel.distToGoalBoundary(pose, goal);
-const distCarToGoal      = (pose, goal) => _kernel.distCarToGoal(pose, goal);
+const advance      = (p: Pose, steer: number, s: number): Pose => _kernel.advancePose(p, steer, s);
+const carPoly      = (p: Pose, inf = 0): Point[] => _kernel.carPolygon(p, inf);
+const simulateMove = (start: Pose, steer: number, dist: number, obstacles: Shape[], step?: number): SimResult => _kernel.simulateMove(start, steer, dist, obstacles, step);
+const inGoal       = (pose: Pose, goal: Goal): boolean => _kernel.inGoal(pose, goal);
+const goalPoly     = (g: Goal): Point[] => _kernel.goalPolygon(g);
+const parkingClearance   = (pose: Pose, goal: Goal): number => _kernel.parkingClearance(pose, goal);
+const distToGoalBoundary = (pose: Pose, goal: Goal): number => _kernel.distToGoalBoundary(pose, goal);
+const distCarToGoal      = (pose: Pose, goal: Goal): number => _kernel.distCarToGoal(pose, goal);
 
 /* ─── Generic 2D geometry (delegate to Geom2D) ─────────────────────────────── */
 const polysCollide = _Geom.polygonsCollide;
@@ -61,7 +64,7 @@ const polyBC       = _Geom.polygonBoundingCircle;
 /* ─── Level building (Scene + flatten Shapes to the legacy obstacle shape) ─── */
 // Old buildLevel obstacles exposed `.poly` (and lazily `.bc`); Scene exposes `.shape`.
 // Flatten so game/editor's `o.poly` reads and simulateMove(o.poly/o.bc) keep working.
-function buildLevel(def) {
+function buildLevel(def: Parameters<typeof _Scene.buildLevel>[0]): ReturnType<typeof _Scene.buildLevel> & { obstacles: (SceneObstacle & { poly: Point[]; bc: import('./geometry2d.js').BoundingCircle })[] } {
   const lvl = _Scene.buildLevel(def);
   const obstacles = lvl.obstacles.map(o =>
     Object.assign({}, o, { poly: o.shape.poly, bc: o.shape.bc }));

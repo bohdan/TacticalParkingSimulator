@@ -36,32 +36,52 @@
  *   alter table leaderboard alter column mode  drop not null; -- deprecated
  */
 
+export interface LeaderboardEntry {
+  player: string;
+  level: number;
+  levelId: string;
+  levelName: string;
+  moves: number;
+  dist: number;
+  solution?: string;
+}
+
+export interface LeaderboardRow {
+  player: string;
+  moves: number;
+  dist: number;
+  solution?: string;
+  submitted_at: string;
+  level_id?: string;
+  level_name?: string;
+}
+
 const DEFAULTS = {
   url: 'https://qvjorkpzlwvswsptkwyn.supabase.co',
   key: 'sb_publishable_geHaaCkSfPilYWV3fYQHQA_KZdYNrpC',
 };
 
-let _url = '';
-let _key = '';
+let _url: string = '';
+let _key: string = '';
 
 // init({ url, key }?) — configure the client. Both fields default to the public project
 // above, so init() with no args is the common case. Returns isEnabled().
-export function init(config = {}) {
+export function init(config: { url?: string; key?: string } = {}): boolean {
   _url = config.url ?? DEFAULTS.url;
   _key = config.key ?? DEFAULTS.key;
   return isEnabled();
 }
 
 // isEnabled() — true once a URL + key are set (i.e. after init()).
-export function isEnabled() {
+export function isEnabled(): boolean {
   return !!(_url && _key);
 }
 
-function _headers(extra) {
+function _headers(extra?: Record<string, string>): Record<string, string> {
   return { apikey: _key, Authorization: `Bearer ${_key}`, ...extra };
 }
 
-async function _getRows(params) {
+async function _getRows(params: URLSearchParams): Promise<LeaderboardRow[]> {
   const r = await fetch(`${_url}/rest/v1/leaderboard?${params}`, { headers: _headers() });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
@@ -70,7 +90,7 @@ async function _getRows(params) {
 // submitToLeaderboard(entry) — POST a single score.
 // entry: { player, level, levelId, levelName, moves, dist, solution? }.
 // Retries without the newer columns (solution, level_id) if the table predates them.
-export async function submitToLeaderboard(entry) {
+export async function submitToLeaderboard(entry: LeaderboardEntry): Promise<void> {
   const body = {
     player:       entry.player,
     level:        entry.level,
@@ -97,7 +117,7 @@ export async function submitToLeaderboard(entry) {
 }
 
 // loadLevelLeaderboard(levelId) — top entries for one level (best first).
-export async function loadLevelLeaderboard(levelId) {
+export async function loadLevelLeaderboard(levelId: string): Promise<LeaderboardRow[]> {
   return _getRows(new URLSearchParams({
     select: 'player,moves,dist,solution,submitted_at',
     level_id: `eq.${levelId}`,
@@ -106,7 +126,7 @@ export async function loadLevelLeaderboard(levelId) {
 }
 
 // loadOverallLeaderboard() — best entries across every level (best first).
-export async function loadOverallLeaderboard() {
+export async function loadOverallLeaderboard(): Promise<LeaderboardRow[]> {
   return _getRows(new URLSearchParams({
     select: 'player,level_id,level_name,moves,dist,solution,submitted_at',
     order: 'moves.asc,dist.asc,submitted_at.asc', limit: '500',

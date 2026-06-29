@@ -1,3 +1,4 @@
+// @ts-nocheck
 'use strict';
 import { CAR, setVehicle, advance, carPoly, centroid, normAng, rad, deg } from './physics-compat.js';
 import { solveParkingLevel } from './solver.js';

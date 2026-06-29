@@ -17,8 +17,8 @@ const _si    = process.argv.indexOf('--step');
 const STEP   = parseFloat(_si >= 0 ? process.argv[_si + 1] : '0.005');
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-function fetchJson(url) {
-  return new Promise((resolve, reject) => {
+function fetchJson(url: string): Promise<any> {
+  return new Promise<any>((resolve, reject) => {
     const req = https.request(url, {
       headers: { apikey: LB_KEY, Authorization: `Bearer ${LB_KEY}` },
     }, res => {
