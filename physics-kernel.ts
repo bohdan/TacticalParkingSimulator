@@ -56,7 +56,6 @@ export interface KernelInstance {
 
 
 export class PhysicsCore {
-  private readonly G: typeof Geom2D;
   readonly SAMPLE_STEP = 0.06;
   readonly STEER_Q = 0.2;   // deg, player steering input grid
   readonly DIST_Q  = 0.05;  // m,   player distance input grid
@@ -69,28 +68,23 @@ export class PhysicsCore {
   };
 
   readonly VEHICLES: Readonly<Record<string, VehicleSpec>>;
-  readonly Shape: {
-    rectangle(x: number, y: number, w: number, h: number): Shape;
-    orientedBox(cx: number, cy: number, w: number, h: number, ang: number): Shape;
-    polygon(points: Point[]): Shape;
-  };
+  readonly Shape = Object.freeze({
+    rectangle: (x: number, y: number, w: number, h: number): Shape =>
+      PhysicsCore.makeShape(Geom2D.rectanglePolygon(x, y, w, h)),
+    orientedBox: (cx: number, cy: number, w: number, h: number, ang: number): Shape =>
+      PhysicsCore.makeShape(Geom2D.orientedBoxPolygon(cx, cy, w, h, ang)),
+    polygon: (points: Point[]): Shape =>
+      PhysicsCore.makeShape(points),
+  });
   Move: (steeringDegrees: number, signedDistanceMeters: number) => Readonly<{ _sd: number; _n: number }>;
 
   private _solverFactory: ((kernel: KernelInstance) => any) | null = null;
 
-  constructor(G: typeof Geom2D = Geom2D) {
-    this.G = G;
+  constructor() {
     this.VEHICLES = Object.freeze(Object.keys(this.VEHICLE_DEFS).reduce((o: Record<string, any>, k: string) => {
       o[k] = this.vehicleSpecFor(k);
       return o;
     }, {}));
-
-    this.Shape = Object.freeze({
-      rectangle: (x: number, y: number, w: number, h: number) => this.makeShape(this.G.rectanglePolygon(x, y, w, h)),
-      orientedBox: (cx: number, cy: number, w: number, h: number, ang: number) =>
-        this.makeShape(this.G.orientedBoxPolygon(cx, cy, w, h, ang)),
-      polygon: (points: Array<{ x: number; y: number }>) => this.makeShape(points),
-    });
 
     this.Move = (steeringDegrees: number, signedDistanceMeters: number) => {
       const _sd = Math.round(steeringDegrees / this.STEER_Q) * this.STEER_Q;
@@ -120,12 +114,12 @@ export class PhysicsCore {
   }
 
   // ─── Geometry comes from Geom2D (geometry2d.js) ─────────────────────────
-  private makeShape(poly: Point[]): Shape {
-    return { poly, bc: this.G.polygonBoundingCircle(poly) };
+  private static makeShape(poly: Point[]): Shape {
+    return { poly, bc: Geom2D.polygonBoundingCircle(poly) };
   }
 
   shapesCollide(a: Shape, b: Shape): boolean {
-    return this.G.polygonsCollide(a.poly, b.poly);
+    return Geom2D.polygonsCollide(a.poly, b.poly);
   }
 
   // ─── Move (control intent; vehicle-independent; encapsulated) ────────────
@@ -167,14 +161,12 @@ export class PhysicsCore {
     const centerOffset = (spec.wb + spec.fOver - spec.rOver) / 2;
     const STEER_Q = this.STEER_Q, DIST_Q = this.DIST_Q;
 
-    const G = this.G;
     const rad = this.rad.bind(this);
     const deg = this.deg.bind(this);
     const normalizeAngle = this.normalizeAngle.bind(this);
-    const makeShape = (poly: Point[]): Shape => ({ poly, bc: G.polygonBoundingCircle(poly) });
+    const makeShape = (poly: Point[]): Shape => ({ poly, bc: Geom2D.polygonBoundingCircle(poly) });
     const { rectanglePolygon, orientedBoxPolygon, pointInPolygon, polygonsCollide,
-      convexHull, polygonBoundingCircle, pointToSegmentDistance } = G;
-    const contactPoint = G.contactPoint.bind(G);
+      convexHull, polygonBoundingCircle, pointToSegmentDistance, contactPoint } = Geom2D;
 
     // ── kinematics (HOT) ──────────────────────────────────────────────────
     function advancePose(p: Pose, steer: number, s: number): Pose {
