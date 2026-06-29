@@ -49,5 +49,5 @@ export function buildLevel(def: PlayableLevelDef): BuiltLevel {
     obstacles.push({ kind: 'car', pose: c, carSpec, shape });
   }
 
-  return Object.assign({}, def, { obstacles });
+  return { ...def, obstacles };
 }

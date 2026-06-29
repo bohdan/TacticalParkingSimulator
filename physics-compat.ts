@@ -1,9 +1,9 @@
 /*
- * physics-compat.js — the legacy physics.js global surface, reimplemented as thin
- * delegation to the refactored components: PhysicsKernel (physics-kernel.js), Geom2D
- * (geometry2d.js) and Scene (scene.js).
+ * physics-compat.ts — the legacy physics.js global surface, reimplemented as thin
+ * delegation to the refactored components: PhysicsKernel (physics-kernel.ts), Geom2D
+ * (geometry2d.ts) and Scene (scene.ts).
  *
- * It lets the large consumers (game.js, editor.js) keep using the flat, named API they
+ * It lets the large consumers (game.ts, editor.ts) keep using the flat, named API they
  * were written against — they `import` these names — while the DUPLICATE algorithms that
  * used to live in physics.js are deleted: the single source of truth is now the
  * components. Behaviour is preserved by construction: every function below forwards to
@@ -23,11 +23,11 @@ import type { SceneObstacle, BuiltLevel } from './scene.js';
 // hold references to it, so setVehicle syncs it IN PLACE. SEDAN/VEHICLES mirror the
 // old constants. (VEHICLES is a shallow, unfrozen copy so older mutating callers
 // don't throw against the frozen component registry.)
-const SEDAN = Object.assign({}, _Phys.vehicleSpecFor('default'));
-const VEHICLES = Object.keys(_Phys.VEHICLES).reduce(
-  (o, k) => (o[k] = Object.assign({}, _Phys.VEHICLES[k]), o), {});
+const SEDAN = { ..._Phys.vehicleSpecFor('default') };
+const VEHICLES: Record<string, VehicleSpec> = Object.fromEntries(
+  Object.keys(_Phys.VEHICLES).map(k => [k, { ..._Phys.VEHICLES[k] }]));
 const SAMPLE_STEP = _Phys.SAMPLE_STEP;
-const CAR = Object.assign({}, _Phys.vehicleSpecFor('default'));
+const CAR: VehicleSpec = { ..._Phys.vehicleSpecFor('default') };
 
 let _kernel = _Phys.PhysicsKernel(_Phys.physicsConfigForLevel({ vehicle: 'default' }));
 function setVehicle(name: string): VehicleSpec {
@@ -65,9 +65,8 @@ const polyBC       = _Geom.polygonBoundingCircle;
 // Flatten so game/editor's `o.poly` reads and simulateMove(o.poly/o.bc) keep working.
 function buildLevel(def: Parameters<typeof _sceneBuildLevel>[0]): ReturnType<typeof _sceneBuildLevel> & { obstacles: (SceneObstacle & { poly: Point[]; bc: import('./geometry2d.js').BoundingCircle })[] } {
   const lvl = _sceneBuildLevel(def);
-  const obstacles = lvl.obstacles.map(o =>
-    Object.assign({}, o, { poly: o.shape.poly, bc: o.shape.bc }));
-  return Object.assign({}, lvl, { obstacles });
+  const obstacles = lvl.obstacles.map(o => ({ ...o, poly: o.shape.poly, bc: o.shape.bc }));
+  return { ...lvl, obstacles };
 }
 
 export {

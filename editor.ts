@@ -1,5 +1,4 @@
 // @ts-nocheck
-'use strict';
 import { CAR, setVehicle, advance, carPoly, centroid, normAng, rad, deg } from './physics-compat.js';
 import { solveParkingLevel } from './solver.js';
 import { LEVELS } from './levels.js';
@@ -786,7 +785,7 @@ function render(){
 // numbered label per move. Uses the shared physics engine (advance()).
 function drawSolutionPath(){
   if(!L || isCutscene(L) || !L.solution || !L.solution.length) return;
-  const saved=Object.assign({},CAR);
+  const saved={...CAR};
   setVehicle(L.vehicle||'default');
   let pose={x:L.start.x,y:L.start.y,h:L.start.h};
   const segs=[];

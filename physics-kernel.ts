@@ -1,4 +1,3 @@
-'use strict';
 /*
  * physics-kernel.ts — the PhysicsKernel interface, implemented.
  *
@@ -29,13 +28,23 @@ export interface PhysicsKernelConfig { vehicle: VehicleSpec; sampleStep?: number
 export interface Goal { cx: number; cy: number; w: number; h: number; heads: number[]; tol: number; ang?: number; }
 export interface SimResult { pts: Pose[]; end: Pose; hit: { pose: Pose; point: Point } | null; }
 export type MoveHandle = Readonly<{ _sd: number; _n: number }>;
+export interface KernelPrecomp {
+  steers: number[];
+  steerTable: ReadonlyArray<{ R: number; absR: number; cornerRadii: number[]; rMin: number; rMax: number }>;
+  steerMap: Map<number, number>;
+  _siKey: (sd: number) => number;
+  dDx: Float64Array;
+  dDy: Float64Array;
+  dDh: Float64Array;
+  MAX_ND: number;
+}
 export interface KernelInstance {
   config: PhysicsKernelConfig;
   spec: VehicleSpec;
   _wheelbase: number;
   _carRadius: number;
   _centerOffset: number;
-  _precomp: any;
+  _precomp: Readonly<KernelPrecomp>;
   advancePose(p: Pose, steer: number, s: number): Pose;
   turnRadius(steer: number): number;
   arcCenter(p: Pose, steer: number): Point | null;
@@ -81,10 +90,9 @@ export class PhysicsCore {
   private _solverFactory: ((kernel: KernelInstance) => any) | null = null;
 
   constructor() {
-    this.VEHICLES = Object.freeze(Object.keys(this.VEHICLE_DEFS).reduce((o: Record<string, any>, k: string) => {
-      o[k] = this.vehicleSpecFor(k);
-      return o;
-    }, {}));
+    this.VEHICLES = Object.freeze(
+      Object.fromEntries(Object.keys(this.VEHICLE_DEFS).map((k): [string, VehicleSpec] => [k, this.vehicleSpecFor(k)]))
+    );
 
     this.Move = (steeringDegrees: number, signedDistanceMeters: number) => {
       const _sd = Math.round(steeringDegrees / this.STEER_Q) * this.STEER_Q;
@@ -103,17 +111,17 @@ export class PhysicsCore {
   }
 
   // ─── PhysicsStatics: math helpers ───────────────────────────────────────
-  rad(d: number) { return d * Math.PI / 180; }
-  deg(r: number) { return r * 180 / Math.PI; }
-  clamp(v: number, a: number, b: number) { return Math.min(b, Math.max(a, v)); }
-  normalizeAngle(a: number) {
+  rad(d: number): number { return d * Math.PI / 180; }
+  deg(r: number): number { return r * 180 / Math.PI; }
+  clamp(v: number, a: number, b: number): number { return Math.min(b, Math.max(a, v)); }
+  normalizeAngle(a: number): number {
     a %= 2 * Math.PI;
     if (a > Math.PI) a -= 2 * Math.PI;
     if (a < -Math.PI) a += 2 * Math.PI;
     return a;
   }
 
-  // ─── Geometry comes from Geom2D (geometry2d.js) ─────────────────────────
+  // ─── Geometry comes from Geom2D (geometry2d.ts) ─────────────────────────
   private static makeShape(poly: Point[]): Shape {
     return { poly, bc: Geom2D.polygonBoundingCircle(poly) };
   }
@@ -123,23 +131,23 @@ export class PhysicsCore {
   }
 
   // ─── Move (control intent; vehicle-independent; encapsulated) ────────────
-  moveTurnDirection(m: { _sd: number }) { return Math.abs(m._sd) < 0.1 ? 'S' : (m._sd > 0 ? 'L' : 'R'); }
-  moveDirection(m: { _n: number }) { return m._n >= 0 ? 1 : -1; }
-  moveDistance(m: { _n: number }) { return Math.round(m._n * this.DIST_Q * 100) / 100; }
-  moveSteeringDegrees(m: { _sd: number }) { return m._sd; }
+  moveTurnDirection(m: { _sd: number }): 'S' | 'L' | 'R' { return Math.abs(m._sd) < 0.1 ? 'S' : (m._sd > 0 ? 'L' : 'R'); }
+  moveDirection(m: { _n: number }): 1 | -1 { return m._n >= 0 ? 1 : -1; }
+  moveDistance(m: { _n: number }): number { return Math.round(m._n * this.DIST_Q * 100) / 100; }
+  moveSteeringDegrees(m: { _sd: number }): number { return m._sd; }
 
   // Serialization — format owned by physics; callers treat the string as opaque.
-  moveToString(m: { _sd: number; _n: number }) {
+  moveToString(m: { _sd: number; _n: number }): string {
     return `${m._sd}:${this.moveDistance(m)}`;
   }
-  parseMove(s: string) {
+  parseMove(s: string): MoveHandle {
     const [d, dist] = s.split(':').map(Number);
     return this.Move(d, dist);
   }
-  moveSequenceToString(moves: Array<{ _sd: number; _n: number }>) {
+  moveSequenceToString(moves: Array<{ _sd: number; _n: number }>): string {
     return moves.map((m) => this.moveToString(m)).join(';');
   }
-  parseMoveSequence(s: string) {
+  parseMoveSequence(s: string): MoveHandle[] {
     return s ? s.split(';').filter(Boolean).map((value) => this.parseMove(value)) : [];
   }
 
@@ -277,8 +285,8 @@ export class PhysicsCore {
         Cy = start.y + Math.cos(start.h) * R;
         const si = steerMap.get(_siKey(deg(steer)));
         const sg = si != null ? steerTable[si] : null;
-        cornBear = startPoly.map((v: any) => Math.atan2(v.y - Cy, v.x - Cx));
-        cornR = sg ? sg.cornerRadii : startPoly.map((v: any) => Math.hypot(v.x - Cx, v.y - Cy));
+        cornBear = startPoly.map((v: Point) => Math.atan2(v.y - Cy, v.x - Cx));
+        cornR = sg ? sg.cornerRadii : startPoly.map((v: Point) => Math.hypot(v.x - Cx, v.y - Cy));
         rMin  = sg ? sg.rMin        : cornR.reduce((a: number, b: number) => Math.min(a, b), Infinity);
         rMax  = sg ? sg.rMax        : cornR.reduce((a: number, b: number) => Math.max(a, b), 0);
       }
@@ -363,7 +371,7 @@ export class PhysicsCore {
         (hd: number) => Math.abs(normalizeAngle(pose.h - rad(hd))) <= rad(goal.tol));
       if (!okHead) return false;
       const zone = goalPolygon(goal);
-      return carPolygon(pose).every((v: any) => pointInPolygon(v, zone));
+      return carPolygon(pose).every((v: Point) => pointInPolygon(v, zone));
     }
 
     function parkingClearance(pose: Pose, goal: Goal): number {
@@ -447,10 +455,10 @@ export class PhysicsCore {
     return kernel;
   }
 
-  _useSolver(factory: (kernel: KernelInstance) => any) { this._solverFactory = factory; }
+  _useSolver(factory: (kernel: KernelInstance) => any): void { this._solverFactory = factory; }
   private makeSolver(kernel: KernelInstance): any {
     if (!this._solverFactory)
-      throw new Error('Solver not loaded — import ./solver.js before calling createSolver().');
+      throw new Error('Solver not loaded — import ./solver.ts before calling createSolver().');
     return this._solverFactory(kernel);
   }
 }

@@ -1,4 +1,3 @@
-'use strict';
 // Min-turn parking solver (anytime).
 //
 // Objective (lexicographic):
@@ -26,7 +25,7 @@
 // propagated with those exact numbers; each emitted plan is re-simulated at the
 // game's fine collision step, so what the solver returns replays identically.
 //
-// Bound to a PhysicsKernel (physics-kernel.js) — NOT the legacy physics.js globals.
+// Bound to a PhysicsKernel (physics-kernel.ts) — NOT the legacy physics.js globals.
 // makeSolver(kernel) → { solve, bruteForce, validateMoves } binds the kernel; the free
 // solveParkingLevel(def, opts, cb) builds a kernel for def.vehicle and delegates, so
 // existing callers (editor.html) keep working unchanged.
@@ -35,7 +34,9 @@
 
 // Physics layer.
 import { Physics as P } from './physics-kernel.js';
+import type { KernelInstance, VehicleSpec, KernelPrecomp, Pose, Goal } from './physics-kernel.js';
 import { Geom2D as G } from './geometry2d.js';
+import type { Shape, Point } from './geometry2d.js';
 import { buildLevel } from './scene.js';
 const STEER_Q = P.STEER_Q, DIST_Q = P.DIST_Q;
 const rad = P.rad, deg = P.deg, normAng = P.normalizeAngle, SAMPLE_STEP = P.SAMPLE_STEP;
@@ -71,14 +72,19 @@ export interface SolverOpts {
 }
 export type ProgressCb = (info: object) => void;
 // These resolve to the active kernel's methods/spec, set by _bindKernel().
-let advance, carPoly, simulateMove, inGoal, CAR, _precomp;
-function _bindKernel(kernel: import('./physics-kernel.js').KernelInstance) {
+let advance: KernelInstance['advancePose'];
+let carPoly: KernelInstance['carPolygon'];
+let simulateMove: KernelInstance['simulateMove'];
+let inGoal: KernelInstance['inGoal'];
+let CAR: VehicleSpec;
+let _precomp: Readonly<KernelPrecomp> | null;
+function _bindKernel(kernel: KernelInstance) {
   advance = kernel.advancePose; carPoly = kernel.carPolygon;
   simulateMove = kernel.simulateMove; inGoal = kernel.inGoal; CAR = kernel.spec;
   _precomp = kernel._precomp || null;
 }
 // Public surface. makeSolver binds an existing kernel; solveParkingLevel builds one.
-export function makeSolver(kernel: import('./physics-kernel.js').KernelInstance) {
+export function makeSolver(kernel: KernelInstance) {
   _bindKernel(kernel);
   return { solve: _solve, bruteForce: bruteForceKernelFast, validateMoves };
 }
@@ -572,8 +578,7 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
       // of fast (high-lock) and slow (near-zero) steers — avoids stragglers.
       const workerSteers = Array.from({ length: want }, () => []);
       prm.STEERS.forEach((s, i) => workerSteers[i % want].push(s));
-      const wprm = Object.assign({}, prm);
-      delete wprm._start; delete wprm._obstacles; delete wprm._goal;   // rebuilt in worker
+      const { _start, _obstacles, _goal, ...wprm } = prm;   // strip fields rebuilt in worker
       const N1est = Math.floor((prm.arc1 || 8) / prm.DIST_Q);
       const totalIters = prm.STEERS.length * 2 * N1est * prm.STEERS.length;
       await new Promise<void>((resolve) => {
@@ -614,7 +619,7 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
           };
           wk.onerror = () => { if (++done >= want) { clearInterval(timer); finish(); } };
           wk.postMessage({ type: 'run', def, vehicle: def.vehicle || 'default',
-            prm: Object.assign({}, wprm, { STEERS: workerSteers[w], sliceLo: 0, sliceHi: workerSteers[w].length }) });
+            prm: { ...wprm, STEERS: workerSteers[w], sliceLo: 0, sliceHi: workerSteers[w].length } });
         }
       });
       return;
@@ -626,7 +631,7 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
   // Inline fallback (Node / no Worker support): one kernel over the whole grid.
   const geom = { obstacles: prm._obstacles, goal: prm._goal, start: prm._start };
   const yieldHook = async () => { await new Promise(r => setTimeout(r, 0)); };
-  await bruteForceKernelFast(geom, Object.assign({}, prm, { sliceLo: 0, sliceHi: prm.STEERS.length }),
+  await bruteForceKernelFast(geom, { ...prm, sliceLo: 0, sliceHi: prm.STEERS.length },
     onCand, () => (shouldStop && shouldStop()) || (deadline && nowFn() > deadline), yieldHook, best);
 }
 

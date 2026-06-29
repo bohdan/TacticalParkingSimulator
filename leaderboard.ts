@@ -1,6 +1,5 @@
-'use strict';
 /*
- * leaderboard.js — Supabase leaderboard client.
+ * leaderboard.ts — Supabase leaderboard client.
  *
  * A small, self-contained REST client for the `leaderboard` table. It knows nothing
  * about levels, poses, or the game UI: callers pass plain values and get plain rows

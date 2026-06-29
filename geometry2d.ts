@@ -1,4 +1,3 @@
-'use strict';
 /*
  * geometry2d.ts — generic 2D geometry utilities (`Geom2D`).
  *
