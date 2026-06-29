@@ -35,6 +35,7 @@
 // Physics layer.
 import { Physics as P } from './physics-kernel.js';
 import type { KernelInstance, VehicleSpec, KernelPrecomp, Pose, Goal } from './physics-kernel.js';
+import './physics-simple-2d.js';
 import { Geom2D as G } from './geometry2d.js';
 import type { Shape, Point } from './geometry2d.js';
 import { buildLevel } from './scene.js';

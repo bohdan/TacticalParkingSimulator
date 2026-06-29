@@ -12,6 +12,7 @@
  * ES module: imports the components and re-exports the legacy surface.
  */
 import { Physics as _Phys } from './physics-kernel.js';
+import './physics-simple-2d.js';
 import type { Pose, VehicleSpec, Goal, SimResult, MoveHandle } from './physics-kernel.js';
 import { Geom2D as _Geom } from './geometry2d.js';
 import type { Point, Shape, BoundingCircle } from './geometry2d.js';

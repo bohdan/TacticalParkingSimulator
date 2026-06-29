@@ -7,6 +7,7 @@
 // collision / inGoal geometry and the brute-force kernel itself — no logic is
 // duplicated here. Importing solver.ts registers its makeSolver with the kernel.
 import { Physics } from './physics-kernel.js';
+import './physics-simple-2d.js';
 import { buildLevel } from './scene.js';
 import './solver.js';
 import type { RawMove } from './solver.js';
