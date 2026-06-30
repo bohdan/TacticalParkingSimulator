@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { CAR, setVehicle, advance, carPoly, centroid, normAng, rad, deg } from './physics-compat.js';
+import { CAR, setVehicle, advance, carPoly, centroid, convexHull, normAng, rad, deg } from './physics-compat.js';
 import { solveParkingLevel } from './solver.js';
 import { LEVELS } from './levels.js';
 
@@ -798,56 +798,26 @@ function drawSolutionPath(){
     pose=pts[pts.length-1];
   }
 
-  // Swept envelope per segment as a 6-edge closed polygon:
-  //   trailing edge → outer arc (oT corner start→end) → outer side at end
-  //   → leading edge → inner arc back (iL corner end→start) → close.
-  // carPoly order: [0]=RL, [1]=FL, [2]=FR, [3]=RR
+  // True swept body: the union of the car footprint along the path, drawn as
+  // overlapping convex-hull strips between consecutive sample poses. This is the
+  // SAME geometry the collision check sweeps (carPoly along the move), so every
+  // part of the car a collision sees is drawn — a clip can no longer hide behind
+  // a thin 2-corner schematic. One fill() per segment (nonzero winding) shades
+  // the union evenly regardless of strip overlap.
   ctx.save();
   ctx.lineJoin='round';
   for(let si=0;si<segs.length;si++){
     const seg=segs[si], hot=(solSel===si);
     const polys=seg.pts.map(p=>carPoly(p));
-    const n=polys.length;
-    // Determine steer side from heading change across first step.
-    // dh>0 (clockwise) = right turn when fwd; left turn when rev.
-    let dh=seg.pts.length>1 ? normAng(seg.pts[1].h-seg.pts[0].h) : 0;
-    const steerRight=Math.abs(dh)<1e-5 ? true : (dh>0)!==seg.rev;
-    // oL/iL = outer/inner corner index at the Leading end (front if fwd, rear if rev)
-    // oT/iT = outer/inner corner index at the Trailing end
-    // Outer arc traces oT (outer-trailing corner sweeps the outer boundary).
-    // Inner arc traces iL (inner-leading corner sweeps the inner boundary).
-    // carPoly: [0]=RL, [1]=FL, [2]=FR, [3]=RR
-    //   fwd+right: oT=RR(3) iT=RL(0) oL=FR(2) iL=FL(1)
-    //   fwd+left:  oT=RL(0) iT=RR(3) oL=FL(1) iL=FR(2)
-    //   bwd+right: oT=FR(2) iT=FL(1) oL=RR(3) iL=RL(0)
-    //   bwd+left:  oT=FL(1) iT=FR(2) oL=RL(0) iL=RR(3)
-    let oL,iL,oT,iT;
-    if(!seg.rev){ if(steerRight){oL=2;iL=1;oT=3;iT=0;}else{oL=1;iL=2;oT=0;iT=3;} }
-    else        { if(steerRight){oL=3;iL=0;oT=2;iT=1;}else{oL=0;iL=3;oT=1;iT=2;} }
-    // For fwd: the rear corners sweep the arcs (oT=rear-outer, iL=front-inner).
-    // For rev: trailing=front, leading=rear, so rear corners are oL and iT.
-    const p0=polys[0], pN=polys[n-1];
     ctx.beginPath();
-    ctx.moveTo(p0[iT].x,p0[iT].y);               // inner-trailing at start
-    ctx.lineTo(p0[oT].x,p0[oT].y);               // trailing edge
-    if(!seg.rev){
-      for(let i=1;i<n;i++) ctx.lineTo(polys[i][oT].x,polys[i][oT].y); // outer arc (oT=rear-outer)
-      ctx.lineTo(pN[oL].x,pN[oL].y);             // outer side at end
-      ctx.lineTo(pN[iL].x,pN[iL].y);             // leading edge at end
-      for(let i=n-2;i>=0;i--) ctx.lineTo(polys[i][iL].x,polys[i][iL].y); // inner arc (iL=front-inner)
-    } else {
-      ctx.lineTo(p0[oL].x,p0[oL].y);             // outer side at start
-      for(let i=1;i<n;i++) ctx.lineTo(polys[i][oL].x,polys[i][oL].y); // outer arc (oL=rear-outer)
-      ctx.lineTo(pN[iL].x,pN[iL].y);             // leading edge
-      ctx.lineTo(pN[iT].x,pN[iT].y);             // inner side at end
-      for(let i=n-2;i>=0;i--) ctx.lineTo(polys[i][iT].x,polys[i][iT].y); // inner arc (iT=front-inner)
+    for(let i=0;i+1<polys.length;i++){
+      const hull=convexHull(polys[i].concat(polys[i+1]));
+      ctx.moveTo(hull[0].x,hull[0].y);
+      for(let k=1;k<hull.length;k++) ctx.lineTo(hull[k].x,hull[k].y);
+      ctx.closePath();
     }
-    ctx.closePath();
-    ctx.fillStyle=hot?'rgba(255,224,80,0.18)':'rgba(255,200,50,0.09)';
+    ctx.fillStyle=hot?'rgba(255,224,80,0.18)':'rgba(255,200,50,0.10)';
     ctx.fill();
-    ctx.strokeStyle=hot?'rgba(255,224,80,0.80)':'rgba(255,200,50,0.42)';
-    ctx.lineWidth=Math.min(hot?0.03:0.015, 2*PX());
-    ctx.stroke();
   }
   // Ghost car outline at end of each turn
   for(let si=0;si<segs.length;si++){
