@@ -131,6 +131,8 @@ let distMin = 0, distMax = 0; // drivable range at current steer/start pose
 let editSim = null;
 let editSimOpp = null; // preview for the opposite direction (same |dist|, opposite sign)
 let editNearHit = false; // current move clears, but one more step would collide (amber)
+let editCleanSim = null; // when colliding: stable, grid-quantized pre-collision sim (for drawing)
+let editEffD = 0;        // cached effective (display) distance of the edit
 let editIdx = null;    // index of the move being tweaked (null = composing next move)
 
 let anim = null;       // {samples, cum, total, t0, speed}
@@ -198,10 +200,20 @@ function recomputeEdit() {
     editSim = editSimOpp = null;
   }
   const hit = !!(editSim?.hit);
-  // Near-collision: this move clears, but advancing one more grid step (further
-  // in the current direction of travel) would collide — warn before it bites.
   editNearHit = false;
-  if (!hit && editSim) {
+  editCleanSim = null;
+  if (!editSim) {
+    editEffD = 0;
+  } else if (hit) {
+    // Collision: trim to the largest collision-free grid distance (stable, see
+    // clearGridDist) and preview that pose — never the requested sim's wandering
+    // truncation, which jumps as the sample grid shifts with the input distance.
+    editEffD = clearGridDist(startPose, s, editDist, level.obstacles);
+    editCleanSim = simulateMove(startPose, s, editEffD, level.obstacles);
+  } else {
+    editEffD = +(+editDist).toFixed(2);
+    // Near-collision: this move clears, but advancing one more grid step (further
+    // in the current direction of travel) would collide — warn before it bites.
     const next = simulateMove(startPose, s, editDist + Math.sign(editDist) * DIST_Q, level.obstacles);
     editNearHit = !!next.hit;
   }
@@ -315,9 +327,10 @@ function updateHUD() {
 
   $('objective').innerHTML = desc ? escHtml(desc) : '';
 
-  // editSim.end is the pre-collision pose (last collision-free sample), so the
-  // goal readout reflects where the move actually leaves the car.
-  const endPose = editSim ? editSim.end : planEnd();
+  // Pre-collision pose of the active preview (the stable grid-trimmed one when it
+  // collides), so the goal readout reflects where the move actually leaves the car.
+  const previewSim = editSim ? (editSim.hit ? (editCleanSim || editSim) : editSim) : null;
+  const endPose = previewSim ? previewSim.end : planEnd();
   const goalDistHtml = fmtGoalDist(distCarToGoal(endPose, level.goal));
 
   if (planning) {
@@ -561,8 +574,8 @@ function draw(now) {
   if (anim) {
     const trav = Math.min(anim.total, (now - anim.t0) / 1000 * anim.speed);
     restPose = anim.samples[sampleAt(anim, trav)].pose;
-  } else if (editSim && !editSim.hit) {
-    restPose = editSim.end;
+  } else if (editSim) {
+    restPose = (editSim.hit ? (editCleanSim || editSim) : editSim).end;
   } else {
     restPose = planEnd();
   }
@@ -663,7 +676,10 @@ function draw(now) {
   let hitInfo = null;
   if (editSim) {
     const bad = !!editSim.hit;
-    Renderer.drawPath(ctx, editSim.pts,
+    // When colliding, draw the stable grid-trimmed preview (editCleanSim), not the
+    // requested sim's wandering truncation; keep editSim.hit for the contact marker.
+    const showSim = bad ? (editCleanSim || editSim) : editSim;
+    Renderer.drawPath(ctx, showSim.pts,
              bad ? 'rgba(255,82,82,0.9)'
                  : editDist >= 0 ? 'rgba(69,196,255,0.95)' : 'rgba(255,159,67,0.95)',
              editDist < 0, 0.09, drawPX);
@@ -672,7 +688,7 @@ function draw(now) {
     const ghostColor = bad ? 'rgba(255,82,82,0.95)'
       : editNearHit ? 'rgba(255,167,38,0.95)'
       : 'rgba(233,240,250,0.95)';
-    Renderer.drawGhost(ctx, editSim.end, CAR, ghostColor, rad(editSteer), drawPX);
+    Renderer.drawGhost(ctx, showSim.end, CAR, ghostColor, rad(editSteer), drawPX);
     if (bad) hitInfo = editSim.hit;
   }
 
@@ -740,30 +756,38 @@ function draw(now) {
 
 /* ===================== Run / animate ===================== */
 
-// Distance the car actually covers in a move, given its simulation (a move
-// that hits a wall stops short — simulateMove truncates at the contact point).
-function traveledDist(dist, sim) {
-  const n = Math.max(2, Math.ceil(Math.abs(dist) / SAMPLE_STEP));
-  return dist * (sim.pts.length - 1) / n;
+// Largest DIST_Q-grid distance the car can roll from `pose` at `steer` toward the
+// sign of `maxDist` (up to |maxDist|) without colliding. Collision-freeness is
+// monotonic in distance — the swept arc only grows — so a binary search over the
+// fixed step grid yields a quantized, stable truncation: it depends only on the
+// obstacle geometry, never on how far past the wall the move was requested. So it
+// never jumps as the input changes, and never reports a distance shorter than one
+// that is itself valid.
+function clearGridDist(pose, steer, maxDist, obstacles) {
+  const dir = maxDist < 0 ? -1 : 1;
+  let lo = 0, hi = Math.floor(Math.abs(maxDist) / DIST_Q + 1e-6);
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (simulateMove(pose, steer, dir * mid * DIST_Q, obstacles).hit) hi = mid - 1;
+    else lo = mid;
+  }
+  return +(dir * lo * DIST_Q).toFixed(2);
 }
 
-// Effective (non-collision) distance: when a move collides, the car keeps only
-// the pre-collision travel. The full requested distance stays in `moves`/`editDist`
-// so a later steer change can re-extend the move, but display, playback and saving
-// all use this trimmed value. The trim is snapped down to the DIST_Q input grid
-// (toward zero, so it never reaches past the contact) — the surviving distance
-// stays on the same step grid the player inputs on, never an off-grid remainder.
-function effDist(dist, sim) {
+// Effective (non-collision) distance: when a move collides, the car keeps only the
+// pre-collision travel, trimmed to the input grid. The full requested distance stays
+// in `moves`/`editDist` so a later steer change can re-extend the move, but display,
+// playback and saving all use this trimmed value.
+function effDist(pose, steer, dist, sim) {
   if (!(sim && sim.hit)) return +(+dist).toFixed(2);
-  const trav = traveledDist(dist, sim);
-  const steps = Math.floor(Math.abs(trav) / DIST_Q + 1e-6);
-  return +(Math.sign(trav) * steps * DIST_Q).toFixed(2);
+  return clearGridDist(pose, steer, dist, level.obstacles);
 }
 function moveEffDist(i) {
-  return effDist(moves[i].dist, planSims[i]);
+  const start = i === 0 ? level.start : planSims[i - 1].end;
+  return effDist(start, moves[i].steer, moves[i].dist, planSims[i]);
 }
 function editEffDist() {
-  return effDist(editDist, editSim);
+  return +editEffD.toFixed(2);
 }
 // `moves` with each distance trimmed to its pre-collision travel — the form used
 // for the URL hash and leaderboard (never the over-the-wall requested distance).
