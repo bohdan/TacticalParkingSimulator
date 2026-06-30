@@ -74,3 +74,43 @@ npm run build
 ```
 
 Output goes to `dist/`. Serve any static file host.
+
+## Numerical determinism (caveat)
+
+Plans are stored as quantized moves (`STEER_Q` steering, `DIST_Q` distance), so the
+*input* of a shared/leaderboard solution round-trips bit-for-bit on any machine. The
+*simulation* of that plan, however, is **not guaranteed identical across JavaScript
+engines**.
+
+- IEEE-754 `+ − × ÷` and `sqrt` are correctly rounded and bit-identical on every
+  engine and CPU (and JS never fuses multiply-add, so `a*b + c` is portable too).
+- The trig the bicycle model leans on (`sin`/`cos`/`tan`/`atan2`/`hypot`) is **not**
+  spec-mandated bit-exact — engines may differ by ~1 ULP, and so may different versions
+  of the same engine. V8 (Chrome + Node) ships its own `fdlibm`, so all Chrome/Node
+  builds agree across OS/CPU; a different engine (Firefox, Safari) can drift slightly.
+
+In practice the grid-quantized inputs, the goal heading/zone tolerances, and the 1 µm
+clean-touch collision margin (`COLLISION_EPS`) absorb this, so replays and leaderboard
+validation stay consistent. The unguarded edge: a solution parked *exactly* on the fit
+limit, or a truncation sitting *exactly* on a grid step (`clearGridDist` branches on a
+trig-dependent collision test), could in principle flip pass/fail or shift by one step
+on a different engine.
+
+### Potential fix (not implemented)
+
+Every trig *argument* is effectively quantized (per-steer angles), so the kinematics
+can be made bit-identical across all engines:
+
+1. Drive motion entirely from **baked** lookup tables — precomputed offline and shipped
+   as literal constants, *not* recomputed at load with `Math.*` (which would just move
+   the per-engine difference to startup). The kernel already precomputes local-frame arc
+   deltas per `(steer, step)`; extend that to the per-steer rotation `(cos δ, sin δ)`.
+2. Track orientation as a **unit vector** advanced by complex-multiply composition
+   (`± × ÷` only), renormalized periodically via `sqrt`. No accumulated-heading
+   `sin`/`cos` in the hot path.
+3. Replace the collision arc test's `atan2` / angle comparisons with **cross/dot-product
+   sign tests** (`± ×` only).
+
+This removes the transcendental dependency entirely, giving provable cross-engine
+lockstep — worth doing only if deterministic replays or an independent verifier ever
+become a requirement.
