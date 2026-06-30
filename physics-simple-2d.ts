@@ -42,13 +42,14 @@ function createSimple2DKernel(
   const centerOffset = (spec.wb + spec.fOver - spec.rOver) / 2;
 
   // Collision footprint is inset by this margin so a *clean touch* (zero-gap
-  // contact — e.g. parking flush against a bumper or wall) is not a collision;
-  // only a real overlap deeper than this counts. Applied uniformly to the SAT
-  // poly checks and the analytic swept-arc corner radii, so every collision path
-  // shares one tolerance. Far below the DIST_Q input grid, so it never affects
-  // a move the player can actually express. Motion (turn radius, advance) is
-  // unaffected — only the collision corners shrink.
-  const COLLISION_EPS = 1e-4;   // metres (0.1 mm)
+  // contact — e.g. parking flush against a bumper or wall) is not a collision.
+  // It is only a floating-point tolerance for the exact-contact boundary (noise
+  // there is ~1e-12 m), NOT physical slack: it caps allowed penetration at 1 µm,
+  // so any real overlap still counts. Applied uniformly to the SAT poly checks
+  // and the analytic swept-arc corner radii, so every collision path shares one
+  // tolerance. Motion (turn radius, advance) is unaffected — only the collision
+  // corners shrink.
+  const COLLISION_EPS = 1e-6;   // metres (1 µm)
 
   const makeShape = (poly: Point[]): Shape => ({ poly, bc: Geom2D.polygonBoundingCircle(poly) });
   const { rectanglePolygon, orientedBoxPolygon, pointInPolygon, polygonsCollide,
