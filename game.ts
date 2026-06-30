@@ -743,9 +743,14 @@ function traveledDist(dist, sim) {
 // Effective (non-collision) distance: when a move collides, the car keeps only
 // the pre-collision travel. The full requested distance stays in `moves`/`editDist`
 // so a later steer change can re-extend the move, but display, playback and saving
-// all use this trimmed value.
+// all use this trimmed value. The trim is snapped down to the DIST_Q input grid
+// (toward zero, so it never reaches past the contact) — the surviving distance
+// stays on the same step grid the player inputs on, never an off-grid remainder.
 function effDist(dist, sim) {
-  return sim && sim.hit ? +traveledDist(dist, sim).toFixed(2) : +(+dist).toFixed(2);
+  if (!(sim && sim.hit)) return +(+dist).toFixed(2);
+  const trav = traveledDist(dist, sim);
+  const steps = Math.floor(Math.abs(trav) / DIST_Q + 1e-6);
+  return +(Math.sign(trav) * steps * DIST_Q).toFixed(2);
 }
 function moveEffDist(i) {
   return effDist(moves[i].dist, planSims[i]);
@@ -765,9 +770,10 @@ function startRun() {
   if (view.focused) exitFocus(); // gently pull back to the full board for the run
   // Bake every move down to the distance actually travelled, so the plan that
   // runs (and gets saved/shared) is the precise sequence the car performs —
-  // no over-the-limit values that silently truncate on replay.
+  // no over-the-limit values that silently truncate on replay. Baking to the
+  // same grid-snapped effective distance the UI already shows.
   for (let i = 0; i < planSims.length; i++)
-    moves[i].dist = Math.round(traveledDist(moves[i].dist, planSims[i]) * 100) / 100;
+    moves[i].dist = moveEffDist(i);
   moves = moves.filter(m => Math.abs(m.dist) >= 0.01); // drop any no-op moves
   recomputePlan();
 
@@ -1045,7 +1051,7 @@ $('goBtn').addEventListener('click', () => {
   if (!moves.length) { toast('Add some moves first'); return; }
   editIdx = null;
   for (let i = 0; i < planSims.length; i++)
-    moves[i].dist = Math.round(traveledDist(moves[i].dist, planSims[i]) * 100) / 100;
+    moves[i].dist = moveEffDist(i);
   moves = moves.filter(m => Math.abs(m.dist) >= 0.01);
   recomputePlan();
   view3dActive = true;
