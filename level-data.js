@@ -261,7 +261,7 @@ export const LEVELS = [
     ],
     cars: [],
     hint: "A 5.8 m corridor — the simple U-turn no longer fits.",
-    solution: [{ steer: -23.4, dist: -4.5 }, { steer: 35, dist: 1.25 }, { steer: -35, dist: -1.25 }, { steer: 35, dist: 1.1 }, { steer: -35, dist: -1 }, { steer: 35.2, dist: 4.75 }],
+    solution: [{ steer: -23.6, dist: -4.48 }, { steer: 35, dist: 1.26 }, { steer: -35, dist: -1.25 }, { steer: 35, dist: 1.08 }, { steer: -35, dist: -1.02 }, { steer: 35, dist: 4.75 }],
   },
   {
     id: "nb4rua",
@@ -321,7 +321,7 @@ export const LEVELS = [
       { cx: 30, cy: 19, h: 0 },
     ],
     hint: "Thread between the pillars before easing the 12 m bus in.",
-    solution: [{ steer: -4.4, dist: 23.8 }, { steer: 45, dist: -6.85 }, { steer: -18, dist: 6.3 }],
+    solution: [{ steer: -4.4, dist: 23.81 }, { steer: 45, dist: -6.85 }, { steer: -18, dist: 6.3 }],
   },
   {
     id: "ahbt26",
@@ -343,7 +343,7 @@ export const LEVELS = [
       { x: 2.3, y: 19.7, h: 0, speed: 3, loop: 30, offset: 20 },
     ],
     hint: "Who designed this?",
-    solution: [{ steer: -13.6, dist: 14.9 }, { steer: 16.4, dist: -2.1 }, { steer: -25, dist: 4.55 }, { steer: 2.8, dist: -5.35 }, { steer: 45, dist: 1.85 }, { steer: -30.6, dist: 4.6 }, { steer: 4.6, dist: -4.85 }, { steer: 45, dist: 1.55 }, { steer: -45, dist: 2.5 }, { steer: 0.2, dist: -4.4 }, { steer: 45, dist: 2 }, { steer: -45, dist: 3.1 }, { steer: 0, dist: -5.15 }, { steer: 23.8, dist: 4.2 }, { steer: -15.4, dist: 0.9 }, { steer: 45, dist: -2.05 }, { steer: 2.8, dist: -2.7 }, { steer: 24, dist: 4.5 }, { steer: 45, dist: -1.6 }],
+    solution: [{ steer: -13.6, dist: 14.92 }, { steer: 16.4, dist: -2.1 }, { steer: -25, dist: 4.55 }, { steer: 2.8, dist: -5.35 }, { steer: 45, dist: 1.85 }, { steer: -30.6, dist: 4.61 }, { steer: 4.6, dist: -4.85 }, { steer: 45, dist: 1.55 }, { steer: -45, dist: 2.5 }, { steer: 0.2, dist: -4.4 }, { steer: 45, dist: 2 }, { steer: -45, dist: 3.1 }, { steer: 0, dist: -5.15 }, { steer: 23.8, dist: 4.2 }, { steer: -15.4, dist: 0.9 }, { steer: 45, dist: -2.05 }, { steer: 2.8, dist: -2.7 }, { steer: 24, dist: 4.5 }, { steer: 45, dist: -1.6 }],
   },
   {
     id: "hm5m7r",
@@ -431,7 +431,7 @@ export const LEVELS = [
       { cx: 9.5, cy: 2.55, h: Math.PI },
     ],
     hint: "Centimetre gaps — a tiny nudge back opens just enough room.",
-    solution: [{ steer: 35, dist: -0.4 }, { steer: -35, dist: 0.95 }, { steer: 35, dist: -0.3 }, { steer: -1.4, dist: 6.4 }],
+    solution: [{ steer: 35, dist: -0.42 }, { steer: -35, dist: 0.96 }, { steer: 35, dist: -0.3 }, { steer: -1.4, dist: 6.4 }],
   },
   {
     id: "m5zrvk",
@@ -452,7 +452,7 @@ export const LEVELS = [
     ],
     par: 25,
     hint: "You were clearly in a rush... you don't remember why.",
-    solution: [{ steer: -25, dist: 5.55 }, { steer: 35, dist: -3.3 }, { steer: 3.2, dist: 3.3 }, { steer: 35, dist: -3 }, { steer: -35, dist: 1.95 }, { steer: 35, dist: -2.1 }, { steer: -35, dist: 0.75 }, { steer: 35, dist: -0.6 }, { steer: -35, dist: 0.65 }, { steer: -3.8, dist: -2 }, { steer: -22, dist: 2 }, { steer: 6.4, dist: -1.7 }, { steer: -35, dist: -1.9 }, { steer: 35, dist: 1.25 }, { steer: -31.8, dist: -3.95 }, { steer: -24.2, dist: 2.75 }, { steer: -35, dist: -2.35 }, { steer: -9, dist: -12.6 }, { steer: -35, dist: 4.85 }, { steer: 35, dist: -4.35 }, { steer: -35, dist: 2.35 }, { steer: 35, dist: -1.85 }, { steer: -23.8, dist: 0.3 }],
+    solution: [{ steer: -25, dist: 5.55 }, { steer: 35, dist: -3.3 }, { steer: 3.2, dist: 3.3 }, { steer: 35, dist: -3 }, { steer: -35, dist: 1.95 }, { steer: 35, dist: -2.1 }, { steer: -35, dist: 0.75 }, { steer: 35, dist: -0.6 }, { steer: -35, dist: 0.66 }, { steer: -3.8, dist: -2 }, { steer: -22, dist: 1.98 }, { steer: 6.4, dist: -1.7 }, { steer: -35, dist: -1.9 }, { steer: 35, dist: 1.25 }, { steer: -31.8, dist: -3.95 }, { steer: -24.2, dist: 2.75 }, { steer: -35, dist: -2.35 }, { steer: -9, dist: -12.6 }, { steer: -35, dist: 4.85 }, { steer: 35, dist: -4.35 }, { steer: -35, dist: 2.35 }, { steer: 35, dist: -1.85 }, { steer: -23.8, dist: 0.3 }],
   },
   {
     id: "s2p1ol",
@@ -580,7 +580,7 @@ export const LEVELS = [
       { cx: 2.8, cy: 9.7, h: Math.PI, type: "tractor" },
     ],
     hint: "It's your first day! Rise and shine!",
-    solution: [{ steer: 5, dist: 11.8 }, { steer: -49.4, dist: 2.9 }, { steer: -24, dist: 4.35 }, { steer: -7.8, dist: -7.1 }, { steer: -1.4, dist: 7 }, { steer: 52, dist: -0.65 }, { steer: -31.6, dist: 3.95 }, { steer: 1.2, dist: 9.5 }],
+    solution: [{ steer: 5, dist: 11.81 }, { steer: -49.4, dist: 2.9 }, { steer: -24, dist: 4.39 }, { steer: -7.8, dist: -7.15 }, { steer: -1.4, dist: 7 }, { steer: 52, dist: -0.65 }, { steer: -31.6, dist: 3.95 }, { steer: 1.2, dist: 9.5 }],
   },
   {
     id: "vl8wg1",
@@ -759,7 +759,7 @@ export const LEVELS = [
       { cx: 22.8, cy: 6.6, h: -2.4629, type: "bus" },
       { cx: 11.2, cy: 20.8, h: -116 * Math.PI / 180, type: "bus" },
       { cx: 15, cy: 22.6, h: -1.7027, type: "tractor" },
-      { cx: 17.57, cy: 12.2, h: 2.4568, type: "tractor" },
+      { cx: 17.58, cy: 12.21, h: 2.4568, type: "tractor" },
       { cx: 24.12, cy: 12.9, h: 0.0750 },
       { cx: 23.4, cy: 20.6, h: 0 },
     ],
