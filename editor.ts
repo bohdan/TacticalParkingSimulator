@@ -1038,7 +1038,7 @@ cv.addEventListener('pointermove', e=>{
     // zoom by spread change, anchored at the centroid
     if(gesture.dist>0 && g.dist>0){
       const f=Math.min(3,Math.max(.33,g.dist/gesture.dist));
-      const ns=Math.min(600,Math.max(5,V.scale*f));
+      const ns=Math.min(6000,Math.max(5,V.scale*f));
       const af=ns/V.scale;
       V.ox=g.cx-(g.cx-V.ox)*af; V.oy=g.cy-(g.cy-V.oy)*af;
       V.scale=ns;
@@ -1193,7 +1193,7 @@ cv.addEventListener('wheel', e=>{
   const r=cv.getBoundingClientRect();
   const mx=e.clientX-r.left, my=e.clientY-r.top;
   const factor=e.deltaY<0?1.15:.87;
-  const ns=Math.min(600,Math.max(5,V.scale*factor));
+  const ns=Math.min(6000,Math.max(5,V.scale*factor));
   const af=ns/V.scale;        // actual factor after clamping
   V.ox=mx-(mx-V.ox)*af;
   V.oy=my-(my-V.oy)*af;
