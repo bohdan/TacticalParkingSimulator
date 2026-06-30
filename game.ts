@@ -778,13 +778,14 @@ function clearGridDist(pose, steer, maxDist, obstacles) {
 // pre-collision travel, trimmed to the input grid. The full requested distance stays
 // in `moves`/`editDist` so a later steer change can re-extend the move, but display,
 // playback and saving all use this trimmed value.
-function effDist(pose, steer, dist, sim) {
-  if (!(sim && sim.hit)) return +(+dist).toFixed(2);
-  return clearGridDist(pose, steer, dist, level.obstacles);
-}
 function moveEffDist(i) {
+  const sim = planSims[i];
+  // No sim yet (planSims out of sync with moves, e.g. mid-load) or a clean move:
+  // use the raw distance. Only a collided move needs the grid-trim, and by then
+  // planSims is built up to i, so planSims[i-1] is safe to read for the start pose.
+  if (!(sim && sim.hit)) return +(+moves[i].dist).toFixed(2);
   const start = i === 0 ? level.start : planSims[i - 1].end;
-  return effDist(start, moves[i].steer, moves[i].dist, planSims[i]);
+  return clearGridDist(start, moves[i].steer, moves[i].dist, level.obstacles);
 }
 function editEffDist() {
   return +editEffD.toFixed(2);
