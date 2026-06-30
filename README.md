@@ -44,16 +44,21 @@ shared as `#sol=` links and replayed.
 ## Project layout
 
 ```
-physics-kernel.ts   — bicycle-model kinematics, collision, per-level PhysicsKernel
+physics-kernel.ts   — PhysicsKernel interface, value types, statics, kernel registry
+physics-simple-2d.ts— bicycle-model kernel: kinematics + analytic swept-arc collision
 geometry2d.ts       — generic 2D geometry (SAT, hull, segment math)
 scene.ts            — obstacle/goal construction from level definitions
+physics-compat.ts   — flat named-API shim over the components (used by game/editor/tools)
 solver.ts           — anytime min-turn A* + brute-force solver (bound to a kernel)
-render.ts           — pure drawing layer (no physics globals)
+solver-worker.ts    — Web Worker entry for parallel brute-force search
+render.ts           — pure 2D drawing layer (no physics globals)
+render-3d.ts        — Three.js 3D fly-through visualisation
 game.ts             — game orchestration, input, HUD, animation loop
 editor.ts           — standalone level editor with Solve helper
-levels.ts           — all levels as plain data, each with id, geometry, solution
+cutscene.ts         — briefing / cutscene screens
+levels.ts           — level types + typed re-export of the level set
+level-data.js       — raw level data (plain JS, read/written by the editor)
 leaderboard.ts      — leaderboard UI and Supabase integration
-solver-worker.ts    — Web Worker entry for parallel brute-force search
 ```
 
 ## Run it
@@ -65,7 +70,10 @@ npm install
 npm run dev
 ```
 
-Then open the URL printed by Vite (typically `http://localhost:5173`).
+Then open `http://localhost:8000`. `npm run dev` runs `tsc --watch` (compiling
+`.ts` → `build/`) alongside `python3 -m http.server 8000`, so edits recompile on
+save — reload the page to pick them up. `npm run typecheck` type-checks without
+emitting.
 
 ## Build for production
 
@@ -73,7 +81,11 @@ Then open the URL printed by Vite (typically `http://localhost:5173`).
 npm run build
 ```
 
-Output goes to `dist/`. Serve any static file host.
+Compiles with `tsc` to `build/` — there is no bundler; the HTML pages load
+`build/*.js` directly. Serving is just static files: `index.html`, `editor.html`,
+`style.css`, `three.min.js` and the `build/` output. Pushing to `main` auto-builds
+and deploys to GitHub Pages via `.github/workflows/deploy-pages.yml` (Pages source
+= GitHub Actions), which publishes exactly those files.
 
 ## Numerical determinism (caveat)
 
