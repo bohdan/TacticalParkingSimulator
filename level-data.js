@@ -771,8 +771,5 @@ export const LEVELS = [
     draft: true,
     hint: "I am in a mood for some pie... ?!?!?",
     solution: [{ steer: 3, dist: 14 }, { steer: 15, dist: 9.2 }, { steer: 6, dist: 5.35 }, { steer: 8, dist: 9.7 }, { steer: 9, dist: 3 }],
-    solutions: [
-      [{ steer: 3, dist: 14 }, { steer: 15, dist: 9.2 }, { steer: 5, dist: 5.35 }, { steer: 8, dist: 9.7 }, { steer: 9, dist: 3 }],
-    ],
   },
 ];
