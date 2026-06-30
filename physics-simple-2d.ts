@@ -41,6 +41,15 @@ function createSimple2DKernel(
   const carRadius = 0.5 * Math.hypot(spec.len, spec.wid) + 0.02;
   const centerOffset = (spec.wb + spec.fOver - spec.rOver) / 2;
 
+  // Collision footprint is inset by this margin so a *clean touch* (zero-gap
+  // contact — e.g. parking flush against a bumper or wall) is not a collision;
+  // only a real overlap deeper than this counts. Applied uniformly to the SAT
+  // poly checks and the analytic swept-arc corner radii, so every collision path
+  // shares one tolerance. Far below the DIST_Q input grid, so it never affects
+  // a move the player can actually express. Motion (turn radius, advance) is
+  // unaffected — only the collision corners shrink.
+  const COLLISION_EPS = 1e-4;   // metres (0.1 mm)
+
   const makeShape = (poly: Point[]): Shape => ({ poly, bc: Geom2D.polygonBoundingCircle(poly) });
   const { rectanglePolygon, orientedBoxPolygon, pointInPolygon, polygonsCollide,
     convexHull, pointToSegmentDistance, contactPoint } = Geom2D;
@@ -83,11 +92,13 @@ function createSimple2DKernel(
   const steerMap = new Map(steers.map((sd, si) => [_siKey(sd), si]));
 
   // Car corners in local frame (rear axle at origin, heading = +x direction).
+  // Inset by COLLISION_EPS so the precomputed corner radii / inner-outer radii
+  // match the inset SAT footprint used in sweepCollides (clean touches allowed).
   const locCorners: [number, number][] = [
-    [-spec.rOver,          -spec.wid / 2],
-    [spec.wb + spec.fOver, -spec.wid / 2],
-    [spec.wb + spec.fOver,  spec.wid / 2],
-    [-spec.rOver,           spec.wid / 2],
+    [-spec.rOver + COLLISION_EPS,          -spec.wid / 2 + COLLISION_EPS],
+    [spec.wb + spec.fOver - COLLISION_EPS, -spec.wid / 2 + COLLISION_EPS],
+    [spec.wb + spec.fOver - COLLISION_EPS,  spec.wid / 2 - COLLISION_EPS],
+    [-spec.rOver + COLLISION_EPS,           spec.wid / 2 - COLLISION_EPS],
   ];
   const locEdges = locCorners.map((c, i) => [c, locCorners[(i + 1) % 4]]);
 
@@ -143,9 +154,9 @@ function createSimple2DKernel(
 
   function sweepCollides(start: Pose, steer: number, dist: number, shapes: Shape[]): Shape | null {
     if (!shapes.length || Math.abs(dist) < 1e-9) return null;
-    const startPoly = carPolygon(start);
+    const startPoly = carPolygon(start, -COLLISION_EPS);
     const end = advancePose(start, steer, dist);
-    const endPoly = carPolygon(end);
+    const endPoly = carPolygon(end, -COLLISION_EPS);
     const isStr = Math.abs(steer) < 1e-4;
     const R = isStr ? Infinity : wheelbase / Math.tan(steer);
     const Delta = isStr ? 0 : dist / R;
@@ -284,7 +295,7 @@ function createSimple2DKernel(
       const o = shapes[i], bc = o.bc;
       const dx = ccx - bc.x, dy = ccy - bc.y, rr = carRadius + bc.r;
       if (dx * dx + dy * dy > rr * rr) continue;
-      if (!poly) poly = carPolygon({ x, y, h });
+      if (!poly) poly = carPolygon({ x, y, h }, -COLLISION_EPS);
       if (polygonsCollide(poly, o.poly)) return true;
     }
     return false;
