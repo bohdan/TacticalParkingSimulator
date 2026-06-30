@@ -7,6 +7,7 @@
     "strict": false,
     "noEmit": false,
     "noCheck": false,
+    "allowJs": true,
     "skipLibCheck": true,
     "rootDir": ".",
     "outDir": "build",

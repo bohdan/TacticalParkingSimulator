@@ -1583,9 +1583,9 @@ bind('sHint',  e=>{ L.hint=e.target.value; });
 
 // ── Level set: load / navigate / structural edits ─────────────────────────────
 // Safe parser for the LEVELS array literal — NEVER uses eval / new Function, so
-// even though this only ever reads our own levels.js (via GitHub API or a
+// even though this only ever reads our own level-data.js (via GitHub API or a
 // same-origin fetch), no fetched or pasted text can execute code. Handles the
-// JS-literal features levels.js uses: unquoted keys, trailing commas, // and
+// JS-literal features level-data.js uses: unquoted keys, trailing commas, // and
 // /* */ comments, single/double-quoted strings, and arithmetic over numbers
 // and Math.PI (e.g. -Math.PI / 2). String contents are read verbatim, so
 // colons or commas inside names never affect structure parsing.
@@ -1714,7 +1714,7 @@ async function fetchLevels(){
   // deleted/duplicate levels keep reappearing). cache:'no-store' (in ghGet) and
   // a fresh timestamp defeat any client/proxy caching of the API response.
   if(!ghReady()) throw new Error('NO_GH');
-  const fd=await ghGet(`/contents/levels.js?ref=${GHS.branch}&t=${Date.now()}`);
+  const fd=await ghGet(`/contents/level-data.js?ref=${GHS.branch}&t=${Date.now()}`);
   return parseLevelsText(b64decode(fd.content));
 }
 
@@ -1745,7 +1745,7 @@ async function loadAllLevels(){
     if(!levels.length) levels=[newLevel()];
   }catch(err){
     if(err.message==='NO_GH'){
-      // No PAT: fall back to the bundled levels.js (read-only, solver still works).
+      // No PAT: fall back to the bundled level-data.js (read-only, solver still works).
       levels=(typeof LEVELS!=='undefined'?[...LEVELS]:[]).map(normalizeLevel);
       if(!levels.length) levels=[newLevel()];
       setSaveStatus('Read-only — no GitHub token (⚙ GitHub to enable saving)','warn');
@@ -1959,15 +1959,15 @@ function setSaveStatus(msg, cls=''){
   el.textContent=msg; el.style.display=''; el.className=cls;
 }
 
-// Commit the entire in-memory level set to levels.js in a single commit.
+// Commit the entire in-memory level set to level-data.js in a single commit.
 async function saveAllToGitHub(){
-  setSaveStatus('Fetching levels.js…');
-  const fd=await ghGet(`/contents/levels.js?ref=${GHS.branch}`);
+  setSaveStatus('Fetching level-data.js…');
+  const fd=await ghGet(`/contents/level-data.js?ref=${GHS.branch}`);
 
-  const newContent='const LEVELS = [\n'+levels.map(lv=>buildExport(lv)).join('\n')+'\n];\n';
+  const newContent='export const LEVELS = [\n'+levels.map(lv=>buildExport(lv)).join('\n')+'\n];\n';
 
   setSaveStatus(`Committing ${levels.length} levels…`);
-  const putData=await ghPut(`/contents/levels.js`,{message:`Update levels (${levels.length} total)`,content:strToBase64(newContent),sha:fd.sha,branch:GHS.branch});
+  const putData=await ghPut(`/contents/level-data.js`,{message:`Update levels (${levels.length} total)`,content:strToBase64(newContent),sha:fd.sha,branch:GHS.branch});
   const newSha=putData.commit.sha.slice(0,7);
 
   // Bump cache-bust in index.html so the deploy refreshes
@@ -2009,7 +2009,7 @@ document.getElementById('ghOverlay').addEventListener('click',e=>{if(e.target===
 document.getElementById('btnSave').onclick=()=>{
   if(!ghReady()){ document.getElementById('btnGH').click(); return; }
   document.getElementById('saveSummary').textContent=
-    `Commit all ${levels.length} levels to ${GHS.owner}/${GHS.repo} (${GHS.branch}). This overwrites levels.js.`;
+    `Commit all ${levels.length} levels to ${GHS.owner}/${GHS.repo} (${GHS.branch}). This overwrites level-data.js.`;
   document.getElementById('saveStatus').style.display='none';
   document.getElementById('saveBtnRow').style.display='';
   document.getElementById('saveOverlay').classList.add('show');
