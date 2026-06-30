@@ -130,6 +130,7 @@ let editDist = 0;      // meters, signed
 let distMin = 0, distMax = 0; // drivable range at current steer/start pose
 let editSim = null;
 let editSimOpp = null; // preview for the opposite direction (same |dist|, opposite sign)
+let editNearHit = false; // current move clears, but one more step would collide (amber)
 let editIdx = null;    // index of the move being tweaked (null = composing next move)
 
 let anim = null;       // {samples, cum, total, t0, speed}
@@ -164,7 +165,7 @@ function driveLimit(pose, steer, dir) {
 
 function updateHash() {
   if (!level || !level.id) return;
-  const compact = movesToCompact(moves);
+  const compact = movesToCompact(effectiveMoves());
   history.replaceState(null, '', location.pathname + '#' + level.id + (compact ? '/' + (solutionUsed ? '' : '~') + compact : ''));
 }
 
@@ -187,7 +188,7 @@ function recomputeEdit() {
     : planEnd();
   const s = rad(editSteer);
   // Fixed symmetric range so the distance value is preserved when the player
-  // adjusts the steering angle. Collision is shown via yellow highlight instead.
+  // adjusts the steering angle. Collision is shown via red highlight instead.
   const fieldRange = Math.max(40, Math.ceil(Math.hypot(level.w, level.h)));
   distMax = fieldRange; distMin = -fieldRange;
   if (Math.abs(editDist) > 0.01) {
@@ -197,7 +198,15 @@ function recomputeEdit() {
     editSim = editSimOpp = null;
   }
   const hit = !!(editSim?.hit);
+  // Near-collision: this move clears, but advancing one more grid step (further
+  // in the current direction of travel) would collide — warn before it bites.
+  editNearHit = false;
+  if (!hit && editSim) {
+    const next = simulateMove(startPose, s, editDist + Math.sign(editDist) * DIST_Q, level.obstacles);
+    editNearHit = !!next.hit;
+  }
   distEl.classList.toggle('hit', hit);
+  distEl.classList.toggle('near', editNearHit);
   // Allow adding when steer is set even at zero distance (creates a 0-dist turn).
   const canAdd = editIdx !== null || (editSim && editSim.pts.length >= 2) || Math.abs(editSteer) >= STEER_Q;
   $('addBtn').disabled = !!anim || (editIdx === null && !canAdd);
@@ -206,7 +215,7 @@ function recomputeEdit() {
 
 function planStats() {
   let dist = 0;
-  for (const m of moves) dist += Math.abs(m.dist);
+  for (let i = 0; i < moves.length; i++) dist += Math.abs(moveEffDist(i));
   return { moves: moves.length, dist };
 }
 
@@ -299,7 +308,9 @@ function updateHUD() {
 
   $('objective').innerHTML = desc ? escHtml(desc) : '';
 
-  const endPose = (editSim && !editSim.hit) ? editSim.end : planEnd();
+  // editSim.end is the pre-collision pose (last collision-free sample), so the
+  // goal readout reflects where the move actually leaves the car.
+  const endPose = editSim ? editSim.end : planEnd();
   const goalDistHtml = fmtGoalDist(distCarToGoal(endPose, level.goal));
 
   if (planning) {
@@ -371,11 +382,10 @@ function renderMoveList() {
   for (let i = 0; i < moves.length; i++) {
     const active = editIdx === i;          // show the live edit on the active chip
     const sDeg = active ? editSteer : deg(moves[i].steer);
-    const dist = active ? editDist : moves[i].dist;
-    html += moveChip(i + 1, sDeg, dist, active, i);
+    html += moveChip(i + 1, sDeg, moveEffDist(i), active, i);
   }
   html += pending
-    ? moveChip(moves.length + 1, editSteer, editDist, true, 'new')
+    ? moveChip(moves.length + 1, editSteer, editEffDist(), true, 'new')
     : `<div class="mv-chip add${composing ? ' active' : ''}" data-i="new">&#65291;</div>`;
   el.innerHTML = html;
   const act = el.querySelector('.active');
@@ -612,7 +622,7 @@ function draw(now) {
     const gPose = editStartPose(), gSteer = rad(editSteer);
     Renderer.drawArcGuides(ctx, gPose, CAR, gSteer,
       driveLimit(gPose, gSteer, 1), driveLimit(gPose, gSteer, -1), advance, drawPX);
-    const previewPose = editSim ? (editSim.hit ? editSim.hit.pose : editSim.end) : null;
+    const previewPose = editSim ? editSim.end : null;   // pre-collision end pose
     Renderer.drawSteeringGeometry(ctx, gPose, CAR, gSteer, previewPose, drawPX);
   }
 
@@ -635,8 +645,10 @@ function draw(now) {
     const isAnchor = editIdx !== null ? i === editIdx - 1 : i === planSims.length - 1 && !editSim;
     ctx.save();
     if (dimmed) ctx.globalAlpha = 0.3;
-    Renderer.drawGhost(ctx, planSims[i].end, CAR, isAnchor
-      ? 'rgba(233,240,250,0.85)' : 'rgba(160,175,195,0.5)', moves[i].steer, drawPX);
+    // A committed move that collides parks the car red at its pre-collision pose.
+    const ghostColor = planSims[i].hit ? 'rgba(255,82,82,0.85)'
+      : isAnchor ? 'rgba(233,240,250,0.85)' : 'rgba(160,175,195,0.5)';
+    Renderer.drawGhost(ctx, planSims[i].end, CAR, ghostColor, moves[i].steer, drawPX);
     ctx.restore();
   }
 
@@ -648,8 +660,12 @@ function draw(now) {
              bad ? 'rgba(255,82,82,0.9)'
                  : editDist >= 0 ? 'rgba(69,196,255,0.95)' : 'rgba(255,159,67,0.95)',
              editDist < 0, 0.09, drawPX);
-    Renderer.drawGhost(ctx, bad ? editSim.hit.pose : editSim.end, CAR,
-              bad ? 'rgba(255,82,82,0.95)' : 'rgba(233,240,250,0.95)', rad(editSteer), drawPX);
+    // Ghost sits at the pre-collision pose: red if this move collides, amber if
+    // one more step would, otherwise the normal bright preview.
+    const ghostColor = bad ? 'rgba(255,82,82,0.95)'
+      : editNearHit ? 'rgba(255,167,38,0.95)'
+      : 'rgba(233,240,250,0.95)';
+    Renderer.drawGhost(ctx, editSim.end, CAR, ghostColor, rad(editSteer), drawPX);
     if (bad) hitInfo = editSim.hit;
   }
 
@@ -722,6 +738,25 @@ function draw(now) {
 function traveledDist(dist, sim) {
   const n = Math.max(2, Math.ceil(Math.abs(dist) / SAMPLE_STEP));
   return dist * (sim.pts.length - 1) / n;
+}
+
+// Effective (non-collision) distance: when a move collides, the car keeps only
+// the pre-collision travel. The full requested distance stays in `moves`/`editDist`
+// so a later steer change can re-extend the move, but display, playback and saving
+// all use this trimmed value.
+function effDist(dist, sim) {
+  return sim && sim.hit ? +traveledDist(dist, sim).toFixed(2) : +(+dist).toFixed(2);
+}
+function moveEffDist(i) {
+  return effDist(moves[i].dist, planSims[i]);
+}
+function editEffDist() {
+  return effDist(editDist, editSim);
+}
+// `moves` with each distance trimmed to its pre-collision travel — the form used
+// for the URL hash and leaderboard (never the over-the-wall requested distance).
+function effectiveMoves() {
+  return moves.map((m, i) => ({ steer: m.steer, dist: moveEffDist(i) }));
 }
 
 function startRun() {

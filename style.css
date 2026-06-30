@@ -264,28 +264,52 @@ input[type="range"]::-moz-range-thumb {
   border: 3px solid #15405a;
 }
 
-/* Collision warning: distance slider turns amber */
-#dist.hit::-webkit-slider-runnable-track {
+/* Near-collision warning: one more step would hit — distance slider turns amber */
+#dist.near::-webkit-slider-runnable-track {
   background: linear-gradient(90deg,
     #2e1800 calc(var(--zero, 50%) - 1.5px),
     #b36000 calc(var(--zero, 50%) - 1.5px),
     #b36000 calc(var(--zero, 50%) + 1.5px),
     #2e1800 calc(var(--zero, 50%) + 1.5px));
 }
-#dist.hit::-webkit-slider-thumb {
+#dist.near::-webkit-slider-thumb {
   background: #ffa726;
   border-color: #7a4400;
+}
+#dist.near::-moz-range-track {
+  background: linear-gradient(90deg,
+    #2e1800 calc(var(--zero, 50%) - 1.5px),
+    #b36000 calc(var(--zero, 50%) - 1.5px),
+    #b36000 calc(var(--zero, 50%) + 1.5px),
+    #2e1800 calc(var(--zero, 50%) + 1.5px));
+}
+#dist.near::-moz-range-thumb {
+  background: #ffa726;
+  border-color: #7a4400;
+}
+
+/* Collision: the move hits — distance slider turns red */
+#dist.hit::-webkit-slider-runnable-track {
+  background: linear-gradient(90deg,
+    #2e0a0a calc(var(--zero, 50%) - 1.5px),
+    #a31a1a calc(var(--zero, 50%) - 1.5px),
+    #a31a1a calc(var(--zero, 50%) + 1.5px),
+    #2e0a0a calc(var(--zero, 50%) + 1.5px));
+}
+#dist.hit::-webkit-slider-thumb {
+  background: #ff5252;
+  border-color: #6e1414;
 }
 #dist.hit::-moz-range-track {
   background: linear-gradient(90deg,
-    #2e1800 calc(var(--zero, 50%) - 1.5px),
-    #b36000 calc(var(--zero, 50%) - 1.5px),
-    #b36000 calc(var(--zero, 50%) + 1.5px),
-    #2e1800 calc(var(--zero, 50%) + 1.5px));
+    #2e0a0a calc(var(--zero, 50%) - 1.5px),
+    #a31a1a calc(var(--zero, 50%) - 1.5px),
+    #a31a1a calc(var(--zero, 50%) + 1.5px),
+    #2e0a0a calc(var(--zero, 50%) + 1.5px));
 }
 #dist.hit::-moz-range-thumb {
-  background: #ffa726;
-  border-color: #7a4400;
+  background: #ff5252;
+  border-color: #6e1414;
 }
 
 #btns {
