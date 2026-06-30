@@ -33,10 +33,20 @@ jobs:
       - name: Build TypeScript
         run: npx tsc -p tsconfig.json
 
+      # Assemble only the files the deployed site actually serves — the HTML
+      # pages, styles, the THREE global, the compiled build/ output (game,
+      # editor, the module worker, level-data, …) and .nojekyll. The TypeScript
+      # sources, README, tooling, configs and node_modules are left out.
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp -r build _site/build
+          cp index.html editor.html truck-physics-demo.html style.css three.min.js .nojekyll _site/
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
   deploy:
     needs: build
