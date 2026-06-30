@@ -216,7 +216,14 @@ function recomputeEdit() {
 function planStats() {
   let dist = 0;
   for (let i = 0; i < moves.length; i++) dist += Math.abs(moveEffDist(i));
-  return { moves: moves.length, dist };
+  let count = moves.length;
+  // Fold in the move being composed (not yet committed) so the running total
+  // counts it too — using its truncated effective distance, like the chips.
+  if (editIdx === null && Math.abs(editDist) > 0.01) {
+    dist += Math.abs(editEffDist());
+    count += 1;
+  }
+  return { moves: count, dist };
 }
 
 // Par = target move count. Defaults to the recorded solution's length
