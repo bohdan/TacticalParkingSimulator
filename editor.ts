@@ -787,6 +787,7 @@ function drawSolutionPath(){
   if(!L || isCutscene(L) || !L.solution || !L.solution.length) return;
   const saved={...CAR};
   setVehicle(L.vehicle||'default');
+  const obstacles=buildLevel(L).obstacles;
   let pose={x:L.start.x,y:L.start.y,h:L.start.h};
   const segs=[];
   for(const m of L.solution){
@@ -794,16 +795,20 @@ function drawSolutionPath(){
     const n=Math.max(2,Math.ceil(Math.abs(m.dist)/0.12));
     const pts=[pose];
     for(let i=1;i<=n;i++) pts.push(advance(pose,steer,m.dist*i/n));
-    segs.push({pts, start:pose, steer, dist:m.dist, rev:m.dist<0, end:pts[pts.length-1]});
-    pose=pts[pts.length-1];
+    // Collision is decided by the kernel's ANALYTIC swept-arc check (the exact same
+    // sweepCollides the game and validator run) — not by eyeballing the fill. `pts`
+    // still traces the FULL requested distance for the visuals (trail + fill), so a
+    // colliding move still shows what you asked for, tinted red with a contact
+    // marker below — but the NEXT move must start from where the car actually stops,
+    // i.e. sim.end (pre-collision, from the same analytic check), not the
+    // full-distance advance() above. Otherwise a collision on an earlier move
+    // silently poisons every later move's start pose, and the editor's verdict on
+    // move N+1 stops matching what the game (which does chain from the real
+    // pre-collision pose) actually does.
+    const sim=simulateMove(pose,steer,m.dist,obstacles);
+    segs.push({pts, start:pose, steer, dist:m.dist, rev:m.dist<0, end:pts[pts.length-1], hit:sim.hit});
+    pose=sim.end;
   }
-
-  // Collision is decided by the kernel's ANALYTIC swept-arc check (the exact same
-  // sweepCollides the game and validator run) — not by eyeballing the fill. Each
-  // move that hits is tinted red and gets a contact marker below, so the verdict
-  // matches the game to the bit, clean-touch tolerance included.
-  const obstacles=buildLevel(L).obstacles;
-  for(const seg of segs) seg.hit=simulateMove(seg.start,seg.steer,seg.dist,obstacles).hit;
 
   // Swept body (visual guide): the union of the car footprint along the path,
   // one fill() per segment (nonzero winding shades overlaps evenly). Amber when
