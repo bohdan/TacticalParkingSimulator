@@ -290,7 +290,7 @@ new ResizeObserver(resize).observe(document.getElementById('cvWrap'));
 const π   = Math.PI;
 const snap = (v,s=0.05) => Math.round(v/s)*s;
 function norm(a){ while(a>π)a-=2*π; while(a<-π)a+=2*π; return a; }
-function fmt(n,d=2){ return +n.toFixed(d); }
+function fmt(n,d=3){ return +n.toFixed(d); }
 
 function w2c(x,y){ return {x:x*V.scale+V.ox, y:y*V.scale+V.oy}; }
 function c2w(cx,cy){ return {x:(cx-V.ox)/V.scale, y:(cy-V.oy)/V.scale}; }
@@ -1469,8 +1469,8 @@ function updateSelPanel(){
     html+=row('h°', `<input type=number step=5   id=seStH value="${fmt(deg(s.h),1)}">`);
     panel.innerHTML=html;
     const liv=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('input',e=>fn(+e.target.value)); };
-    liv('seStX',v=>{s.x=v;markDirty();render();});
-    liv('seStY',v=>{s.y=v;markDirty();render();});
+    liv('seStX',v=>{s.x=fmt(v);markDirty();render();});
+    liv('seStY',v=>{s.y=fmt(v);markDirty();render();});
     liv('seStH',v=>{s.h=rad(v);markDirty();render();});
     return;
   }
@@ -1486,10 +1486,10 @@ function updateSelPanel(){
     html+=row('tol°',`<input type=number step=1 min=1 id=seGTol value="${g.tol}">`);
     panel.innerHTML=html;
     const liv=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener('input',e=>fn(+e.target.value)); };
-    liv('seGCx',v=>{g.cx=v;markDirty();render();});
-    liv('seGCy',v=>{g.cy=v;markDirty();render();});
-    liv('seGW',v=>{g.w=v;markDirty();render();});
-    liv('seGH',v=>{g.h=v;markDirty();render();});
+    liv('seGCx',v=>{g.cx=fmt(v);markDirty();render();});
+    liv('seGCy',v=>{g.cy=fmt(v);markDirty();render();});
+    liv('seGW',v=>{g.w=fmt(v);markDirty();render();});
+    liv('seGH',v=>{g.h=fmt(v);markDirty();render();});
     liv('seGAng',v=>{g.ang=rad(v)||0;markDirty();render();});
     liv('seGTol',v=>{g.tol=v;markDirty();render();});
     const he=document.getElementById('seGHeads');
@@ -1544,27 +1544,27 @@ function updateSelPanel(){
   function lis(id,fn){ const el=document.getElementById(id); if(el) el.addEventListener('input',e=>fn(e.target.value)); }
   if(sel.kind==='wall'){
     const w=L.walls[sel.idx];
-    liv('seX',v=>{w.x=v;render();}); liv('seY',v=>{w.y=v;render();});
-    liv('seCx',v=>{w.cx=v;render();}); liv('seCy',v=>{w.cy=v;render();});
-    liv('seW',v=>{w.w=v;render();}); liv('seH',v=>{w.h=v;render();});
+    liv('seX',v=>{w.x=fmt(v);render();}); liv('seY',v=>{w.y=fmt(v);render();});
+    liv('seCx',v=>{w.cx=fmt(v);render();}); liv('seCy',v=>{w.cy=fmt(v);render();});
+    liv('seW',v=>{w.w=fmt(v);render();}); liv('seH',v=>{w.h=fmt(v);render();});
     liv('seAng',v=>{w.ang=rad(v);render();});
     const ke=document.getElementById('seKind'); if(ke)ke.onchange=e=>{w.kind=e.target.value;render();};
   } else if(sel.kind==='car'){
     const c=L.cars[sel.idx];
-    liv('seCx',v=>{c.cx=v;render();}); liv('seCy',v=>{c.cy=v;render();});
+    liv('seCx',v=>{c.cx=fmt(v);render();}); liv('seCy',v=>{c.cy=fmt(v);render();});
     liv('seAng',v=>{c.h=rad(v);render();});
     const te=document.getElementById('seType'); if(te)te.onchange=e=>{c.type=e.target.value||undefined;render();};
   } else if(sel.kind==='traffic'){
     const t=L.traffic[sel.idx];
-    liv('seX',v=>{t.x=v;}); liv('seY',v=>{t.y=v;});
+    liv('seX',v=>{t.x=fmt(v);}); liv('seY',v=>{t.y=fmt(v);});
     liv('seAng',v=>{t.h=rad(v);render();}); liv('seSpeed',v=>t.speed=v);
     liv('seLoop',v=>t.loop=v); liv('seOffset',v=>t.offset=v);
     lis('seColor',v=>{t.color=v;render();});
   } else if(sel.kind==='marking'){
     const m=L.markings[sel.idx];
-    liv('seMx',  v=>{m.x=v;  markDirty();render();});
-    liv('seMy',  v=>{m.y=v;  markDirty();render();});
-    liv('seMLen',v=>{m.len=v; markDirty();render();});
+    liv('seMx',  v=>{m.x=fmt(v);  markDirty();render();});
+    liv('seMy',  v=>{m.y=fmt(v);  markDirty();render();});
+    liv('seMLen',v=>{m.len=fmt(v); markDirty();render();});
     liv('seMAng',v=>{m.ang=rad(Math.round(v/15)*15); markDirty();render();});
   }
 }
@@ -1827,7 +1827,7 @@ function fmtRad(r){
   }
   return r.toFixed(4);
 }
-function fn(n,d=2){ const s=n.toFixed(d); return parseFloat(s)+''; }
+function fn(n,d=3){ const s=n.toFixed(d); return parseFloat(s)+''; }
 
 function buildExport(lv=L){
   const l=lv;
