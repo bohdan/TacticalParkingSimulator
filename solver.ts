@@ -39,6 +39,13 @@ import './physics-simple-2d.js';
 import { Geom2D as G } from './geometry2d.js';
 import type { Shape, Point } from './geometry2d.js';
 import { buildLevel } from './scene.js';
+
+// Injected by esbuild (see esbuild.config.mjs) with the worker bundle's actual — possibly
+// content-hashed — URL; `new Worker(new URL(...))` below is a runtime string esbuild can't
+// rewrite the way it rewrites static `import` specifiers, so the build script bakes the
+// right value in at compile time instead.
+declare const __SOLVER_WORKER_URL__: string;
+
 const STEER_Q = P.STEER_Q, DIST_Q = P.DIST_Q;
 const rad = P.rad, deg = P.deg, normAng = P.normalizeAngle, SAMPLE_STEP = P.SAMPLE_STEP;
 const polysCollide = G.polygonsCollide, polyBC = G.polygonBoundingCircle;
@@ -599,7 +606,7 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
         }, 500);
         for (let w = 0; w < want; w++) {
           const wi = w;
-          const wk = new Worker(new URL('./solver-worker.js', import.meta.url), { type: 'module' });
+          const wk = new Worker(new URL(__SOLVER_WORKER_URL__, import.meta.url), { type: 'module' });
           workers.push(wk);
           wk.onmessage = (e) => {
             const m = e.data;

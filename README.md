@@ -59,6 +59,7 @@ cutscene.ts         — briefing / cutscene screens
 levels.ts           — level types + typed re-export of the level set
 level-data.js       — raw level data (plain JS, read/written by the editor)
 leaderboard.ts      — leaderboard UI and Supabase integration
+esbuild.config.mjs  — bundles game.ts/editor.ts/truck-physics-demo.ts/solver-worker.ts
 ```
 
 ## Run it
@@ -70,22 +71,29 @@ npm install
 npm run dev
 ```
 
-Then open `http://localhost:8000`. `npm run dev` runs `tsc --watch` (compiling
-`.ts` → `build/`) alongside `python3 -m http.server 8000`, so edits recompile on
-save — reload the page to pick them up. `npm run typecheck` type-checks without
-emitting.
+Then open `http://localhost:8000`. `npm run dev` runs three things concurrently:
+`esbuild --watch` (bundling `.ts` → `build/*.js`, fixed filenames), `tsc --noEmit
+--watch` (type-checking only — esbuild strips types but never checks them), and
+`python3 -m http.server 8000`. Edits rebuild on save — reload the page to pick
+them up. `npm run typecheck` type-checks once without watching.
 
 ## Build for production
 
 ```sh
-npm run build
+npm run build        # local: same bundling as dev, fixed filenames
+npm run build:prod    # CI only: content-hashed filenames + HTML rewrite
 ```
 
-Compiles with `tsc` to `build/` — there is no bundler; the HTML pages load
-`build/*.js` directly. Serving is just static files: `index.html`, `editor.html`,
-`style.css`, `three.min.js` and the `build/` output. Pushing to `main` auto-builds
-and deploys to GitHub Pages via `.github/workflows/deploy-pages.yml` (Pages source
-= GitHub Actions), which publishes exactly those files.
+Bundled with `esbuild` (`esbuild.config.mjs`) — one bundle per entry point
+(`game`, `editor`, `truck-physics-demo`, `solver-worker`), no code-splitting.
+`build:prod` additionally content-hashes every output filename and rewrites the
+`<script src>`/`<link href>` tags in `index.html`/`editor.html`/
+`truck-physics-demo.html` to match, so a stale cached bundle can never be served
+after a deploy — this only ever runs against a throwaway CI checkout, never the
+committed HTML. Serving is just static files: the HTML pages, `style.css`,
+`three.min.js` and the `build/` output. Pushing to `main` auto-builds and deploys
+to GitHub Pages via `.github/workflows/deploy-pages.yml` (Pages source = GitHub
+Actions), which publishes exactly those files.
 
 ## Numerical determinism (caveat)
 

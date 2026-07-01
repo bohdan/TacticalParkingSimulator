@@ -6,11 +6,13 @@
   "devDependencies": {
     "@types/node": "^20.14.2",
     "concurrently": "^10.0.3",
+    "esbuild": "^0.28.1",
     "typescript": "^5.5.4"
   },
   "scripts": {
-    "dev": "concurrently \"tsc -p tsconfig.json --watch --pretty false\" \"python3 -m http.server 8000\"",
-    "build": "tsc --pretty false",
+    "dev": "concurrently \"node esbuild.config.mjs --watch\" \"tsc --noEmit --watch --pretty false\" \"python3 -m http.server 8000\"",
+    "build": "node esbuild.config.mjs",
+    "build:prod": "node esbuild.config.mjs --hash",
     "typecheck": "tsc --noEmit --pretty false"
   }
 }

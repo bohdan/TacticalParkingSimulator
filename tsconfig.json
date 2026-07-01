@@ -5,12 +5,11 @@
     "moduleResolution": "Bundler",
     "lib": ["DOM", "ES2020"],
     "strict": false,
-    "noEmit": false,
+    "noEmit": true,
     "noCheck": false,
     "allowJs": true,
     "skipLibCheck": true,
     "rootDir": ".",
-    "outDir": "build",
     "moduleDetection": "force",
     "types": ["node"]
   },
