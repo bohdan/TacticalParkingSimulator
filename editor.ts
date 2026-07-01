@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { CAR, setVehicle, advance, carPoly, centroid, normAng, rad, deg } from './physics-compat.js';
+import { CAR, setVehicle, advance, carPoly, centroid, simulateMove, buildLevel, normAng, rad, deg } from './physics-compat.js';
 import { solveParkingLevel } from './solver.js';
 import { LEVELS } from './levels.js';
 
@@ -798,12 +798,16 @@ function drawSolutionPath(){
     pose=pts[pts.length-1];
   }
 
-  // True swept body: fill the union of the car FOOTPRINT along the path at fine
-  // (2 cm) sampling — exactly what the kernel sweeps for collisions. This tracks
-  // the game's collision boundary to within a hundredth of a mm: unlike the old
-  // 2-corner envelope it can't hide a real clip, and unlike a convex-hull-of-
-  // samples its edges don't bulge past the arc and show a phantom clip. One
-  // fill() per segment; nonzero winding shades the overlapping footprints evenly.
+  // Collision is decided by the kernel's ANALYTIC swept-arc check (the exact same
+  // sweepCollides the game and validator run) — not by eyeballing the fill. Each
+  // move that hits is tinted red and gets a contact marker below, so the verdict
+  // matches the game to the bit, clean-touch tolerance included.
+  const obstacles=buildLevel(L).obstacles;
+  for(const seg of segs) seg.hit=simulateMove(seg.start,seg.steer,seg.dist,obstacles).hit;
+
+  // Swept body (visual guide): the union of the car footprint along the path,
+  // one fill() per segment (nonzero winding shades overlaps evenly). Amber when
+  // clear, red when that move collides per the analytic check above.
   ctx.save();
   ctx.lineJoin='round';
   for(let si=0;si<segs.length;si++){
@@ -816,7 +820,8 @@ function drawSolutionPath(){
       for(let k=1;k<4;k++) ctx.lineTo(poly[k].x,poly[k].y);
       ctx.closePath();
     }
-    ctx.fillStyle=hot?'rgba(255,224,80,0.18)':'rgba(255,200,50,0.10)';
+    ctx.fillStyle=seg.hit ? (hot?'rgba(255,90,90,0.30)':'rgba(255,72,72,0.17)')
+                          : (hot?'rgba(255,224,80,0.18)':'rgba(255,200,50,0.10)');
     ctx.fill();
   }
   // Ghost car outline at end of each turn
@@ -830,6 +835,22 @@ function drawSolutionPath(){
     ctx.strokeStyle=hot?'rgba(69,196,255,0.90)':'rgba(69,196,255,0.30)';
     ctx.lineWidth=Math.min(hot?0.04:0.02, 2*PX());
     ctx.stroke();
+  }
+  // Analytic collision markers: red car outline at the contact pose + a dot at
+  // the exact contact point (from the kernel's sweepCollides), per colliding move.
+  for(const seg of segs){
+    if(!seg.hit) continue;
+    const poly=carPoly(seg.hit.pose);
+    ctx.beginPath();
+    ctx.moveTo(poly[0].x,poly[0].y);
+    for(let k=1;k<4;k++) ctx.lineTo(poly[k].x,poly[k].y);
+    ctx.closePath();
+    ctx.strokeStyle='rgba(255,60,60,0.95)';
+    ctx.lineWidth=Math.min(0.05, 2.5*PX());
+    ctx.stroke();
+    const p=seg.hit.point;
+    ctx.beginPath(); ctx.arc(p.x,p.y,Math.min(0.16,5*PX()),0,2*π);
+    ctx.fillStyle='rgba(255,50,50,0.95)'; ctx.fill();
   }
   ctx.restore();
 
