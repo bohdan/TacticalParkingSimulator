@@ -17,18 +17,19 @@
 //   D — radial twin-stick: touch-down point is the stick's centre; the vector from
 //       there to the current pointer decomposes into forward/back (-> distance,
 //       absolute, like a real analog stick) and lateral (-> steer).
-import { CAR, setVehicle, rad, deg, advance, carPoly } from './physics-compat.js';
+import { CAR, setVehicle, rad, deg, advance, carPoly, simulateMove, buildLevel, goalPoly } from './physics-compat.js';
 
+const cvWrap = document.getElementById('cvWrap') as HTMLElement;
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 let SCALE = 28; // px per metre
 
 function resize() {
-  canvas.width = innerWidth;
-  canvas.height = innerHeight;
+  canvas.width = cvWrap.clientWidth;
+  canvas.height = cvWrap.clientHeight;
 }
 resize();
-window.addEventListener('resize', resize);
+new ResizeObserver(resize).observe(cvWrap);
 
 function w2c(x: number, y: number) { return { x: canvas.width / 2 + x * SCALE, y: canvas.height / 2 + y * SCALE }; }
 function c2w(cx: number, cy: number) { return { x: (cx - canvas.width / 2) / SCALE, y: (cy - canvas.height / 2) / SCALE }; }
@@ -37,6 +38,26 @@ function c2w(cx: number, cy: number) { return { x: (cx - canvas.width / 2) / SCA
 setVehicle('default');
 const pose = { x: 0, y: 0, h: -Math.PI / 2 }; // pointing "up" on screen
 let steer = 0, dist = 0; // current edited move: degrees, metres
+
+// A small fixed scene around the test car — just for visual/spatial realism and so the
+// zone circles and drag gestures can be tried near obstacles, not in an empty void. Built
+// through the real scene/kernel (buildLevel + simulateMove) so the collision tint below
+// matches the actual game exactly, not a separate approximation.
+const testLevel = {
+  id: 'touch-demo', name: 'touch demo', w: 60, h: 60,
+  start: { x: pose.x, y: pose.y, h: pose.h },
+  goal: { cx: 0, cy: 9, w: 3.4, h: 1.9, ang: 0, heads: [180], tol: 30 },
+  walls: [
+    { x: -6, y: -10, w: 1.6, h: 0.5 },
+    { cx: 4.5, cy: 2, w: 3.2, h: 0.5, ang: 0.35 },
+  ],
+  cars: [
+    { cx: 2.6, cy: -3.2, h: Math.PI / 2 },
+    { cx: -3.2, cy: 3.4, h: 0 },
+    { cx: 5.6, cy: -6.5, h: -Math.PI / 2, type: 'bus' },
+  ],
+} as any;
+const obstacles = buildLevel(testLevel).obstacles;
 let mode: 'A' | 'B' | 'C' | 'D' = 'A';
 let showZones = true;
 let fallbackMode: 'combined' | 'lock' = 'combined';
@@ -130,8 +151,10 @@ function onMove(clientX: number, clientY: number) {
   }
 
   if (drag.axis === 'combined') {
+    // Matches game.ts's setEdit(), which clamps arcToPoint's result to the vehicle's
+    // actual max steer — without this, mode A could show angles no real car can hit.
     const a = arcToPoint(pose, drag.tx + wdx, drag.ty + wdy);
-    steer = a.steer; dist = a.dist;
+    steer = Math.max(-CAR.maxSteer, Math.min(CAR.maxSteer, a.steer)); dist = a.dist;
   } else if (drag.axis === 'steer') {
     const { ly } = localDelta(pose, wdx, wdy);
     const raw = drag.startSteer + ly * DEG_PER_METRE;
@@ -175,14 +198,31 @@ setMode('A');
 document.getElementById('resetBtn')!.addEventListener('click', () => { steer = 0; dist = 0; });
 
 // ── render ───────────────────────────────────────────────────────────────────
-function drawCar(p: any, fill: string, stroke: string, lw = 2) {
-  const poly = carPoly(p);
+function drawPoly(poly: any[], fill: string, stroke: string, lw = 2) {
   ctx.beginPath();
   const p0 = w2c(poly[0].x, poly[0].y); ctx.moveTo(p0.x, p0.y);
   for (let i = 1; i < poly.length; i++) { const pt = w2c(poly[i].x, poly[i].y); ctx.lineTo(pt.x, pt.y); }
   ctx.closePath();
   ctx.fillStyle = fill; ctx.fill();
   ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke();
+}
+function drawCar(p: any, fill: string, stroke: string, lw = 2) { drawPoly(carPoly(p), fill, stroke, lw); }
+
+function drawObstacles() {
+  for (const o of obstacles) {
+    if (o.kind === 'border') continue;
+    const isCar = o.kind === 'car';
+    drawPoly(o.poly, isCar ? '#737d8c' : '#39404e', isCar ? '#525a66' : '#4a5568', 1.5);
+  }
+  // goal zone (dashed, matching the game's look)
+  ctx.beginPath();
+  const gp = goalPoly(testLevel.goal);
+  const g0 = w2c(gp[0].x, gp[0].y); ctx.moveTo(g0.x, g0.y);
+  for (let i = 1; i < gp.length; i++) { const pt = w2c(gp[i].x, gp[i].y); ctx.lineTo(pt.x, pt.y); }
+  ctx.closePath();
+  ctx.setLineDash([8, 6]);
+  ctx.strokeStyle = 'rgba(120,220,140,0.55)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.setLineDash([]);
 }
 
 function draw() {
@@ -196,6 +236,8 @@ function draw() {
   for (let x = Math.floor(w0.x); x <= Math.ceil(w1.x); x++) { const a = w2c(x, w0.y), b = w2c(x, w1.y); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
   for (let y = Math.floor(w0.y); y <= Math.ceil(w1.y); y++) { const a = w2c(w0.x, y), b = w2c(w1.x, y); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
   ctx.stroke();
+
+  drawObstacles();
 
   // trail: sample the arc from pose to the current (steer,dist)
   if (Math.abs(dist) > 0.005) {
@@ -235,15 +277,17 @@ function draw() {
     ctx.beginPath(); ctx.arc(drag.lastX, drag.lastY, 6, 0, 2 * Math.PI); ctx.fillStyle = '#8ef'; ctx.fill();
   }
 
-  // static start car + ghost
+  // static start car + ghost — same analytic collision check the game/editor use, so a
+  // move that would actually hit one of the obstacles above tints red instead of amber.
   drawCar(pose, 'rgba(120,140,170,0.35)', 'rgba(180,200,230,0.9)');
-  const end = advance(pose, rad(steer), dist);
-  drawCar(end, 'rgba(255,224,80,0.22)', 'rgba(255,224,80,0.9)');
+  const sim = simulateMove(pose, rad(steer), dist, obstacles);
+  const hit = !!sim.hit;
+  drawCar(sim.end, hit ? 'rgba(255,90,90,0.28)' : 'rgba(255,224,80,0.22)', hit ? 'rgba(255,90,90,0.95)' : 'rgba(255,224,80,0.9)');
 
   // readout
   const axisLabel = mode === 'D' ? '—' : (drag ? drag.axis : '—');
   (document.getElementById('hud-text') as HTMLElement).textContent =
-    `steer: ${steer.toFixed(1)}°  |  dist: ${dist.toFixed(2)} m  |  axis: ${axisLabel}`;
+    `steer: ${steer.toFixed(1)}°  |  dist: ${dist.toFixed(2)} m  |  axis: ${axisLabel}${hit ? '  |  COLLISION' : ''}`;
   (document.getElementById('steerVal') as HTMLElement).textContent = `${steer.toFixed(1)}°`;
   (document.getElementById('distVal') as HTMLElement).textContent = `${dist.toFixed(2)} m`;
   (document.getElementById('axisVal') as HTMLElement).textContent = String(axisLabel);

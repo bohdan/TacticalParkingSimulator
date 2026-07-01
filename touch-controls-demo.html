@@ -6,92 +6,83 @@
 <title>Touch Controls Demo</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #0e1117; overflow: hidden; font-family: system-ui, sans-serif; color: #e0e0e0; }
-  canvas { display: block; touch-action: none; }
+  html, body { height: 100%; }
+  body { background: #171a21; overflow: hidden; font-family: system-ui, sans-serif; color: #e7ecf3; }
 
-  #overlay { position: fixed; bottom: 14px; left: 12px; right: 220px;
-             pointer-events: none; font-family: monospace; }
+  #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+  #cvWrap { flex: 1; min-height: 0; position: relative; background: #0e1117; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+  #hud { position: absolute; top: 8px; left: 10px; right: 10px;
+         pointer-events: none; font-family: monospace; }
   #hud-text { font-size: 12px; color: #9ab; }
-  #hud-hint { margin-top: 4px; font-size: 11px; color: #567; }
+  #hud-hint { margin-top: 3px; font-size: 11px; color: #567; }
 
-  #panel {
-    position: fixed; right: 0; top: 0; bottom: 0; width: 210px;
-    background: rgba(8,13,22,0.92); border-left: 1px solid #1e2e3e;
-    padding: 12px 10px; overflow-y: auto;
-    display: flex; flex-direction: column; gap: 6px;
-    font-size: 11px; color: #aaa;
-  }
-  #panel .sec {
-    color: #4a7a8a; font-size: 9px; letter-spacing: 2px;
-    text-transform: uppercase; margin-top: 10px; padding-bottom: 3px;
-    border-bottom: 1px solid #1e2e3e;
-  }
-  #panel .modes { display: flex; flex-direction: column; gap: 4px; }
-  #panel .mode-btn {
-    text-align: left; padding: 7px 8px; border-radius: 6px; border: 1px solid #22314a;
-    background: #141b2b; color: #cdd; cursor: pointer; font-size: 11px;
-  }
-  #panel .mode-btn b { color: #fff; }
-  #panel .mode-btn.on { background: #1d4f6b; border-color: #2d7396; }
-  #panel .mode-desc { font-size: 10px; color: #789; margin: 2px 0 4px; line-height: 1.4; }
-  #panel label.chk { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-  #panel label.chk input { cursor: pointer; accent-color: #4af; }
-  #panel select { width: 100%; background: #141b2b; color: #cdd; border: 1px solid #22314a;
-                  border-radius: 5px; padding: 4px; font-size: 11px; }
-  #panel .row { display: flex; flex-direction: column; gap: 1px; }
-  #panel .lrow { display: flex; justify-content: space-between; }
-  #panel .val  { color: #4af; }
-  #panel button.reset {
-    margin-top: 6px; padding: 6px; border-radius: 6px; border: 1px solid #4a2530;
-    background: #2a1418; color: #f88; cursor: pointer; font-size: 11px;
-  }
+  /* ── bottom panel, sized like the game's #panel ── */
+  #panel { flex-shrink: 0; background: #1b1f2a; border-top: 1px solid #2a3142;
+           padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px;
+           max-height: 46vh; overflow-y: auto; }
+  .modes { display: flex; gap: 5px; flex-wrap: wrap; }
+  .mode-btn { flex: 1 1 auto; min-width: 64px; text-align: center; padding: 7px 6px;
+              border-radius: 8px; border: 1px solid #2a3142; background: #222837;
+              color: #cdd; cursor: pointer; font-size: 12px; font-weight: 600; }
+  .mode-btn.on { background: #1d4f6b; border-color: #2d7396; color: #fff; }
+  .mode-desc { font-size: 10.5px; color: #7c8aa3; line-height: 1.35; }
+  .ctrl-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; color: #aab; }
+  .ctrl-row label.chk { display: flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; }
+  .ctrl-row label.chk input { cursor: pointer; accent-color: #4af; }
+  select { background: #222837; color: #cdd; border: 1px solid #2a3142;
+           border-radius: 6px; padding: 5px 6px; font-size: 11px; }
+  .readout { display: flex; gap: 14px; font-size: 11px; color: #aab; }
+  .readout .val { color: #4af; font-weight: 700; }
+  button.reset { padding: 5px 10px; border-radius: 6px; border: 1px solid #4a2530;
+                 background: #2a1418; color: #f88; cursor: pointer; font-size: 11px; }
 </style>
 </head>
 <body>
-<canvas id="canvas"></canvas>
-
-<div id="overlay">
-  <div id="hud-text">steer: 0° &nbsp;|&nbsp; dist: 0.00 m &nbsp;|&nbsp; axis: —</div>
-  <div id="hud-hint"></div>
-</div>
-
-<div id="panel">
-  <div class="sec">Control scheme</div>
-  <div class="modes">
-    <button class="mode-btn" data-mode="A"><b>A</b> — Combined arc-drag (current game)</button>
-    <button class="mode-btn" data-mode="B"><b>B</b> — Front/back zones + fallback</button>
-    <button class="mode-btn" data-mode="C"><b>C</b> — Direction-lock (no zones)</button>
-    <button class="mode-btn" data-mode="D"><b>D</b> — Radial twin-stick dial</button>
-  </div>
-  <div class="mode-desc" id="modeDesc"></div>
-
-  <div class="sec">Zone / tolerance (mode B)</div>
-  <label class="chk"><input type="checkbox" id="showZones" checked> Show front/back zone circles</label>
-  <div class="row">
-    <span>Outside-zone touches:</span>
-    <select id="fallbackMode">
-      <option value="combined">Fall back to combined drag (A)</option>
-      <option value="lock">Fall back to direction-lock (C)</option>
-    </select>
+<div id="app">
+  <div id="cvWrap">
+    <canvas id="canvas"></canvas>
+    <div id="hud">
+      <div id="hud-text">steer: 0° &nbsp;|&nbsp; dist: 0.00 m &nbsp;|&nbsp; axis: —</div>
+      <div id="hud-hint"></div>
+    </div>
   </div>
 
-  <div class="sec">Desktop extra</div>
-  <label class="chk"><input type="checkbox" id="scrollNudge" checked> Scroll wheel nudges distance</label>
+  <div id="panel">
+    <div class="modes">
+      <button class="mode-btn" data-mode="A">A · combined</button>
+      <button class="mode-btn" data-mode="B">B · zones</button>
+      <button class="mode-btn" data-mode="C">C · dir-lock</button>
+      <button class="mode-btn" data-mode="D">D · twin-stick</button>
+    </div>
+    <div class="mode-desc" id="modeDesc"></div>
 
-  <div class="sec">Vehicle</div>
-  <select id="vehicle">
-    <option value="default">Sedan</option>
-    <option value="miata">Miata</option>
-    <option value="bus">Bus</option>
-    <option value="tractor">Tractor</option>
-  </select>
+    <div class="ctrl-row">
+      <label class="chk"><input type="checkbox" id="showZones" checked> zone circles</label>
+      <select id="fallbackMode">
+        <option value="combined">outside-zone → combined (A)</option>
+        <option value="lock">outside-zone → direction-lock (C)</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="scrollNudge" checked> scroll = dist</label>
+      <select id="vehicle">
+        <option value="default">Sedan</option>
+        <option value="miata">Miata</option>
+        <option value="bus">Bus</option>
+        <option value="tractor">Tractor</option>
+      </select>
+    </div>
 
-  <div class="sec">Readout</div>
-  <div class="row"><div class="lrow"><span>Steer</span><span class="val" id="steerVal">0°</span></div></div>
-  <div class="row"><div class="lrow"><span>Dist</span><span class="val" id="distVal">0.00 m</span></div></div>
-  <div class="row"><div class="lrow"><span>Axis lock</span><span class="val" id="axisVal">—</span></div></div>
-
-  <button class="reset" id="resetBtn">Reset steer/dist</button>
+    <div class="ctrl-row">
+      <div class="readout">
+        <span>steer <span class="val" id="steerVal">0°</span></span>
+        <span>dist <span class="val" id="distVal">0.00 m</span></span>
+        <span>axis <span class="val" id="axisVal">—</span></span>
+      </div>
+      <button class="reset" id="resetBtn">Reset</button>
+    </div>
+  </div>
 </div>
 
 <script type="module" src="build/touch-controls-demo.js"></script>
