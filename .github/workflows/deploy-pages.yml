@@ -47,7 +47,7 @@ jobs:
         run: |
           mkdir -p _site
           cp -r build _site/build
-          cp index.html editor.html truck-physics-demo.html style.css .nojekyll _site/
+          cp index.html editor.html truck-physics-demo.html touch-controls-demo.html style.css .nojekyll _site/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

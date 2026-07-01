@@ -21,6 +21,7 @@ const ENTRIES = {
   game: 'game.ts',
   editor: 'editor.ts',
   'truck-physics-demo': 'truck-physics-demo.ts',
+  'touch-controls-demo': 'touch-controls-demo.ts',
   'solver-worker': 'solver-worker.ts',
 };
 
@@ -70,7 +71,7 @@ function rewriteHtml(outputs) {
   }
   const cssHash = crypto.createHash('sha256').update(fs.readFileSync('style.css')).digest('hex').slice(0, 10);
 
-  for (const html of ['index.html', 'editor.html', 'truck-physics-demo.html']) {
+  for (const html of ['index.html', 'editor.html', 'truck-physics-demo.html', 'touch-controls-demo.html']) {
     if (!fs.existsSync(html)) continue;
     let src = fs.readFileSync(html, 'utf8');
     src = src.replace(/(src=["'])build\/([\w-]+)\.js(["'])/g, (m, pre, name, post) =>
