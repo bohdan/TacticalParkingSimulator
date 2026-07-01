@@ -758,7 +758,7 @@ export const LEVELS = [
       { cx: 22.8, cy: 6.6, h: -2.4629, type: "bus" },
       { cx: 11.2, cy: 20.8, h: -116 * Math.PI / 180, type: "bus" },
       { cx: 15, cy: 22.6, h: -1.7027, type: "tractor" },
-      { cx: 17.57, cy: 12.21, h: 2.4568, type: "tractor" },
+      { cx: 17.575, cy: 12.21, h: 2.4568, type: "tractor" },
       { cx: 24.12, cy: 12.9, h: 0.0750 },
       { cx: 23.4, cy: 20.6, h: 0 },
       { cx: 23.98, cy: 14.9, h: 0 },
