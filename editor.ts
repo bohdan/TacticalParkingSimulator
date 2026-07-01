@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { CAR, setVehicle, advance, carPoly, centroid, convexHull, normAng, rad, deg } from './physics-compat.js';
+import { CAR, setVehicle, advance, carPoly, centroid, normAng, rad, deg } from './physics-compat.js';
 import { solveParkingLevel } from './solver.js';
 import { LEVELS } from './levels.js';
 
@@ -794,26 +794,26 @@ function drawSolutionPath(){
     const n=Math.max(2,Math.ceil(Math.abs(m.dist)/0.12));
     const pts=[pose];
     for(let i=1;i<=n;i++) pts.push(advance(pose,steer,m.dist*i/n));
-    segs.push({pts, rev:m.dist<0, end:pts[pts.length-1]});
+    segs.push({pts, start:pose, steer, dist:m.dist, rev:m.dist<0, end:pts[pts.length-1]});
     pose=pts[pts.length-1];
   }
 
-  // True swept body: the union of the car footprint along the path, drawn as
-  // overlapping convex-hull strips between consecutive sample poses. This is the
-  // SAME geometry the collision check sweeps (carPoly along the move), so every
-  // part of the car a collision sees is drawn — a clip can no longer hide behind
-  // a thin 2-corner schematic. One fill() per segment (nonzero winding) shades
-  // the union evenly regardless of strip overlap.
+  // True swept body: fill the union of the car FOOTPRINT along the path at fine
+  // (2 cm) sampling — exactly what the kernel sweeps for collisions. This tracks
+  // the game's collision boundary to within a hundredth of a mm: unlike the old
+  // 2-corner envelope it can't hide a real clip, and unlike a convex-hull-of-
+  // samples its edges don't bulge past the arc and show a phantom clip. One
+  // fill() per segment; nonzero winding shades the overlapping footprints evenly.
   ctx.save();
   ctx.lineJoin='round';
   for(let si=0;si<segs.length;si++){
     const seg=segs[si], hot=(solSel===si);
-    const polys=seg.pts.map(p=>carPoly(p));
+    const n=Math.max(2,Math.ceil(Math.abs(seg.dist)/0.02));
     ctx.beginPath();
-    for(let i=0;i+1<polys.length;i++){
-      const hull=convexHull(polys[i].concat(polys[i+1]));
-      ctx.moveTo(hull[0].x,hull[0].y);
-      for(let k=1;k<hull.length;k++) ctx.lineTo(hull[k].x,hull[k].y);
+    for(let i=0;i<=n;i++){
+      const poly=carPoly(advance(seg.start,seg.steer,seg.dist*i/n));
+      ctx.moveTo(poly[0].x,poly[0].y);
+      for(let k=1;k<4;k++) ctx.lineTo(poly[k].x,poly[k].y);
       ctx.closePath();
     }
     ctx.fillStyle=hot?'rgba(255,224,80,0.18)':'rgba(255,200,50,0.10)';
