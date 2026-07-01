@@ -760,7 +760,7 @@ export const LEVELS = [
       { cx: 15, cy: 22.6, h: -1.7027, type: "tractor" },
       { cx: 17.862, cy: 12.414, h: 2.0282, type: "tractor" },
       { cx: 24.12, cy: 12.9, h: 0.0750 },
-      { cx: 23.4, cy: 20.6, h: 0 },
+      { cx: 23.361, cy: 20.47, h: 0 },
       { cx: 23.98, cy: 14.9, h: 0 },
     ],
     markings: [
