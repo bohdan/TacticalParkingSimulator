@@ -783,31 +783,46 @@ function render(){
 // Trace the solution as a schematic curve: forward arcs cyan (solid),
 // reverse arcs orange (dashed), white dots at each move boundary, and a
 // numbered label per move. Uses the shared physics engine (advance()).
+// Chains L.solution move-by-move with the kernel's ANALYTIC swept-arc check (the exact
+// same sweepCollides the game and validator run), starting each move from the PREVIOUS
+// move's true end pose (sim.end — pre-collision when it hits, since the kernel's sweep
+// stops sampling at first contact). This is the single source of truth for "does move i
+// collide", shared by the canvas overlay (drawSolutionPath) and the solution list
+// (updateSolutionPanel) so they can never disagree with each other or with the game.
+function simulateSolution(lv){
+  if(!lv || isCutscene(lv) || !lv.solution || !lv.solution.length) return [];
+  const saved={...CAR};
+  setVehicle(lv.vehicle||'default');
+  const obstacles=buildLevel(lv).obstacles;
+  let pose={x:lv.start.x,y:lv.start.y,h:lv.start.h};
+  const out=[];
+  for(const m of lv.solution){
+    const steer=rad(m.steer);
+    const sim=simulateMove(pose,steer,m.dist,obstacles);
+    out.push({start:pose, steer, dist:m.dist, hit:sim.hit, end:sim.end});
+    pose=sim.end;
+  }
+  Object.assign(CAR,saved); CAR.fOver=CAR.len-CAR.wb-CAR.rOver;
+  return out;
+}
+
 function drawSolutionPath(){
   if(!L || isCutscene(L) || !L.solution || !L.solution.length) return;
+  const sims=simulateSolution(L);
   const saved={...CAR};
   setVehicle(L.vehicle||'default');
-  const obstacles=buildLevel(L).obstacles;
-  let pose={x:L.start.x,y:L.start.y,h:L.start.h};
   const segs=[];
-  for(const m of L.solution){
-    const steer=rad(m.steer);
+  for(let mi=0;mi<L.solution.length;mi++){
+    const m=L.solution[mi], sim=sims[mi];
+    const steer=sim.steer, pose=sim.start;
     const n=Math.max(2,Math.ceil(Math.abs(m.dist)/0.12));
     const pts=[pose];
+    // `pts` traces the FULL requested distance for the visuals (trail + fill), so a
+    // colliding move still shows what you asked for, tinted red with a contact marker
+    // below — sim.hit/sim.end (from simulateSolution above) are the actual verdict and
+    // the pose the NEXT move chains from.
     for(let i=1;i<=n;i++) pts.push(advance(pose,steer,m.dist*i/n));
-    // Collision is decided by the kernel's ANALYTIC swept-arc check (the exact same
-    // sweepCollides the game and validator run) — not by eyeballing the fill. `pts`
-    // still traces the FULL requested distance for the visuals (trail + fill), so a
-    // colliding move still shows what you asked for, tinted red with a contact
-    // marker below — but the NEXT move must start from where the car actually stops,
-    // i.e. sim.end (pre-collision, from the same analytic check), not the
-    // full-distance advance() above. Otherwise a collision on an earlier move
-    // silently poisons every later move's start pose, and the editor's verdict on
-    // move N+1 stops matching what the game (which does chain from the real
-    // pre-collision pose) actually does.
-    const sim=simulateMove(pose,steer,m.dist,obstacles);
     segs.push({pts, start:pose, steer, dist:m.dist, rev:m.dist<0, end:pts[pts.length-1], hit:sim.hit});
-    pose=sim.end;
   }
 
   // Swept body (visual guide): the union of the car footprint along the path,
@@ -1351,12 +1366,15 @@ function updateSolutionPanel(){
     el.innerHTML=`<p class="sel-hint">No solution yet. Click <b>⚙ Solve</b> in the toolbar, or add moves manually.</p>`
       +`<button id="solAdd" style="margin-top:6px">+ Add move</button>`;
   } else {
+    // Same chained analytic check drawSolutionPath uses for the canvas fill/markers,
+    // so the row list and the canvas can never disagree about which move collides.
+    const sims=simulateSolution(L);
     el.innerHTML=sol.map((m,i)=>
-      `<div class="row sol-row${solSel===i?' sol-hot':''}" data-i="${i}">`
-      +`<span class="sol-n">${i+1}</span>`
+      `<div class="row sol-row${solSel===i?' sol-hot':''}${sims[i]?.hit?' sol-row-hit':''}" data-i="${i}">`
+      +`<span class="sol-n">${i+1}${sims[i]?.hit?' ⚠':''}</span>`
       +`<input class="sol-steer" type="number" step="1" inputmode="decimal" value="${+(+m.steer).toFixed(1)}" title="steer °">`
       +`<span class="sol-u">°</span>`
-      +`<input class="sol-dist" type="number" step="0.1" inputmode="decimal" value="${+(+m.dist).toFixed(2)}" title="distance m">`
+      +`<input class="sol-dist" type="number" step="0.1" inputmode="decimal" value="${+(+m.dist).toFixed(2)}" title="${sims[i]?.hit?'distance m — collides, see canvas':'distance m'}">`
       +`<span class="sol-u">m</span>`
       +`<button class="sol-del" title="Delete move">✕</button>`
       +`</div>`).join('')
