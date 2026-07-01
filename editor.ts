@@ -808,11 +808,23 @@ function drawSolutionPath(){
   // Swept body (visual guide): the union of the car footprint along the path,
   // one fill() per segment (nonzero winding shades overlaps evenly). Amber when
   // clear, red when that move collides per the analytic check above.
+  //
+  // The stamp spacing adapts to zoom so consecutive footprints sit ~1px apart,
+  // making the sampled union track the true swept envelope to sub-pixel at any
+  // zoom. A corner sweeps faster than the rear axle on a turn — by roughly
+  // (R + carDiagonal)/R — so we shrink the axle step by that factor to keep the
+  // fastest-moving corner near pixel resolution. Capped so a long off-screen
+  // move can't explode the vertex count.
+  const px=PX();                                  // metres per on-screen pixel
+  const diag=Math.hypot(CAR.len,CAR.wid);
   ctx.save();
   ctx.lineJoin='round';
   for(let si=0;si<segs.length;si++){
     const seg=segs[si], hot=(solSel===si);
-    const n=Math.max(2,Math.ceil(Math.abs(seg.dist)/0.02));
+    const R=Math.abs(seg.steer)>1e-4 ? Math.abs(CAR.wb/Math.tan(seg.steer)) : Infinity;
+    const cornerFactor=isFinite(R) ? (R+diag)/R : 1;   // ≥1: corner travel / axle travel
+    const step=Math.max(px/cornerFactor, 5e-4);        // ~1px of corner travel, floored at 0.5mm
+    const n=Math.max(2, Math.min(4000, Math.ceil(Math.abs(seg.dist)/step)));
     ctx.beginPath();
     for(let i=0;i<=n;i++){
       const poly=carPoly(advance(seg.start,seg.steer,seg.dist*i/n));
