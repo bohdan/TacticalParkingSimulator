@@ -1973,14 +1973,6 @@ async function saveAllToGitHub(){
   const putData=await ghPut(`/contents/level-data.js`,{message:`Update levels (${levels.length} total)`,content:strToBase64(newContent),sha:fd.sha,branch:GHS.branch});
   const newSha=putData.commit.sha.slice(0,7);
 
-  // Bump cache-bust in index.html so the deploy refreshes
-  try{
-    setSaveStatus(`Bumping cache to ${newSha}…`);
-    const ifd=await ghGet(`/contents/index.html?ref=${GHS.branch}`);
-    const iText=b64decode(ifd.content).replace(/(\?v=)[a-f0-9]{7,8}/g,`$1${newSha}`);
-    await ghPut(`/contents/index.html`,{message:`Bump cache-bust to ${newSha}`,content:strToBase64(iText),sha:ifd.sha,branch:GHS.branch});
-  }catch(e){ /* non-fatal */ }
-
   dirty=false;
   setSaveStatus(`✓ Saved all ${levels.length} levels — commit ${newSha}`, 'ok');
   document.getElementById('saveBtnRow').style.display='none';
