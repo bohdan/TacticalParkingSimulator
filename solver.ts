@@ -599,7 +599,7 @@ async function bruteForceParallel(def, prm, consume, shouldStop, deadline, nowFn
         }, 500);
         for (let w = 0; w < want; w++) {
           const wi = w;
-          const wk = new Worker('solver-worker.js', { type: 'module' });
+          const wk = new Worker(new URL('./solver-worker.js', import.meta.url), { type: 'module' });
           workers.push(wk);
           wk.onmessage = (e) => {
             const m = e.data;
