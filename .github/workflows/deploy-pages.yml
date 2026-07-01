@@ -39,14 +39,15 @@ jobs:
         run: npm run build:prod
 
       # Assemble only the files the deployed site actually serves — the HTML
-      # pages, styles, the THREE global, the bundled build/ output (game,
-      # editor, the module worker, …) and .nojekyll. The TypeScript sources,
-      # README, tooling, configs and node_modules are left out.
+      # pages, styles, and the bundled build/ output (game, editor, the module
+      # worker, …; Three.js is now bundled into game.js, not a separate vendor
+      # file) plus .nojekyll. The TypeScript sources, README, tooling, configs
+      # and node_modules are left out.
       - name: Assemble site
         run: |
           mkdir -p _site
           cp -r build _site/build
-          cp index.html editor.html truck-physics-demo.html style.css three.min.js .nojekyll _site/
+          cp index.html editor.html truck-physics-demo.html style.css .nojekyll _site/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

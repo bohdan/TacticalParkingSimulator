@@ -1,15 +1,16 @@
 // @ts-nocheck
-declare const THREE: any;
 
 // Shared math/physics come from the refactored components via the compat surface
-// (PhysicsKernel / Geom2D / Scene). THREE remains a classic global from three.min.js.
+// (PhysicsKernel / Geom2D / Scene).
 import { CAR, SEDAN, setVehicle, SAMPLE_STEP, advance, carPoly, goalPoly, pointInPoly,
          simulateMove, buildLevel, inGoal, distCarToGoal, normAng, rad, deg, clamp } from './physics-compat.js';
 import { LEVELS } from './levels.js';
 import * as Leaderboard from './leaderboard.js';
 import * as Renderer from './render.js';
 import { showCutscene } from './cutscene.js';
-import { show3DView } from './render-3d.js';
+// render-3d.ts pulls in all of Three.js, so it's its own lazy-loaded bundle chunk
+// (dynamic import at each call site below) instead of bloating the main game bundle
+// with a 3D library most page loads never touch.
 
 /* ===================== Levels ===================== */
 
@@ -1074,6 +1075,15 @@ $('resetBtn').addEventListener('click', () => {
 let view3dActive = false;   // true while the 3-D visualisation is showing
 let _3dSuppressClick = false; // long-press 2D run fired; eat the subsequent click
 
+// render-3d.js (and the Three.js library it pulls in) is a separate, lazily-fetched
+// bundle chunk so the initial page load stays small — but almost every player opens
+// the 3D replay sooner or later, so start fetching it in the background as soon as the
+// browser is idle, well before anyone clicks, instead of waiting for the click itself.
+const render3dModule = new Promise(resolve => {
+  const start = () => resolve(import('./render-3d.js'));
+  ('requestIdleCallback' in window) ? requestIdleCallback(start) : setTimeout(start, 200);
+});
+
 // Click → 3D view
 $('goBtn').addEventListener('click', () => {
   if (view3dActive) return;
@@ -1087,9 +1097,10 @@ $('goBtn').addEventListener('click', () => {
   moves = moves.filter(m => Math.abs(m.dist) >= 0.01);
   recomputePlan();
   view3dActive = true;
-  show3DView({ level, sedan: SEDAN, car: CAR, viewScale: view.scale, moves, planSims,
+  render3dModule.then(({ show3DView }) => show3DView({
+    level, sedan: SEDAN, car: CAR, viewScale: view.scale, moves, planSims,
     cv, v3d: $('v3d'), cv3d: $('cv3d'), v3dClose: $('v3dClose'),
-    planEnd, finishRun, toast, onClose: () => { view3dActive = false; } });
+    planEnd, finishRun, toast, onClose: () => { view3dActive = false; } }));
 });
 
 // Long-press → 2D animated run
@@ -1237,9 +1248,10 @@ $('ovReplay2d').addEventListener('click', () => {
 $('ovReplay3d').addEventListener('click', () => {
   $('overlay').classList.add('hidden');
   view3dActive = true;
-  show3DView({ level, sedan: SEDAN, car: CAR, viewScale: view.scale, moves, planSims,
+  render3dModule.then(({ show3DView }) => show3DView({
+    level, sedan: SEDAN, car: CAR, viewScale: view.scale, moves, planSims,
     cv, v3d: $('v3d'), cv3d: $('cv3d'), v3dClose: $('v3dClose'),
-    planEnd, finishRun, toast, onClose: () => { view3dActive = false; } });
+    planEnd, finishRun, toast, onClose: () => { view3dActive = false; } }));
 });
 $('ovShare').addEventListener('click', () => {
   const url = location.href.replace('/~', '/');  // strip session marker before sharing
@@ -1691,5 +1703,3 @@ if (_gameHash && _gameHashIdx >= 0 && level) {
 }
 
 requestAnimationFrame(draw);
-
-/* show3DView is imported from render-3d.ts above. */

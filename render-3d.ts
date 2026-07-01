@@ -1,10 +1,8 @@
 // render-3d.ts — Three.js 3D visualisation, extracted from game.ts.
-// THREE is loaded as a global script tag (three.min.js); declared below.
 // Consumers import show3DView and pass game state via View3DParams.
 import { inGoal, clamp } from './physics-compat.js';
 import type { VehicleSpec, Pose, Goal } from './physics-kernel.js';
-
-declare const THREE: any;
+import * as THREE from 'three';
 
 interface ObstacleRect {
   x?: number; y?: number;
@@ -256,9 +254,6 @@ export function show3DView(params: View3DParams): void {
           planEnd, finishRun, toast, onClose } = params;
 
   if (!level) { onClose(); return; }
-  if (typeof THREE === 'undefined') {
-    toast('3D library not loaded'); onClose(); return;
-  }
 
   // Position the 3-D overlay exactly over the 2-D game canvas so the
   // transition is seamless (same on-screen rectangle, same world scale).

@@ -31,6 +31,10 @@ const common = {
   outdir: 'build',
   sourcemap: true,
   logLevel: 'info',
+  // render-3d.ts (and the Three.js library it pulls in) is only reached via the
+  // dynamic `import('./render-3d.js')` in game.ts, so splitting gives it its own
+  // chunk file instead of bloating every entry point that doesn't use 3D.
+  splitting: true,
 };
 
 async function buildHashed() {
