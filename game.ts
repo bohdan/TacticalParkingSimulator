@@ -271,20 +271,70 @@ const TIER_EMOJI = {
 };
 const tierEmoji = def => TIER_EMOJI[def && def.tier] || '⚪';
 
+// Stable per-level key (for localStorage AND the leaderboard): the level's id
+// (survives rename/reorder in LEVELS), falling back to its name for any legacy
+// level without an id.
+const levelKey = idx => LEVELS[idx].id || LEVELS[idx].name;
+
 // ── Level unlock progression ───────────────────────────────────────────────
 // A level is unlocked when the player reaches it; the title of locked levels
-// is hidden in the selector. `maxUnlocked` is the highest unlocked index.
-let maxUnlocked = (() => {
-  const m = parseInt(localStorage.getItem('parking.maxUnlocked') || '-1', 10);
-  return isNaN(m) ? -1 : m;
+// is hidden in the selector. Stored as the level's stable id (not its array
+// index) so inserting/reordering levels in LEVELS never desyncs a returning
+// player's progress — `maxUnlockedIdx()` re-resolves that id's CURRENT
+// position every time, rather than trusting a stale saved number.
+function maxUnlockedIdx() {
+  return maxUnlockedId ? LEVELS.findIndex(l => l.id === maxUnlockedId) : -1;
+}
+let maxUnlockedId = (() => {
+  const stored = localStorage.getItem('parking.maxUnlockedId');
+  if (stored) return stored;
+  // One-time migration from the old index-keyed value (pre-dates level id
+  // tracking). Best-effort: if levels were inserted/reordered between when
+  // that index was saved and now, this can be off by one — but it only ever
+  // moves a returning player's frontier, never erases it back to zero. Persist
+  // it right away so the migration is done, not deferred until they next
+  // unlock something new.
+  const oldIdx = parseInt(localStorage.getItem('parking.maxUnlocked') || '-1', 10);
+  const migrated = (!isNaN(oldIdx) && oldIdx >= 0 && oldIdx < LEVELS.length) ? LEVELS[oldIdx].id : null;
+  if (migrated) { try { localStorage.setItem('parking.maxUnlockedId', migrated); } catch (e) {} }
+  return migrated;
 })();
 function setMaxUnlocked(idx) {
-  if (idx > maxUnlocked) {
-    maxUnlocked = idx;
-    try { localStorage.setItem('parking.maxUnlocked', String(idx)); } catch (e) {}
+  const id = LEVELS[idx] && LEVELS[idx].id;
+  if (id && idx > maxUnlockedIdx()) {
+    maxUnlockedId = id;
+    try { localStorage.setItem('parking.maxUnlockedId', id); } catch (e) {}
   }
 }
-const isUnlocked = idx => isCutscene(LEVELS[idx]) || idx <= maxUnlocked;
+const isUnlocked = idx => isCutscene(LEVELS[idx]) || idx <= maxUnlockedIdx();
+
+// ── Per-level status: 'solved' (cleared under your own steam) vs 'skipped'
+// (cleared with a hint/loaded solution, or explicitly skipped) — keyed by the
+// same stable id. 'solved' never downgrades to 'skipped' once earned.
+function loadStatus(idx) {
+  try {
+    const key = `parking.status.${levelKey(idx)}`;
+    const v = localStorage.getItem(key);
+    if (v) return v;
+    // Levels beaten before this tracking existed have no status yet, but did
+    // write a best score — that's the closest available evidence they were
+    // cleared, so treat it as a (best-effort) solve rather than blank.
+    if (localStorage.getItem(`parking.best.${levelKey(idx)}`) ||
+        localStorage.getItem(`parking.best.${idx}`)) {
+      localStorage.setItem(key, 'solved');
+      return 'solved';
+    }
+    return null;
+  } catch (e) { return null; }
+}
+function setStatus(idx, status) {
+  if (status === 'skipped' && loadStatus(idx) === 'solved') return; // never downgrade
+  try { localStorage.setItem(`parking.status.${levelKey(idx)}`, status); } catch (e) {}
+}
+function statusIcon(idx) {
+  const s = loadStatus(idx);
+  return s === 'solved' ? '🏆' : s === 'skipped' ? '⏭️' : '';
+}
 
 // 1-based position counting only playable (non-cutscene) levels.
 function playableRank(idx) {
@@ -303,8 +353,9 @@ function rebuildLevelSelect() {
     const def = LEVELS[i];
     if (isCutscene(def)) continue;        // cutscenes aren't selectable levels
     const n = playableRank(i);
+    const icon = statusIcon(i);
     const label = isUnlocked(i)
-      ? `${tierEmoji(def)} ${n}. ${def.name}`
+      ? `${tierEmoji(def)}${icon ? ' ' + icon : ''} ${n}. ${def.name}`
       : `🔒 ${n}. ? ? ?`;
     html += `<option value="${i}"${i === levelIdx ? ' selected' : ''}` +
             `${isUnlocked(i) ? '' : ' disabled'}>${label}</option>`;
@@ -414,8 +465,17 @@ function renderMoveList() {
 }
 
 function loadBest() {
-  try { return JSON.parse(localStorage.getItem(`parking.best.${levelIdx}`)); }
-  catch (e) { return null; }
+  try {
+    const key = `parking.best.${levelKey(levelIdx)}`;
+    let v = localStorage.getItem(key);
+    if (v == null) {
+      // One-time migration from the old index-keyed value, if any (best-effort:
+      // see the maxUnlockedId migration note above for the same caveat).
+      const old = localStorage.getItem(`parking.best.${levelIdx}`);
+      if (old != null) { localStorage.setItem(key, old); v = old; }
+    }
+    return v ? JSON.parse(v) : null;
+  } catch (e) { return null; }
 }
 
 function saveBest(st, stars) {
@@ -426,7 +486,7 @@ function saveBest(st, stars) {
   if (!prev || stars > prev.stars ||
       (stars === prev.stars && st.moves < prevMoves) ||
       (stars === prev.stars && st.moves === prevMoves && st.dist < prevDist)) {
-    localStorage.setItem(`parking.best.${levelIdx}`,
+    localStorage.setItem(`parking.best.${levelKey(levelIdx)}`,
       JSON.stringify({ moves: st.moves, dist: st.dist, stars }));
   }
 }
@@ -853,10 +913,14 @@ function finishRun() {
   if (inGoal(end, level.goal)) {
     const st = planStats();
     const stars = computeStars(st);
-    saveBest(st, stars);
+    // A hint/loaded solution still unlocks progress, but doesn't count as a
+    // genuine solve: no personal best recorded, status is 'skipped' not 'solved'.
+    if (!solutionUsed) saveBest(st, stars);
+    setStatus(levelIdx, solutionUsed ? 'skipped' : 'solved');
     // Clearing a level unlocks the next one.
     const nxt = nextPlayable(levelIdx, +1);
-    if (nxt >= 0) { setMaxUnlocked(nxt); rebuildLevelSelect(); }
+    if (nxt >= 0) setMaxUnlocked(nxt);
+    rebuildLevelSelect();
     $('ovTitle').textContent = 'Parked!';
     $('ovStars').innerHTML =
       starStr(stars).replace(/☆/g, '<span class="dim">★</span>');
@@ -1190,6 +1254,17 @@ $('menuSol').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
   showSolution();
 });
+$('menuSkip').addEventListener('click', () => {
+  $('menuOverlay').classList.add('hidden');
+  if (!level || isCutscene(level)) return;
+  if (loadStatus(levelIdx) === 'solved') { toast('Already solved!'); return; }
+  showConfirm('Skip this level? It won\'t count as solved, but you\'ll unlock the next one.', () => {
+    setStatus(levelIdx, 'skipped');
+    const nxt = nextPlayable(levelIdx, +1);
+    if (nxt >= 0) { setMaxUnlocked(nxt); setLevel(nxt); }
+    rebuildLevelSelect();
+  });
+});
 $('menuLb').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
   if (!lbEnabled()) toast('Leaderboard not configured — see leaderboard.js');
@@ -1202,13 +1277,14 @@ $('menuNewGame').addEventListener('click', () => {
   try {
     localStorage.removeItem('parking.level');
     localStorage.removeItem('parking.maxUnlocked');
+    localStorage.removeItem('parking.maxUnlockedId');
     localStorage.removeItem('parking.introDay');
     for (let k = localStorage.length - 1; k >= 0; k--) {
       const key = localStorage.key(k);
       if (key && key.startsWith('parking.draft.')) localStorage.removeItem(key);
     }
   } catch (e) {}
-  maxUnlocked = -1;
+  maxUnlockedId = null;
   const firstPlayable = nextPlayable(-1, +1);
   if (firstPlayable >= 0) setMaxUnlocked(firstPlayable);
   // Replay the intro; it flows into the first level when it ends.
@@ -1297,10 +1373,6 @@ function selectMove(i) {
 const lbEnabled = () => Leaderboard.isEnabled();
 // Tutorial levels are practice — they don't have a leaderboard.
 const lbAllowed = (def = level) => lbEnabled() && !!def && def.tier !== 'Tutorial';
-
-// Stable per-level key for the leaderboard: the level's id (survives rename /
-// reorder), falling back to its name for any legacy level without an id.
-const levelKey = idx => LEVELS[idx].id || LEVELS[idx].name;
 
 function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
