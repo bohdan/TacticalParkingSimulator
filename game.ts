@@ -355,7 +355,7 @@ function rebuildLevelSelect() {
     const n = playableRank(i);
     const icon = statusIcon(i);
     const label = isUnlocked(i)
-      ? `${tierEmoji(def)}${icon ? ' ' + icon : ''} ${n}. ${def.name}`
+      ? `${tierEmoji(def)} ${n}. ${def.name}${icon ? '   ' + icon : ''}`
       : `🔒 ${n}. ? ? ?`;
     html += `<option value="${i}"${i === levelIdx ? ' selected' : ''}` +
             `${isUnlocked(i) ? '' : ' disabled'}>${label}</option>`;
