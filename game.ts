@@ -495,19 +495,20 @@ function renderMoveList() {
   if (act) act.scrollIntoView({ inline: 'nearest', block: 'nearest' });
 }
 
-function loadBest() {
+function loadBestFor(idx) {
   try {
-    const key = `parking.best.${levelKey(levelIdx)}`;
+    const key = `parking.best.${levelKey(idx)}`;
     let v = localStorage.getItem(key);
     if (v == null) {
       // One-time migration from the old index-keyed value, if any (best-effort:
       // see the maxUnlockedId migration note above for the same caveat).
-      const old = localStorage.getItem(`parking.best.${levelIdx}`);
+      const old = localStorage.getItem(`parking.best.${idx}`);
       if (old != null) { localStorage.setItem(key, old); v = old; }
     }
     return v ? JSON.parse(v) : null;
   } catch (e) { return null; }
 }
+function loadBest() { return loadBestFor(levelIdx); }
 
 function saveBest(st, stars) {
   const prev = loadBest();
@@ -1416,6 +1417,27 @@ async function lbPost(levelIdx, player, stars, st, solutionStr) {
 const lbGet    = levelIdx => Leaderboard.loadLevelLeaderboard(levelKey(levelIdx));
 const lbGetAll = () => Leaderboard.loadOverallLeaderboard();
 
+// Viewing someone ELSE's leaderboard solution is gated behind having genuinely
+// solved the level yourself (loadBestFor only ever records a genuine solve —
+// see finishRun) using MORE moves than that solution — so you unlock
+// progressively better solutions to learn from as you struggle, rather than
+// immediately peeking at the best one. Always allowed for your own entries.
+function canViewSolution(idx, entryMoves, entryPlayer) {
+  const me = localStorage.getItem('parking.player');
+  if (me && entryPlayer === me) return true;
+  const best = loadBestFor(idx);
+  return !!best && best.moves >= entryMoves + 1;
+}
+function solutionButtonHtml(idx, r) {
+  if (!r.solution) return '';
+  if (canViewSolution(idx, r.moves, r.player)) {
+    return `<button class="lb-sol-btn" data-sol="${escHtml(r.solution)}" data-level-idx="${idx}">&#9654;</button>`;
+  }
+  const need = r.moves + 1;
+  return `<button class="lb-sol-btn lb-sol-locked" data-level-idx="${idx}" data-locked="1" data-need="${need}" ` +
+         `title="Solve this level yourself in ${need}+ moves to unlock">&#128274;</button>`;
+}
+
 async function renderLbAll(allRows, autoSelectIdx) {
   // Build best-per-level map from already-fetched rows (sorted best-first)
   const bestByLevel = new Map();
@@ -1435,8 +1457,7 @@ async function renderLbAll(allRows, autoSelectIdx) {
       const player = (!locked && r) ? escHtml(r.player) : '—';
       const movesStr = (!locked && r) ? r.moves : '—';
       const distStr = (!locked && r && r.dist != null) ? (r.dist * 100).toFixed(0) + 'cm' : '—';
-      const playBtn = (!locked && r?.solution)
-        ? `<button class="lb-sol-btn" data-sol="${escHtml(r.solution)}" data-level-idx="${i}">&#9654;</button>` : '';
+      const playBtn = (!locked && r) ? solutionButtonHtml(i, r) : '';
       const sel = i === autoSelectIdx ? ' lb-row-sel' : '';
       return `<tr class="lb-row${sel}" data-idx="${i}" style="cursor:pointer">` +
         `<td class="lb-name">${name}</td><td class="lb-name">${player}</td>` +
@@ -1466,9 +1487,7 @@ function renderLbDetail(idx, allRows) {
       const cls = i === 0 ? 'lb-gold' : i === 1 ? 'lb-silver' : i === 2 ? 'lb-bronze' : '';
       const sc = starsForMoves(r.moves, par);
       const stars = '★'.repeat(sc) + `<span class="lb-dim">★</span>`.repeat(3 - sc);
-      const playBtn = r.solution
-        ? `<td><button class="lb-sol-btn" data-sol="${escHtml(r.solution)}" data-level-idx="${idx}">&#9654;</button></td>`
-        : '<td></td>';
+      const playBtn = r.solution ? `<td>${solutionButtonHtml(idx, r)}</td>` : '<td></td>';
       const when = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '';
       const dist = r.dist != null ? (r.dist * 100).toFixed(0) + 'cm' : '—';
       return `<tr class="${cls}" title="${when}"><td class="lb-rank">${i+1}</td>` +
@@ -1494,6 +1513,10 @@ async function openLeaderboard(idx) {
 }
 
 function lbLoadSolution(btn) {
+  if (btn.dataset.locked) {
+    toast(`Solve this level yourself in ${btn.dataset.need}+ moves to unlock others' solutions`);
+    return;
+  }
   const mvs = movesFromAny(btn.dataset.sol);
   if (!mvs) { toast('Could not decode solution'); return; }
   $('lbOverlay').classList.add('hidden');

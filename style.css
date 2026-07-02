@@ -596,6 +596,8 @@ button:active:not(:disabled) { filter: brightness(1.25); }
 #overlay .row button.lb { background: #152a1c; border-color: #2a5035; color: #5dde8e; }
 .lb-sol-btn { background: none; border: none; color: #4fc3f7; font-size: 13px; cursor: pointer; padding: 2px 6px; }
 .lb-sol-btn:hover { color: #fff; }
+.lb-sol-btn.lb-sol-locked { color: #5a6478; }
+.lb-sol-btn.lb-sol-locked:hover { color: #8892a8; }
 .lb-head td { color: #6b778c; font-size: 11px; font-weight: 600; border-bottom: 1px solid #2a3142; }
 .lb-head .lb-metric { text-align: right; }
 .lb-row:hover td { background: rgba(255,255,255,0.03); }
