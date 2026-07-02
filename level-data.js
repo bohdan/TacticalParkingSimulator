@@ -35,21 +35,6 @@ export const LEVELS = [
     solution: [{ steer: 0, dist: -9 }],
   },
   {
-    id: "u92xwz",
-    type: "cutscene", name: "Cutscene - Corrections",
-    message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "EXPERIMENTAL TACTICAL PARKING", "QUANTUM COMPUTER ENGAGED", "", "RETROACTIVE CORRECTION ENGAGED", "", "SEE TRAINING MANUAL FOR DETAILS"],
-  },
-  {
-    id: "qz4mtx",
-    name: "Lesson 4: Edit a Turn", tier: "Tutorial", mode: "moves", w: 18, h: 12,
-    start: { x: 3, y: 9, h: 0 },
-    goal: { cx: 6.16, cy: 6.55, w: 3.6, h: 5.6, heads: [90], tol: 45 },
-    walls: [],
-    cars: [],
-    hint: "Drive up, then reverse in. If move 2 misses, tap move 1's chip above and nudge it.",
-    solution: [{ steer: 0, dist: 7 }, { steer: -35, dist: -6 }],
-  },
-  {
     id: "p3qylc",
     name: "First Steps", tier: "Easy", mode: "moves", w: 18, h: 12,
     start: { x: 2.5, y: 9.8, h: -Math.PI / 2 },
@@ -81,6 +66,37 @@ export const LEVELS = [
     solution: [{ steer: 13, dist: 6 }, { steer: 35, dist: 4 }],
   },
   {
+    id: "wijyq6",
+    name: "Like a Swiss watch...", tier: "Easy", mode: "moves", w: 22, h: 13,
+    start: { x: 2.3, y: 8.5, h: 0 },
+    goal: { cx: 15.9, cy: 4.5, w: 4.5, h: 1.83, ang: -Math.PI / 6, heads: [-30], tol: 45 },
+    walls: [
+      { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
+      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
+    ],
+    cars: [
+      { cx: 13.2, cy: 9.1, h: 0 },
+      { cx: 8.1, cy: 5.3, h: 0 },
+    ],
+    hint: "Use \"+\" & \"-\" to precisely tune the trajectory",
+    solution: [{ steer: -6.2, dist: 13 }],
+  },
+  {
+    id: "u92xwz",
+    type: "cutscene", name: "Cutscene - Corrections",
+    message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "EXPERIMENTAL TACTICAL PARKING", "QUANTUM COMPUTER ENGAGED", "", "RETROACTIVE CORRECTION ENGAGED", "", "SEE TRAINING MANUAL FOR DETAILS"],
+  },
+  {
+    id: "qz4mtx",
+    name: "Lesson 4: Edit a Turn", tier: "Tutorial", mode: "moves", w: 18, h: 12,
+    start: { x: 3, y: 9, h: 0 },
+    goal: { cx: 6.16, cy: 6.55, w: 3.6, h: 5.6, heads: [90], tol: 45 },
+    walls: [],
+    cars: [],
+    hint: "Drive up, then reverse in. If move 2 misses, tap move 1's chip above and nudge it.",
+    solution: [{ steer: 0, dist: 7 }, { steer: -35, dist: -6 }],
+  },
+  {
     id: "hdbsvd",
     name: "First Parallel", tier: "Easy", mode: "moves", w: 24, h: 13,
     start: { x: 2.6, y: 7, h: 0 },
@@ -103,22 +119,6 @@ export const LEVELS = [
     ],
     hint: "So much space... you can do it!",
     solution: [{ steer: 10.2, dist: 5.55 }, { steer: -8.6, dist: 6.65 }],
-  },
-  {
-    id: "wijyq6",
-    name: "Like a Swiss watch...", tier: "Easy", mode: "moves", w: 22, h: 13,
-    start: { x: 2.3, y: 8.5, h: 0 },
-    goal: { cx: 15.9, cy: 4.5, w: 4.5, h: 1.83, ang: -Math.PI / 6, heads: [-30], tol: 45 },
-    walls: [
-      { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
-      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
-    ],
-    cars: [
-      { cx: 13.2, cy: 9.1, h: 0 },
-      { cx: 8.1, cy: 5.3, h: 0 },
-    ],
-    hint: "Use \"+\" & \"-\" to precisely tune the trajectory",
-    solution: [{ steer: -6.2, dist: 13 }],
   },
   {
     id: "d9lm3k",
