@@ -95,6 +95,22 @@ export const LEVELS = [
     solution: [{ steer: 10.2, dist: 5.55 }, { steer: -8.6, dist: 6.65 }],
   },
   {
+    id: "wijyq6",
+    name: "Like a Swiss watch...", tier: "Easy", mode: "moves", w: 22, h: 13,
+    start: { x: 2.3, y: 8.5, h: 0 },
+    goal: { cx: 15.9, cy: 4.5, w: 4.5, h: 1.83, ang: -Math.PI / 6, heads: [-30], tol: 45 },
+    walls: [
+      { x: 0, y: 10.5, w: 22, h: 2.5, kind: "curb" },
+      { x: 0, y: 0, w: 22, h: 1.6, kind: "curb" },
+    ],
+    cars: [
+      { cx: 13.2, cy: 9.1, h: 0 },
+      { cx: 8.1, cy: 5.3, h: 0 },
+    ],
+    hint: "Use \"+\" & \"-\" to precisely tune the trajectory",
+    solution: [{ steer: -6.2, dist: 13 }],
+  },
+  {
     id: "d9lm3k",
     name: "Diagonal Slot", tier: "Easy", mode: "moves", w: 24, h: 12,
     start: { x: 1.2, y: 7.3, h: 0 },
@@ -698,7 +714,7 @@ export const LEVELS = [
   {
     id: "r0kir7",
     type: "cutscene", name: "Cutscene Miata",
-    message: ["> MSG INCOMING", "", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "EXEMPLARY FIELD SERVICE: REWARDED", "", "CONGRATULATIONS ON YOUR CLEAN RECORD.", "YOUR NEW RED CONVERTIBLE HAS BEEN DELIVERED.", "THE POP-UP HEADLIGHTS DO NOT FIRE LASERS."],
+    message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "EXEMPLARY FIELD SERVICE: REWARDED", "", "CONGRATULATIONS ON YOUR CLEAN RECORD.", "YOUR NEW RED CONVERTIBLE HAS BEEN DELIVERED.", "THE POP-UP HEADLIGHTS DO NOT FIRE LASERS."],
   },
   {
     id: "iyp8hx",
