@@ -364,7 +364,38 @@ function rebuildLevelSelect() {
   sel.value = String(levelIdx);
   const prevBtn = $('lvPrev'), nextBtn = $('lvNext');
   if (prevBtn) prevBtn.disabled = adjacentUnlocked(-1) < 0;
-  if (nextBtn) nextBtn.disabled = adjacentUnlocked(+1) < 0;
+  if (nextBtn) {
+    // A further level exists but isn't unlocked yet (current one isn't cleared) —
+    // offer to skip ahead instead of just showing a dead, disabled arrow.
+    const skippable = nextLevelSkippable();
+    nextBtn.disabled = !skippable && adjacentUnlocked(+1) < 0;
+    nextBtn.classList.toggle('lv-arrow-skip', skippable);
+    nextBtn.title = skippable ? 'Skip this level' : 'Next level';
+    nextBtn.innerHTML = skippable ? '⏭' : '&#8250;';
+  }
+}
+
+// True when there's a next playable level in the array, but tapping "next"
+// can't reach it normally because the current level hasn't been cleared —
+// i.e. skipping the current level (not navigating) is what would advance.
+function nextLevelSkippable() {
+  return !!level && !isCutscene(level) && adjacentUnlocked(+1) < 0 && nextPlayable(levelIdx, +1) >= 0;
+}
+
+// Shared by the menu's "Skip level" and the header next-arrow's skip mode.
+function confirmSkipCurrentLevel() {
+  if (!level || isCutscene(level)) return;
+  if (loadStatus(levelIdx) === 'solved') { toast('Already solved!'); return; }
+  showConfirm(
+    'Skip this level? It won\'t count as solved — you can always come back and try it properly later.',
+    () => {
+      setStatus(levelIdx, 'skipped');
+      const nxt = nextPlayable(levelIdx, +1);
+      if (nxt >= 0) { setMaxUnlocked(nxt); setLevel(nxt); }
+      rebuildLevelSelect();
+    },
+    'Skip level'
+  );
 }
 
 function fmtGoalDist(d) {
@@ -1191,7 +1222,10 @@ $('lvSelect').addEventListener('change', e => {
 });
 
 $('lvPrev').addEventListener('click', () => { const t = adjacentUnlocked(-1); if (t >= 0) setLevel(t); });
-$('lvNext').addEventListener('click', () => { const t = adjacentUnlocked(+1); if (t >= 0) setLevel(t); });
+$('lvNext').addEventListener('click', () => {
+  if (nextLevelSkippable()) { confirmSkipCurrentLevel(); return; }
+  const t = adjacentUnlocked(+1); if (t >= 0) setLevel(t);
+});
 
 // Persist the in-progress plan when the tab is hidden/closed too.
 window.addEventListener('pagehide', saveDraft);
@@ -1257,14 +1291,7 @@ $('menuSol').addEventListener('click', () => {
 });
 $('menuSkip').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
-  if (!level || isCutscene(level)) return;
-  if (loadStatus(levelIdx) === 'solved') { toast('Already solved!'); return; }
-  showConfirm('Skip this level? It won\'t count as solved, but you\'ll unlock the next one.', () => {
-    setStatus(levelIdx, 'skipped');
-    const nxt = nextPlayable(levelIdx, +1);
-    if (nxt >= 0) { setMaxUnlocked(nxt); setLevel(nxt); }
-    rebuildLevelSelect();
-  }, 'Skip level');
+  confirmSkipCurrentLevel();
 });
 $('menuLb').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');

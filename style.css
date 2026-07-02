@@ -41,6 +41,8 @@ header {
 .lv-nav .lv-select { flex: 0 1 auto; min-width: 0; }
 .lv-arrow { width: 40px; height: 40px; font-size: 24px; flex: 0 0 auto; }
 .lv-arrow:disabled { opacity: 0.28; }
+/* Next-arrow doubling as "skip this level" when the next one isn't unlocked yet */
+.lv-arrow-skip { font-size: 17px; color: #ffa726; border-color: #7a4400; background: #2e1800; }
 .sub { font-size: 12px; color: #93a0b4; }
 button.nav {
   width: 44px; height: 44px;
