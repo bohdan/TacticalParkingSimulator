@@ -40,6 +40,16 @@ export const LEVELS = [
     message: ["> MSG INCOMING", "TOP SECRET // EYES ONLY // OPERATIVE 008", "", "EXPERIMENTAL TACTICAL PARKING", "QUANTUM COMPUTER ENGAGED", "", "RETROACTIVE CORRECTION ENGAGED", "", "SEE TRAINING MANUAL FOR DETAILS"],
   },
   {
+    id: "qz4mtx",
+    name: "Lesson 4: Edit a Turn", tier: "Tutorial", mode: "moves", w: 18, h: 12,
+    start: { x: 3, y: 9, h: 0 },
+    goal: { cx: 6.16, cy: 6.55, w: 3.6, h: 5.6, heads: [90], tol: 45 },
+    walls: [],
+    cars: [],
+    hint: "Drive up, then reverse in. If move 2 misses, tap move 1's chip above and nudge it.",
+    solution: [{ steer: 0, dist: 7 }, { steer: -35, dist: -6 }],
+  },
+  {
     id: "p3qylc",
     name: "First Steps", tier: "Easy", mode: "moves", w: 18, h: 12,
     start: { x: 2.5, y: 9.8, h: -Math.PI / 2 },
