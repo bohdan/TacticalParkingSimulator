@@ -1205,8 +1205,9 @@ $('menuHelp').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
   $('helpOverlay').classList.remove('hidden');
 });
-function showConfirm(msg, onYes) {
+function showConfirm(msg, onYes, yesLabel = 'Reset & hint') {
   $('confirmMsg').textContent = msg;
+  $('confirmYes').textContent = yesLabel;
   $('confirmOverlay').classList.remove('hidden');
   const yes = $('confirmYes'), no = $('confirmNo');
   const close = () => $('confirmOverlay').classList.add('hidden');
@@ -1263,7 +1264,7 @@ $('menuSkip').addEventListener('click', () => {
     const nxt = nextPlayable(levelIdx, +1);
     if (nxt >= 0) { setMaxUnlocked(nxt); setLevel(nxt); }
     rebuildLevelSelect();
-  });
+  }, 'Skip level');
 });
 $('menuLb').addEventListener('click', () => {
   $('menuOverlay').classList.add('hidden');
