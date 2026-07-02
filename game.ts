@@ -474,8 +474,11 @@ function showLevelIntro(text) {
 }
 
 // Horizontal strip of move chips; the active (being-edited) one is highlighted.
-// The trailing slot shows the move currently being composed (live preview) when
-// it has length, otherwise a ＋ to start one. Tapping a chip selects it.
+// While composing a new move, the trailing slot is always the live chip itself
+// (even at 0°/0.00) — it never collapses into a generic ＋. When editing an
+// existing move instead, a separate (never-highlighted) ＋ follows so you can
+// jump straight to composing the next move; it's hidden while editing the
+// last move and that move is still at zero distance. Tapping a chip selects it.
 function moveChip(num, steerDeg, dist, active, dataI) {
   const st = Math.abs(steerDeg) < 0.1 ? '0°' : `${+Math.abs(steerDeg).toFixed(1)}°${steerDeg < 0 ? 'L' : 'R'}`;
   const d = `${dist < 0 ? '−' : '+'}${+Math.abs(dist).toFixed(2)}`;
@@ -486,7 +489,6 @@ function renderMoveList() {
   const el = $('moveList');
   if (!el) return;
   const composing = editIdx === null;
-  const pending = composing && Math.abs(editDist) >= 0.01;
   // Always render (at least the ＋ chip) so the strip keeps its height and the
   // panel never jumps when the first move appears.
   let html = '';
@@ -495,9 +497,12 @@ function renderMoveList() {
     const sDeg = active ? editSteer : deg(moves[i].steer);
     html += moveChip(i + 1, sDeg, moveEffDist(i), active, i);
   }
-  html += pending
-    ? moveChip(moves.length + 1, editSteer, editEffDist(), true, 'new')
-    : `<div class="mv-chip add${composing ? ' active' : ''}" data-i="new">&#65291;</div>`;
+  if (composing) {
+    html += moveChip(moves.length + 1, editSteer, editEffDist(), true, 'new');
+  } else {
+    const lastEmpty = editIdx === moves.length - 1 && Math.abs(moveEffDist(editIdx)) < 0.01;
+    if (!lastEmpty) html += `<div class="mv-chip add" data-i="new">&#65291;</div>`;
+  }
   el.innerHTML = html;
   const act = el.querySelector('.active');
   if (act) act.scrollIntoView({ inline: 'nearest', block: 'nearest' });
