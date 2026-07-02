@@ -1419,14 +1419,16 @@ const lbGetAll = () => Leaderboard.loadOverallLeaderboard();
 
 // Viewing someone ELSE's leaderboard solution is gated behind having genuinely
 // solved the level yourself (loadBestFor only ever records a genuine solve —
-// see finishRun) using MORE moves than that solution — so you unlock
-// progressively better solutions to learn from as you struggle, rather than
-// immediately peeking at the best one. Always allowed for your own entries.
+// see finishRun) in N+1 moves or fewer, N being that solution's own move
+// count — so you have to have gotten close under your own steam (at most one
+// move off, or better) before we show you how it's done, rather than being
+// able to copy a solution far beyond your current skill. Always allowed for
+// your own entries.
 function canViewSolution(idx, entryMoves, entryPlayer) {
   const me = localStorage.getItem('parking.player');
   if (me && entryPlayer === me) return true;
   const best = loadBestFor(idx);
-  return !!best && best.moves >= entryMoves + 1;
+  return !!best && best.moves <= entryMoves + 1;
 }
 function solutionButtonHtml(idx, r) {
   if (!r.solution) return '';
@@ -1435,7 +1437,7 @@ function solutionButtonHtml(idx, r) {
   }
   const need = r.moves + 1;
   return `<button class="lb-sol-btn lb-sol-locked" data-level-idx="${idx}" data-locked="1" data-need="${need}" ` +
-         `title="Solve this level yourself in ${need}+ moves to unlock">&#128274;</button>`;
+         `title="Solve this level yourself in ${need} moves or fewer to unlock">&#128274;</button>`;
 }
 
 async function renderLbAll(allRows, autoSelectIdx) {
@@ -1514,7 +1516,7 @@ async function openLeaderboard(idx) {
 
 function lbLoadSolution(btn) {
   if (btn.dataset.locked) {
-    toast(`Solve this level yourself in ${btn.dataset.need}+ moves to unlock others' solutions`);
+    toast(`Solve this level yourself in ${btn.dataset.need} moves or fewer to unlock others' solutions`);
     return;
   }
   const mvs = movesFromAny(btn.dataset.sol);
