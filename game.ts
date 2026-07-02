@@ -278,36 +278,23 @@ const tierEmoji = def => TIER_EMOJI[def && def.tier] || '⚪';
 const levelKey = idx => LEVELS[idx].id || LEVELS[idx].name;
 
 // ── Level unlock progression ───────────────────────────────────────────────
-// A level is unlocked when the player reaches it; the title of locked levels
-// is hidden in the selector. Stored as the level's stable id (not its array
-// index) so inserting/reordering levels in LEVELS never desyncs a returning
-// player's progress — `maxUnlockedIdx()` re-resolves that id's CURRENT
-// position every time, rather than trusting a stale saved number.
-function maxUnlockedIdx() {
-  return maxUnlockedId ? LEVELS.findIndex(l => l.id === maxUnlockedId) : -1;
+// A level is unlocked once it — or the playable level right before it — has
+// been solved or skipped. Derived live from per-level status (below), which
+// is the single source of truth for progress: there is no separate "how far
+// did they get" counter to keep in sync, so a level can never show as solved
+// while the level after it stays locked (previously `parking.maxUnlockedId`
+// was a second, independently-updated ratchet that could drift from status —
+// e.g. a stale one left behind by "New game" — leaving a solved level's
+// successor stuck locked with no way to progress).
+function isUnlocked(idx) {
+  if (isCutscene(LEVELS[idx])) return true;
+  const st = loadStatus(idx);
+  if (st === 'solved' || st === 'skipped') return true;
+  const prev = nextPlayable(idx, -1);
+  if (prev < 0) return true; // first playable level is always open
+  const prevSt = loadStatus(prev);
+  return prevSt === 'solved' || prevSt === 'skipped';
 }
-let maxUnlockedId = (() => {
-  const stored = localStorage.getItem('parking.maxUnlockedId');
-  if (stored) return stored;
-  // One-time migration from the old index-keyed value (pre-dates level id
-  // tracking). Best-effort: if levels were inserted/reordered between when
-  // that index was saved and now, this can be off by one — but it only ever
-  // moves a returning player's frontier, never erases it back to zero. Persist
-  // it right away so the migration is done, not deferred until they next
-  // unlock something new.
-  const oldIdx = parseInt(localStorage.getItem('parking.maxUnlocked') || '-1', 10);
-  const migrated = (!isNaN(oldIdx) && oldIdx >= 0 && oldIdx < LEVELS.length) ? LEVELS[oldIdx].id : null;
-  if (migrated) { try { localStorage.setItem('parking.maxUnlockedId', migrated); } catch (e) {} }
-  return migrated;
-})();
-function setMaxUnlocked(idx) {
-  const id = LEVELS[idx] && LEVELS[idx].id;
-  if (id && idx > maxUnlockedIdx()) {
-    maxUnlockedId = id;
-    try { localStorage.setItem('parking.maxUnlockedId', id); } catch (e) {}
-  }
-}
-const isUnlocked = idx => isCutscene(LEVELS[idx]) || idx <= maxUnlockedIdx();
 
 // ── Per-level status: 'solved' (cleared under your own steam) vs 'skipped'
 // (cleared with a hint/loaded solution, or explicitly skipped) — keyed by the
@@ -397,9 +384,9 @@ function confirmSkipCurrentLevel() {
   showConfirm(
     'Skip this level? It won\'t count as solved — you can always come back and try it properly later.',
     () => {
-      setStatus(levelIdx, 'skipped');
+      setStatus(levelIdx, 'skipped');       // unlocks the next level (derived from status)
       const nxt = nextPlayable(levelIdx, +1);
-      if (nxt >= 0) { setMaxUnlocked(nxt); setLevel(nxt); }
+      if (nxt >= 0) setLevel(nxt);
       rebuildLevelSelect();
     },
     'Skip level'
@@ -514,7 +501,8 @@ function loadBestFor(idx) {
     let v = localStorage.getItem(key);
     if (v == null) {
       // One-time migration from the old index-keyed value, if any (best-effort:
-      // see the maxUnlockedId migration note above for the same caveat).
+      // if levels were reordered since it was saved, this can point at the
+      // wrong level — but it only ever adds a plausible best, never removes one).
       const old = localStorage.getItem(`parking.best.${idx}`);
       if (old != null) { localStorage.setItem(key, old); v = old; }
     }
@@ -961,10 +949,7 @@ function finishRun() {
     // A hint/loaded solution still unlocks progress, but doesn't count as a
     // genuine solve: no personal best recorded, status is 'skipped' not 'solved'.
     if (!solutionUsed) saveBest(st, stars);
-    setStatus(levelIdx, solutionUsed ? 'skipped' : 'solved');
-    // Clearing a level unlocks the next one.
-    const nxt = nextPlayable(levelIdx, +1);
-    if (nxt >= 0) setMaxUnlocked(nxt);
+    setStatus(levelIdx, solutionUsed ? 'skipped' : 'solved'); // unlocks the next level
     rebuildLevelSelect();
     $('ovTitle').textContent = 'Parked!';
     $('ovStars').innerHTML =
@@ -1019,7 +1004,6 @@ function setLevel(i) {
   // Don't persist progress while previewing a test level (shifted indices) or
   // while on a cutscene (so the daily intro never overwrites real progress).
   if (!testLevelLoaded && !isCutscene(def)) localStorage.setItem('parking.level', String(levelIdx));
-  if (!isCutscene(def)) setMaxUnlocked(levelIdx); // reaching a level unlocks it
   if (isCutscene(def)) {
     level = null;
     showCutscene(def, () => {
@@ -1318,17 +1302,14 @@ $('menuNewGame').addEventListener('click', () => {
   if (!confirm('Start a new game? This resets your progress.')) return;
   try {
     localStorage.removeItem('parking.level');
-    localStorage.removeItem('parking.maxUnlocked');
-    localStorage.removeItem('parking.maxUnlockedId');
     localStorage.removeItem('parking.introDay');
     for (let k = localStorage.length - 1; k >= 0; k--) {
       const key = localStorage.key(k);
-      if (key && key.startsWith('parking.draft.')) localStorage.removeItem(key);
+      if (key && (key.startsWith('parking.draft.') || key.startsWith('parking.status.') ||
+                  key.startsWith('parking.best.'))) localStorage.removeItem(key);
     }
   } catch (e) {}
-  maxUnlockedId = null;
   const firstPlayable = nextPlayable(-1, +1);
-  if (firstPlayable >= 0) setMaxUnlocked(firstPlayable);
   // Replay the intro; it flows into the first level when it ends.
   const ci = LEVELS.findIndex(isCutscene);
   setLevel(ci >= 0 ? ci : (firstPlayable >= 0 ? firstPlayable : 0));
@@ -1798,12 +1779,6 @@ if (!testLevelLoaded && isCutscene(LEVELS[resumeIdx])) {
   const np = nextPlayable(resumeIdx, +1);
   resumeIdx = np >= 0 ? np : 0;
 }
-
-// Unlock everything up to where the player has already reached (migrates
-// existing players who progressed before unlock-gating existed).
-const firstPlayableIdx = nextPlayable(-1, +1);
-if (firstPlayableIdx >= 0) setMaxUnlocked(firstPlayableIdx);
-if (!testLevelLoaded) setMaxUnlocked(resumeIdx);
 
 // Resolve which level to open: new-format hash (#id/moves) > saved progress > intro.
 let _gameHashIdx = -1;
