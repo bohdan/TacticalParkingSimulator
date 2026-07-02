@@ -4,7 +4,7 @@
     "three": "^0.152.2"
   },
   "devDependencies": {
-    "@types/node": "^20.14.2",
+    "@types/node": "^24.13.2",
     "concurrently": "^10.0.3",
     "esbuild": "^0.28.1",
     "typescript": "^5.5.4"
