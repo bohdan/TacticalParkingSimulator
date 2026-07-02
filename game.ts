@@ -241,11 +241,12 @@ function planStats() {
 
 // Par = target move count. Defaults to the recorded solution's length
 // (the solver's optimal), or an explicit level.par override.
-function levelPar() {
-  if (typeof level.par === 'number') return level.par;
-  if (level.solution && level.solution.length) return level.solution.length;
+function levelParFor(def) {
+  if (typeof def.par === 'number') return def.par;
+  if (def.solution && def.solution.length) return def.solution.length;
   return 4; // fallback for levels without a recorded solution
 }
+function levelPar() { return levelParFor(level); }
 
 // Golf-style scoring: Par → 3★, Bogey (Par+1) → 2★, worse → 1★.
 function starsForMoves(mvCount, par) {
@@ -333,7 +334,14 @@ function setStatus(idx, status) {
 }
 function statusIcon(idx) {
   const s = loadStatus(idx);
-  return s === 'solved' ? '🏆' : s === 'skipped' ? '⏭️' : '';
+  if (s === 'skipped') return '⏭️';
+  if (s === 'solved') {
+    // Cup is reserved for a par-or-better clear; a solved-but-over-par level
+    // still shows a plain check so the distinction from "never attempted" isn't lost.
+    const best = loadBestFor(idx);
+    return (best && best.moves <= levelParFor(LEVELS[idx])) ? '🏆' : '✅';
+  }
+  return '';
 }
 
 // 1-based position counting only playable (non-cutscene) levels.
