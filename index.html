@@ -154,17 +154,19 @@
 <div id="lbOverlay" class="hidden">
   <div class="card lb-card">
     <div id="lbTitle" style="text-align:center;font-size:17px;font-weight:700;margin-bottom:14px;">Leaderboard</div>
-    <div class="lb-cols">
-      <div class="lb-col">
-        <div id="lbCurTitle" class="lb-col-hd">Current level</div>
-        <table id="lbDetailTable" class="lb-table"></table>
-      </div>
-      <div class="lb-col lb-col-all">
-        <div class="lb-col-hd">All levels</div>
-        <table id="lbTable" class="lb-table"></table>
+    <div class="lb-scroll">
+      <div class="lb-cols">
+        <div class="lb-col">
+          <div id="lbCurTitle" class="lb-col-hd">Current level</div>
+          <table id="lbDetailTable" class="lb-table"></table>
+        </div>
+        <div class="lb-col lb-col-all">
+          <div class="lb-col-hd">All levels</div>
+          <table id="lbTable" class="lb-table"></table>
+        </div>
       </div>
     </div>
-    <div style="position:sticky;bottom:0;background:#1f2530;text-align:center;padding:12px 0 6px;border-top:1px solid #2a3142;margin-top:14px;">
+    <div class="lb-footer">
       <button id="lbClose" style="height:44px;padding:0 24px;border-radius:12px;border:1px solid #313a4b;background:#222837;color:#e7ecf3;font-size:14px;font-weight:600;">Close</button>
     </div>
   </div>
